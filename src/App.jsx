@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import AuthModal from './AuthModal.jsx';
 import { supabase } from './lib/supabase.js';
 import {
