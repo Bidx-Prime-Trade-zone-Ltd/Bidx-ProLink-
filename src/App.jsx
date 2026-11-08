@@ -75,7 +75,8 @@ function App() {
   const [joinData, setJoinData] = useState(() => { const empty={full_name:'',email:'',phone:'',whatsapp:'',dob_day:'',dob_month:'',dob_year:'',state:'',lga:'',address:'',category:'',subcategory:'',experience:'',skills:'',nin:'',business_name:'',cac_number:'',trade_test:'',other_certificate:'',about:''}; try{return {...empty,...JSON.parse(localStorage.getItem('prolink-onboarding-draft')||'{}'),nin:''};}catch{return empty;} });
   const [joinSaving, setJoinSaving] = useState(false);
   const [ninConsent, setNinConsent] = useState(false);
-  const [ninManualMode, setNinManualMode] = useState(false);
+  const [ninLookupStatus, setNinLookupStatus] = useState('idle');
+  const [ninVerifiedLegalName, setNinVerifiedLegalName] = useState('');
   const [showCategories, setShowCategories] = useState(false);
   const [categorySearch, setCategorySearch] = useState('');
   const [categoryGroup, setCategoryGroup] = useState('');
@@ -127,6 +128,30 @@ function App() {
 
   const openAuth = (mode = 'Sign in') => { setAuthMode(mode); setShowAuth(true); setMobileMenu(false); };
   const saveProfile = async () => { setSavingProfile(true); const {error}=await supabase.auth.updateUser({data:profile}); setSavingProfile(false); notify(error ? error.message : 'Profile saved.'); };
+  const verifyNin = async () => {
+    if (!joinData.full_name.trim() || !/^\\d{11}$/.test(joinData.nin) || !ninConsent) {
+      notify('Enter your full legal name and 11-digit NIN, then provide consent before lookup.');
+      return;
+    }
+    setNinLookupStatus('loading');
+    setNinVerifiedLegalName('');
+    try {
+      const consentReference='PROLINK-'+session.user.id+'-'+Date.now();
+      const response=await fetch('/api/identro-nin',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({nin:joinData.nin,legalName:joinData.full_name,consentCaptured:true,consentReference})});
+      const result=await response.json().catch(()=>null);
+      if (!response.ok || result?.success!==true || !result?.legalName) {
+        setNinLookupStatus('failed');
+        notify('We could not complete your verification right now. Please continue with manual submission.');
+        return;
+      }
+      setNinVerifiedLegalName(result.legalName);
+      setNinLookupStatus('success');
+      notify('NIN lookup successful. Your legal name has been verified.');
+    } catch {
+      setNinLookupStatus('failed');
+      notify('We could not complete your verification right now. Please continue with manual submission.');
+    }
+  };
   const signOut = async () => { const {error}=await supabase.auth.signOut(); if(error) notify(error.message); };
   const startRequest = (person) => { setSelected(person); setRequestSent(false); setShowRequest(true); };
   const startJoin = (category = '', service = '') => { setJoinData(p=>({...p,category:category||p.category,subcategory:service||p.subcategory})); setJoinStep(1); setShowCategories(false); setShowJoin(true); };
@@ -201,8 +226,7 @@ function App() {
         <label className="form-label">State *<select value={joinData.state} onChange={e=>setJoinData(p=>({...p,state:e.target.value,lga:''}))}><option value="">Select state</option>{NIGERIAN_STATES.map(st=><option key={st}>{st}</option>)}</select></label>
         <label className="form-label">Local Government Area *<select value={joinData.lga} onChange={e=>setJoinData(p=>({...p,lga:e.target.value}))}><option value="">Select LGA</option>{(LGA_OPTIONS[joinData.state]||['Other / not listed']).map(lga=><option key={lga}>{lga}</option>)}</select></label>
         <label className="form-label wide-field">Residential address *<input value={joinData.address} onChange={e=>setJoinData(p=>({...p,address:e.target.value}))} placeholder="Street, area and city"/></label>
-        <div className="document-required wide-field"><b>National Identification Number (NIN) *</b><small>Your NIN is used only for the secure identity lookup and is not saved in your profile.</small><input inputMode="numeric" pattern="[0-9]*" maxLength={11} value={joinData.nin} onChange={e=>setJoinData(p=>({...p,nin:e.target.value.replace(/\D/g,'').slice(0,11)}))} placeholder="Enter your 11-digit NIN"/><label className="form-label consent-line"><input type="checkbox" checked={ninConsent} onChange={e=>setNinConsent(e.target.checked)}/> I consent to Bidx ProLink submitting my NIN to Identro for identity verification.</label></div>
-        {ninManualMode&&<div className="document-optional wide-field"><b>Manual identity review</b><p>We could not complete the automatic check. You may continue with manual review. An administrator can review your identity documents later.</p><small>Manual review is recorded so registration can continue. Secure document upload must be connected before identity files can be submitted.</small></div>}
+        <div className="document-required wide-field"><b>National Identification Number (NIN) *</b><small>Enter your 11-digit NIN. Tap Verify NIN to run the secure Identro lookup. Your NIN is sent server-to-server and is not saved in your profile.</small><input inputMode="numeric" pattern="[0-9]*" maxLength={11} value={joinData.nin} onChange={e=>{setJoinData(p=>({...p,nin:e.target.value.replace(/\\D/g,'').slice(0,11)}));setNinLookupStatus('idle');setNinVerifiedLegalName('');}} placeholder="Enter your 11-digit NIN"/><label className="form-label consent-line"><input type="checkbox" checked={ninConsent} onChange={e=>{setNinConsent(e.target.checked);setNinLookupStatus('idle');setNinVerifiedLegalName('');}}/> I consent to Bidx ProLink submitting my NIN to Identro for identity verification.</label><button type="button" className="outline-button" disabled={ninLookupStatus==='loading'} onClick={verifyNin}>{ninLookupStatus==='loading'?'Checking NIN…':'Verify NIN'}</button>{ninLookupStatus==='success'&&<p role="status">NIN lookup successful. Verified legal name: <b>{ninVerifiedLegalName}</b></p>}{ninLookupStatus==='failed'&&<p role="status">We could not complete your verification right now. Please continue with manual submission. You may submit your legal details for manual review.</p>}</div>
       </div>:<div className="onboard-fields">
         <label className="form-label">Professional / business name *<input value={joinData.business_name} onChange={e=>setJoinData(p=>({...p,business_name:e.target.value}))} placeholder="Name customers will see"/></label>
         <label className="form-label">Professional category *<select value={joinData.category} onChange={e=>setJoinData(p=>({...p,category:e.target.value,subcategory:''}))}><option value="">Select category</option>{categories.slice(0,7).map(c=><option key={c.name}>{c.name}</option>)}{PROFESSION_GROUPS.slice(7).map(g=><option key={g.name}>{g.name}</option>)}<option>Other</option></select></label>
@@ -218,23 +242,15 @@ function App() {
       </div>}
       <div className="modal-actions">{joinStep>1&&<button className="outline-button" onClick={()=>setJoinStep(1)}>Back</button>}<button className="primary-button" disabled={joinSaving} onClick={async()=>{
         if(joinStep===1){
-          if(!joinData.full_name.trim()||!joinData.phone.trim()||!joinData.state||!joinData.lga||!joinData.address.trim()||!/^\d{11}$/.test(joinData.nin)||!ninConsent){notify('Complete the required legal details, enter your 11-digit NIN and provide consent.');return;}
+          if(!joinData.full_name.trim()||!joinData.phone.trim()||!joinData.state||!joinData.lga||!joinData.address.trim()||!/^\\d{11}$/.test(joinData.nin)||!ninConsent){notify('Complete the required legal details, enter your 11-digit NIN and provide consent.');return;}
+          if(ninLookupStatus!=='success'&&ninLookupStatus!=='failed'){notify('Please tap Verify NIN first. If the lookup cannot be completed, you can submit for manual review.');return;}
           setJoinSaving(true);
-          let verification={success:false,manual:true};
-          if(!ninManualMode){
-            try{
-              const consentReference='PROLINK-'+session.user.id+'-'+Date.now();
-              const response=await fetch('/api/identro-nin',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({nin:joinData.nin,legalName:joinData.full_name,consentCaptured:true,consentReference})});
-              verification=await response.json();
-            }catch{verification={success:false,manual:true};}
-          }
-          const legalPayload={full_name:joinData.full_name.trim(),phone:joinData.phone,whatsapp:joinData.whatsapp,state:joinData.state,lga:joinData.lga,address:joinData.address,date_of_birth:joinData.dob_year&&joinData.dob_month&&joinData.dob_day?joinData.dob_year+'-'+joinData.dob_month+'-'+joinData.dob_day:null,legal_identity_status:verification.success?'name_verified':'manual_review',legal_identity_verified_name:verification.success?verification.legalName:null,legal_identity_submitted_at:new Date().toISOString(),legal_identity_manual_review:!verification.success};
+          const legalPayload={full_name:joinData.full_name.trim(),phone:joinData.phone,whatsapp:joinData.whatsapp,state:joinData.state,lga:joinData.lga,address:joinData.address,date_of_birth:joinData.dob_year&&joinData.dob_month&&joinData.dob_day?joinData.dob_year+'-'+joinData.dob_month+'-'+joinData.dob_day:null,legal_identity_status:ninLookupStatus==='success'?'name_verified':'manual_review',legal_identity_verified_name:ninLookupStatus==='success'?ninVerifiedLegalName:null,legal_identity_submitted_at:new Date().toISOString(),legal_identity_manual_review:ninLookupStatus==='failed'};
           const {error}=await supabase.auth.updateUser({data:{...profile,...legalPayload}});
           setJoinSaving(false);
-          if(error){notify('We could not save your legal details. Please try again.');return;}
+          if(error){notify('Legal details could not be saved: '+error.message);return;}
           setProfile(p=>({...p,...legalPayload}));
-          if(!verification.success){setNinManualMode(true);notify(verification.message||'We could not complete your verification right now. Please continue with manual submission.');}
-          else{notify('Legal details saved. Your verified legal name is confirmed.');}
+          notify(ninLookupStatus==='success'?'Legal details submitted successfully. NIN name verified.':'Legal details submitted successfully for manual identity review.');
           setJoinStep(2);return;
         }
         if(!joinData.business_name.trim()||!joinData.category||!joinData.subcategory||!joinData.experience||!joinData.skills.trim()){notify('Complete your professional name, category, specialisation, experience and skills.');return;}
@@ -244,7 +260,7 @@ function App() {
         setJoinSaving(false);
         if(error){notify('We could not save your professional information. Please try again.');return;}
         setProfile(p=>({...p,...businessPayload}));
-        setShowJoin(false);setJoinStep(1);setNinManualMode(false);setJoinData(p=>({...p,nin:''}));
+        setShowJoin(false);setJoinStep(1);setNinLookupStatus('idle');setNinVerifiedLegalName('');setJoinData(p=>({...p,nin:''}));
         notify('Your legal and professional information has been submitted. Business review can proceed after legal identity approval.');
       }}>{joinSaving?'Saving…':joinStep===1?'Submit legal details':'Submit professional details'} <ChevronRight size={15}/></button></div>
       <small className="legal-copy">NIN is checked against the legal name only. Date-of-birth differences do not affect the result. NIN is not saved in your profile. Manual review can proceed if the lookup cannot be completed.</small>
