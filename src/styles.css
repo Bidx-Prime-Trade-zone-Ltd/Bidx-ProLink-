@@ -81,3 +81,45 @@
  .prolink-home-screen{min-height:calc(100vh - 125px);padding-bottom:72px}
  .prolink-bottom-nav{padding-top:8px}
 }
+
+
+/* Compact category tiles and professional onboarding */
+.prolink-category-section{width:min(900px,calc(100% - 32px));margin:22px auto 90px}
+.prolink-category-intro{margin-bottom:16px}
+.prolink-category-intro h2{font:600 15px/1.4 Manrope,sans-serif;color:#263d30;margin:0 0 5px}
+.prolink-category-intro p{font-size:11px;line-height:1.5;color:#718077;margin:0 0 8px}
+.prolink-category-intro button{border:0;background:transparent;color:#287a4c;font-size:11px;font-weight:700;padding:4px 0;display:inline-flex;align-items:center;gap:3px}
+.prolink-category-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}
+.prolink-category-card{min-height:55px;border:1px solid #dce9df;border-radius:8px;background:#f5faf6;color:#23583a;padding:9px 7px;display:flex;align-items:center;justify-content:center;text-align:center;flex-direction:column;font-size:11px;font-weight:600;line-height:1.25}
+.prolink-category-card:active{background:#e7f3e9}
+.prolink-category-card.more-category{background:#e5f2e8;border-color:#bcd9c4;color:#175c34}
+.prolink-category-card small{font-size:9px;font-weight:500;margin-top:3px;color:#4e795d}
+.prolink-onboard-modal{width:min(100%,560px)}
+.prolink-onboard-modal h2{font-size:19px}
+.prolink-onboard-modal>p{font-size:11px}
+.onboard-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 12px}
+.onboard-fields .form-label{min-width:0}
+.onboard-fields .form-label input,.onboard-fields .form-label select,.onboard-fields .form-label textarea,.document-optional>input,.document-required>input{width:100%;min-width:0;border:1px solid #dce6de;border-radius:8px;padding:11px 12px;background:#fff;font:400 12px inherit;color:#293b30}
+.onboard-fields .wide-field{grid-column:1/-1}
+.dob-field>span{display:block;margin-bottom:7px}
+.dob-controls{display:grid;grid-template-columns:70px 1fr 90px;gap:7px}
+.dob-controls input,.dob-controls select{min-width:0;width:100%;height:40px;border:1px solid #dce6de;border-radius:8px;background:#fff;padding:0 8px;font-size:12px}
+.document-required,.document-optional{grid-column:1/-1;border:1px solid #e3ebe5;border-radius:9px;padding:13px;margin-bottom:10px;display:flex;flex-direction:column;gap:8px}
+.document-required b,.document-optional b{font-size:11px;color:#2d513a}
+.document-required>small{font-size:10px;color:#78867d;line-height:1.4}
+.document-optional>input{margin-top:2px}
+.file-picker{display:flex;flex-wrap:wrap;align-items:center;gap:8px;border:1px dashed #c9d9cd;border-radius:8px;padding:9px;font-size:10px;color:#356448}
+.file-picker input{max-width:100%;font-size:10px}
+.file-picker small{width:100%;color:#728177}
+.prolink-onboard-modal .modal-actions{position:sticky;bottom:-24px;background:#fff;padding:12px 0 4px}
+@media(max-width:700px){
+ .prolink-category-section{margin-top:17px;width:calc(100% - 26px)}
+ .prolink-category-grid{gap:7px}
+ .prolink-category-card{min-height:49px;padding:7px 4px;font-size:10px;border-radius:7px}
+ .prolink-category-intro h2{font-size:13px}
+ .prolink-category-intro p{font-size:10px}
+ .onboard-fields{grid-template-columns:1fr}
+ .onboard-fields .wide-field{grid-column:auto}
+ .prolink-onboard-modal{padding:22px 16px}
+ .dob-controls{grid-template-columns:62px 1fr 78px}
+}
