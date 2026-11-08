@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { supabase, supabaseConfigError } from './lib/supabase.js';
-import { X, Mail, Lock, LoaderCircle, CheckCircle2 } from 'lucide-react';
+import { X, LoaderCircle, CheckCircle2, Eye, EyeOff } from 'lucide-react';
 
 export default function AuthModal({ onClose }) {
   const [mode, setMode] = useState('Sign in');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -45,8 +46,8 @@ export default function AuthModal({ onClose }) {
   const submit = async (event) => {
     event.preventDefault();
     if (!supabase) { setError(supabaseConfigError); return; }
-    if (mode === 'Create account' && password !== confirmPassword) {
-      setError('Your passwords do not match.'); return;
+    if (mode === 'Create account' && !acceptedTerms) {
+      setError('Please accept the Terms and Conditions and Privacy Policy to create your account.'); return;
     }
     if (mode !== 'Forgot password' && password.length < 8) {
       setError('Use a password with at least 8 characters.'); return;
@@ -59,8 +60,8 @@ export default function AuthModal({ onClose }) {
           options: { emailRedirectTo: window.location.origin }
         });
         if (e) throw e;
-        if (data.session) setMessage('Your account has been created and you are signed in.');
-        else setMessage('Registration received. Check your inbox and spam folder for the confirmation link.');
+        if (data.session) setMessage('Your account is confirmed and you are signed in.');
+        else setMessage('Confirmation email sent. Open the message in your inbox and tap Confirm Email. You will be signed in automatically when confirmation succeeds.');
       } else if (mode === 'Sign in') {
         const { error: e } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
         if (e) throw e;
@@ -76,7 +77,7 @@ export default function AuthModal({ onClose }) {
         if (e) throw e;
         setRecovery(false);
         setMessage('Password updated successfully. You can now sign in with your new password.');
-        setMode('Sign in'); setPassword(''); setConfirmPassword('');
+        setMode('Sign in'); setPassword('');
       }
     });
   };
@@ -103,16 +104,16 @@ export default function AuthModal({ onClose }) {
         {mode !== 'Forgot password' && mode !== 'Reset password' && <div className="or-divider"><span>or continue with email</span></div>}
         <form onSubmit={submit}>
           <label className="form-label">Email address<input type="email" autoComplete="email" required value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com"/></label>
-          {mode !== 'Forgot password' && <label className="form-label">Password<input type="password" required minLength={8} autoComplete={mode==='Sign in'?'current-password':'new-password'} value={password} onChange={e=>setPassword(e.target.value)} placeholder="At least 8 characters"/></label>}
-          {(mode==='Create account'||mode==='Reset password') && <label className="form-label">Confirm password<input type="password" required minLength={8} autoComplete="new-password" value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} placeholder="Confirm your password"/></label>}
-          {mode==='Sign in' && <p className="auth-switch"><button type="button" onClick={()=>{setMode('Forgot password');setError('');setMessage('');}}>Forgot password?</button></p>}
+          {mode !== 'Forgot password' && <label className="form-label">Password<div className="password-input-wrap"><input type={showPassword?'text':'password'} required minLength={8} autoComplete={mode==='Sign in'?'current-password':'new-password'} value={password} onChange={e=>setPassword(e.target.value)} placeholder="At least 8 characters"/><button className="password-visibility" type="button" onClick={()=>setShowPassword(v=>!v)} aria-label={showPassword?'Hide password':'Show password'}>{showPassword?<EyeOff size={16}/>:<Eye size={16}/>}</button></div></label>}
+          {mode==='Create account' && <label className="auth-terms-check"><input type="checkbox" checked={acceptedTerms} onChange={e=>setAcceptedTerms(e.target.checked)}/><span>I agree to the <a href="/terms" target="_blank" rel="noreferrer">Terms and Conditions</a> and <a href="/privacy" target="_blank" rel="noreferrer">Privacy Policy</a>.</span></label>}
+          {mode==='Sign in' && <p className="auth-switch"><button type="button" onClick={()=>{setMode('Forgot password');setError('');setMessage('');setPassword('');}}>Forgot password?</button></p>}
           {error && <p className="auth-feedback error" role="alert">{error}</p>}
           {message && <p className="auth-feedback success" role="status">{message}</p>}
           {supabaseConfigError && <p className="auth-feedback error">{supabaseConfigError}</p>}
           <button className="primary-button full" type="submit" disabled={busy}>{busy?<><LoaderCircle className="spin" size={16}/> Please wait…</>:mode}</button>
         </form>
-        {mode!=='Forgot password' && mode!=='Reset password' && <p className="auth-switch">{mode==='Sign in'?'New to ProLink?':'Already have an account?'} <button type="button" onClick={()=>{setMode(mode==='Sign in'?'Create account':'Sign in');setError('');setMessage('');}}> {mode==='Sign in'?'Create account':'Sign in'}</button></p>}
-        {mode==='Forgot password' && <p className="auth-switch"><button type="button" onClick={()=>{setMode('Sign in');setError('');setMessage('');}}>Back to sign in</button></p>}
+        {mode!=='Forgot password' && mode!=='Reset password' && <p className="auth-switch">{mode==='Sign in'?'New to ProLink?':'Already have an account?'} <button type="button" onClick={()=>{setMode(mode==='Sign in'?'Create account':'Sign in');setError('');setMessage('');setPassword('');setAcceptedTerms(false);setShowPassword(false);}}> {mode==='Sign in'?'Create account':'Sign in'}</button></p>}
+        {mode==='Forgot password' && <p className="auth-switch"><button type="button" onClick={()=>{setMode('Sign in');setError('');setMessage('');setPassword('');}}>Back to sign in</button></p>}
       </>}
       <small className="legal-copy">By continuing, you agree to our Terms of Service and Privacy Policy.</small>
     </div>
