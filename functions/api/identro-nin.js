@@ -26,12 +26,12 @@ export async function onRequestPost({ request, env }) {
 
     log("secret_present");
     const body = await request.json();
-    const nin = String(body.nin || "").replace(/\\D/g, "");
+    const nin = String(body.nin || "").replace(/\D/g, "");
     const legalName = String(body.legalName || "").trim();
     const consentReference = String(body.consentReference || "").trim();
 
     const validation = {
-      ninValid: /^\\d{11}$/.test(nin),
+      ninValid: /^\d{11}$/.test(nin),
       legalNamePresent: Boolean(legalName),
       consentReferencePresent: Boolean(consentReference),
       consentCaptured: body.consentCaptured === true
@@ -127,7 +127,7 @@ export async function onRequestPost({ request, env }) {
     const verifiedName = [d.firstName, d.middleName, d.lastName]
       .filter(Boolean)
       .join(" ")
-      .replace(/\\s+/g, " ")
+      .replace(/\s+/g, " ")
       .trim();
 
     log("verification_succeeded");
