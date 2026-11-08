@@ -160,3 +160,12 @@
 .auth-terms-check input{width:15px;height:15px;flex:0 0 15px;margin:1px 0 0;accent-color:#237a49}
 .auth-terms-check a{color:#216d40;text-decoration:underline}
 .auth-modal .form-label small{display:block;font-size:10px;color:#7d8981;margin-top:4px}
+
+.prolink-drawer>button:not(.drawer-close){width:100%;text-align:left;padding:14px 12px;border-radius:9px;background:#f6f9f6;color:#28583d;font-weight:650}
+.prolink-drawer .settings-folder{display:flex;justify-content:space-between;align-items:center;margin-top:8px}
+.settings-folder-content{padding:4px 0 8px 14px}.settings-folder-content button{width:100%;padding:12px;text-align:left;background:#fff4f2;color:#a33f35;border-radius:8px}
+.drawer-contact span{display:none}.legal-page,.plan-page{padding-bottom:110px}
+.plan-card{max-width:520px;padding:24px;border:1px solid #dfe9e1;border-radius:14px;background:#fff}
+.plan-card h2{font-size:18px}.plan-card strong{font-size:30px;color:#175b34}.plan-card strong small,.plan-card p,.plan-card li,.plan-card>small{font-size:13px;color:#647269}
+.deletion-form{max-width:650px}.deletion-form .danger-button{border:0;cursor:pointer}
+@media(max-width:700px){.plan-card{padding:18px}}
