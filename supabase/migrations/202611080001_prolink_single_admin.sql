@@ -114,10 +114,6 @@ create policy "users submit own review records" on public.prolink_review_records
 for insert to authenticated with check (user_id=auth.uid() and status='pending' and reviewed_by is null);
 create policy "single admin reads review records" on public.prolink_review_records
 for select to authenticated using (public.prolink_is_admin());
-create policy "single admin updates review status only" on public.prolink_review_records
-for update to authenticated using (public.prolink_is_admin())
-with check (public.prolink_is_admin());
-
 create or replace function public.prolink_admin_review(
   p_record_id bigint, p_action text, p_reason text default null
 ) returns void language plpgsql security definer
@@ -148,3 +144,11 @@ revoke all on function public.prolink_admin_review(bigint,text,text) from public
 grant execute on function public.prolink_admin_review(bigint,text,text) to authenticated;
 
 -- No client-facing policy can create admin rows. Only the auth trigger (owner) can.
+
+-- Explicit privileges; RLS remains the authorization boundary.
+grant select, insert on public.prolink_review_records to authenticated;
+grant select, insert on public.prolink_admin_messages to authenticated;
+grant select, insert on public.prolink_admin_audit to authenticated;
+revoke update, delete on public.prolink_review_records from authenticated;
+revoke update, delete on public.prolink_admin_audit from authenticated;
+revoke update, delete on public.prolink_admin_messages from authenticated;
