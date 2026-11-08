@@ -219,3 +219,5 @@
     box-shadow:-8px 0 24px #00000018;
   }
 }
+
+.auth-progress{display:flex;flex-direction:column;gap:10px;margin:20px 0 24px;color:#2c6942;font-size:12px}.auth-progress-track{height:5px;overflow:hidden;border-radius:20px;background:#e6efe8}.auth-progress-track i{display:block;width:38%;height:100%;border-radius:20px;background:#2b8050;animation:auth-progress-move 1.1s ease-in-out infinite alternate}@keyframes auth-progress-move{from{transform:translateX(-15%)}to{transform:translateX(180%)}}.auth-progress-backdrop{z-index:1000}.auth-progress-backdrop .auth-modal{min-height:280px}
