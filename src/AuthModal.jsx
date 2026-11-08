@@ -6,6 +6,7 @@ export default function AuthModal({ onClose }) {
   const [mode, setMode] = useState('Sign in');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword,setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -49,6 +50,8 @@ export default function AuthModal({ onClose }) {
     if (mode === 'Create account' && !acceptedTerms) {
       setError('Please accept the Terms and Conditions and Privacy Policy to create your account.'); return;
     }
+    if (mode === 'Reset password' && !recovery) { setError('Open the verified password-reset link from your email first.'); return; }
+    if (mode === 'Reset password' && password !== confirmPassword) { setError('The passwords do not match.'); return; }
     if (mode !== 'Forgot password' && password.length < 8) {
       setError('Use a password with at least 8 characters.'); return;
     }
@@ -76,7 +79,9 @@ export default function AuthModal({ onClose }) {
         const { error: e } = await supabase.auth.updateUser({ password });
         if (e) throw e;
         setRecovery(false);
-        setMessage('Password updated successfully. You can now sign in with your new password.');
+        const {error: signOutError}=await supabase.auth.signOut({scope:'global'});
+        if(signOutError) throw signOutError;
+        setMessage('Password updated. You have been signed out; please sign in with your new password.');
         setMode('Sign in'); setPassword('');
       }
     });
@@ -105,7 +110,8 @@ export default function AuthModal({ onClose }) {
         <form onSubmit={submit}>
           <label className="form-label">Email address<input type="email" autoComplete="email" required value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com"/></label>
           {mode !== 'Forgot password' && <label className="form-label">Password<div className="password-input-wrap"><input type={showPassword?'text':'password'} required minLength={8} autoComplete={mode==='Sign in'?'current-password':'new-password'} value={password} onChange={e=>setPassword(e.target.value)} placeholder="At least 8 characters"/><button className="password-visibility" type="button" onClick={()=>setShowPassword(v=>!v)} aria-label={showPassword?'Hide password':'Show password'}>{showPassword?<EyeOff size={16}/>:<Eye size={16}/>}</button></div></label>}
-          {mode==='Create account' && <label className="auth-terms-check"><input type="checkbox" checked={acceptedTerms} onChange={e=>setAcceptedTerms(e.target.checked)}/><span>I agree to the <a href="/terms" target="_blank" rel="noreferrer">Terms and Conditions</a> and <a href="/privacy" target="_blank" rel="noreferrer">Privacy Policy</a>.</span></label>}
+          {mode==='Reset password' && <label className="form-label">Confirm new password<input type="password" required minLength={8} autoComplete="new-password" value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} /></label>}
+          {mode==='Create account' && <label className="auth-terms-check"><input type="checkbox" checked={acceptedTerms} onChange={e=>setAcceptedTerms(e.target.checked)}/><span>I confirm that I am at least 18 years old and agree to the <a href="/terms" target="_blank" rel="noreferrer">Terms and Conditions</a> and <a href="/privacy" target="_blank" rel="noreferrer">Privacy Policy</a>.</span></label>}
           {mode==='Sign in' && <p className="auth-switch"><button type="button" onClick={()=>{setMode('Forgot password');setError('');setMessage('');setPassword('');}}>Forgot password?</button></p>}
           {error && <p className="auth-feedback error" role="alert">{error}</p>}
           {message && <p className="auth-feedback success" role="status">{message}</p>}
