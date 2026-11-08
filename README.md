@@ -9,7 +9,28 @@ Mobile-first professional services marketplace for Nigeria, built for electricia
 - `npm run dev`
 - `npm run build`
 
-This repository currently contains the frontend interface prototype. Production authentication, Google sign-in, email verification, identity checks, document storage, profile moderation, messaging, and request/invoice persistence must be connected to the approved backend before launch.
+## Cloudflare Workers deployment
+
+The production app is served by the `bidx-prolink` Worker. Build the Vite frontend first, then deploy the Worker with Wrangler:
+
+```sh
+npm run build
+npx wrangler deploy
+```
+
+The Worker routes `POST /api/identro-nin` to the server-side Identro handler before static asset fallback. Other API paths return JSON 404 responses; non-API paths continue through the Vite build assets and SPA fallback.
+
+### Required production secret
+
+Set this in Cloudflare Dashboard → Workers & Pages → `bidx-prolink` → Settings → Variables and Secrets → Production:
+
+- Name: `BIDX_IDENTRO_PROLIINK_KEY`
+- Type: Secret
+- Value: the live Identro merchant API key
+
+Do not put the secret value in `wrangler.jsonc`, source control, frontend variables, or browser code. The Worker reads it only from `env.BIDX_IDENTRO_PROLIINK_KEY`.
+
+The secret must be added separately in Cloudflare; this PR does not change production secrets or deploy the Worker.
 
 ## Product rules captured in the interface
 
