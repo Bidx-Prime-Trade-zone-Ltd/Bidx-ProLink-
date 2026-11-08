@@ -140,9 +140,10 @@ function App() {
   return <div className="app-shell">
     <header className="topbar prolink-mobile-topbar">
       <div className="topbar-inner">
-        {(tab!=='Explore'||selected) && <button className="icon-button" onClick={back} aria-label="Go back"><ArrowLeft size={22}/></button>}<button className="icon-button" onClick={() => menuOpen ? back() : openDrawer()} aria-label="Open menu"><Menu size={24}/></button>
+        {(tab!=='Explore'||selected) && <button className="icon-button" onClick={back} aria-label="Go back"><ArrowLeft size={22}/></button>}
         <button className="brand-button" onClick={() => {navigateTab('Explore');setSelected(null);}}><Brand /></button>
         <span className="topbar-spacer"/>
+        <button className="icon-button" onClick={() => menuOpen ? back() : openDrawer()} aria-label="Open menu"><Menu size={24}/></button>
       </div>
     </header>
         {menuOpen && <div className="menu-scrim" onClick={back}><aside className="app-menu prolink-drawer" onClick={e=>e.stopPropagation()}><div className="drawer-brand"><Brand/><button className="drawer-close" onClick={back} aria-label="Close menu"><X/></button></div>
