@@ -251,6 +251,8 @@ function App() {
           const {error}=await supabase.auth.updateUser({data:{...profile,...legalPayload}});
           setJoinSaving(false);
           if(error){notify('Legal details could not be saved: '+error.message);return;}
+          const {error:reviewError}=await supabase.from('prolink_review_records').insert({user_id:session.user.id,section:'legal_identity',status:'pending',submitted_data:{...legalPayload,identity_lookup:ninLookupStatus==='success'?'name_verified':'manual_review'}});
+          if(reviewError){notify('Your legal details were saved, but the review record could not be created. Please retry before continuing.');return;}
           setProfile(p=>({...p,...legalPayload}));
           notify(ninLookupStatus==='success'?'Legal details submitted successfully. NIN name verified.':'Legal details submitted successfully for manual identity review.');
           setJoinStep(2);return;
@@ -261,6 +263,8 @@ function App() {
         const {error}=await supabase.auth.updateUser({data:{...profile,...businessPayload}});
         setJoinSaving(false);
         if(error){notify('We could not save your professional information. Please try again.');return;}
+        const {error:businessReviewError}=await supabase.from('prolink_review_records').insert({user_id:session.user.id,section:'professional_profile',status:'pending',submitted_data:businessPayload});
+        if(businessReviewError){notify('Your profile details were saved, but the review record could not be created. Please retry.');return;}
         setProfile(p=>({...p,...businessPayload}));
         setShowJoin(false);setJoinStep(1);setNinLookupStatus('idle');setNinVerifiedLegalName('');setJoinData(p=>({...p,nin:''}));
         notify('Your legal and professional information has been submitted. Business review can proceed after legal identity approval.');
