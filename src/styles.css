@@ -151,3 +151,12 @@
 .work-photo-item button{position:absolute;top:2px;right:2px;border:0;border-radius:50%;background:#fff;color:#ab3930;width:22px;height:22px;display:grid;place-items:center}
 .onboard-photo-section>small{font-size:10px;color:#7c897e}
 @media(max-width:700px){.profession-browser{max-height:85dvh;padding:22px 15px}.work-photo-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
+
+.password-input-wrap{position:relative;display:flex;align-items:center}
+.password-input-wrap input{width:100%;padding-right:43px!important}
+.password-visibility{position:absolute;right:9px;top:50%;transform:translateY(-50%);width:30px;height:30px;display:grid;place-items:center;border:0;border-radius:6px;background:transparent;color:#68786d;padding:0}
+.password-visibility:focus-visible{outline:2px solid #2b8050;outline-offset:2px}
+.auth-terms-check{display:flex;align-items:flex-start;gap:9px;margin:12px 0 16px;font-size:11px;line-height:1.5;color:#65736a}
+.auth-terms-check input{width:15px;height:15px;flex:0 0 15px;margin:1px 0 0;accent-color:#237a49}
+.auth-terms-check a{color:#216d40;text-decoration:underline}
+.auth-modal .form-label small{display:block;font-size:10px;color:#7d8981;margin-top:4px}
