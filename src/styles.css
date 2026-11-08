@@ -185,3 +185,37 @@
   from{transform:translateX(100%)}
   to{transform:translateX(0)}
 }
+
+
+/* Right-side menu stays within the content area, preserving permanent navigation. */
+@media(max-width:700px){
+  .menu-scrim{
+    position:fixed;
+    top:66px;
+    right:0;
+    bottom:calc(64px + env(safe-area-inset-bottom));
+    left:0;
+    background:transparent;
+    z-index:60;
+  }
+  .prolink-drawer{
+    position:fixed;
+    top:0;
+    right:0;
+    bottom:0;
+    left:auto;
+    width:50vw;
+    max-width:300px;
+    min-width:0;
+    height:auto;
+    max-height:100%;
+    overflow-x:hidden;
+    overflow-y:auto;
+    overscroll-behavior:contain;
+    padding:12px 10px;
+    border-radius:0;
+    transform:translateX(100%);
+    animation:prolink-drawer-enter .24s ease-out forwards;
+    box-shadow:-8px 0 24px #00000018;
+  }
+}
