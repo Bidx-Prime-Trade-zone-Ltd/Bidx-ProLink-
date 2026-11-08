@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import AuthModal from './AuthModal.jsx';
+import { supabase } from './lib/supabase.js';
 import {
   Search, MapPin, SlidersHorizontal, ChevronDown, ChevronRight, ArrowLeft,
   Menu, Bell, UserRound, BriefcaseBusiness, ShieldCheck, Star, Phone,
@@ -38,6 +39,17 @@ function Avatar({ person, large = false }) {
 }
 
 function App() {
+  const [session, setSession] = useState(null);
+  const [authReady, setAuthReady] = useState(false);
+  const [profile, setProfile] = useState({full_name:'',date_of_birth:'',phone:'',whatsapp:'',state:'',lga:'',address:'',profession:'',bio:''});
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
+  useEffect(() => {
+    if (!supabase) { setAuthReady(true); return; }
+    supabase.auth.getSession().then(({data}) => { setSession(data.session); setProfile(p=>({...p,...(data.session?.user?.user_metadata||{})})); setAuthReady(true); });
+    const {data:{subscription}} = supabase.auth.onAuthStateChange((_event,next) => { setSession(next); setProfile(p=>({...p,...(next?.user?.user_metadata||{})})); setAuthReady(true); });
+    return () => subscription.unsubscribe();
+  }, []);
   const [tab, setTab] = useState('Explore');
   const [query, setQuery] = useState('');
   const [location, setLocation] = useState('Lagos, Nigeria');
@@ -66,23 +78,28 @@ function App() {
   const toggleSave = (id) => setSaved(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
 
   const openAuth = (mode = 'Sign in') => { setAuthMode(mode); setShowAuth(true); setMobileMenu(false); };
+  const saveProfile = async () => { setSavingProfile(true); const {error}=await supabase.auth.updateUser({data:profile}); setSavingProfile(false); notify(error ? error.message : 'Profile saved.'); };
+  const signOut = async () => { const {error}=await supabase.auth.signOut(); if(error) notify(error.message); };
   const startRequest = (person) => { setSelected(person); setRequestSent(false); setShowRequest(true); };
 
+  if (!authReady) return <div className="app-loading">Loading Bidx ProLink…</div>;
+  if (!session) return <div className="auth-entry"><AuthModal onClose={()=>{}} /></div>;
   return <div className="app-shell">
     <header className="topbar">
       <div className="topbar-inner">
-        <button className="icon-button mobile-only" onClick={() => setMobileMenu(!mobileMenu)} aria-label="Open menu"><Menu size={21}/></button>
+        <button className="icon-button" onClick={() => setMenuOpen(!menuOpen)} aria-label="Open menu"><Menu size={21}/></button>
         <button className="brand-button" onClick={() => {setTab('Explore');setSelected(null);}}><Brand /></button>
         <nav className={`desktop-nav ${mobileMenu ? 'nav-open' : ''}`}>
           {['Explore', 'How it works', 'For professionals'].map(item => <button key={item} className={tab === item ? 'nav-link active' : 'nav-link'} onClick={() => {setTab(item);setSelected(null);setMobileMenu(false); if(item==='For professionals')setShowJoin(true);}}>{item}</button>)}
         </nav>
         <div className="top-actions">
           <button className="icon-button notification-button" aria-label="Notifications" onClick={() => notify('You are all caught up.')}><Bell size={19}/><i/></button>
-          <button className="sign-in-button" onClick={() => openAuth()}>Sign in</button>
-          <button className="join-button" onClick={() => setShowJoin(true)}>Join as a professional <ArrowUpRight size={16}/></button>
+          <button className="sign-in-button" onClick={() => setTab("Profile")}>Profile</button>
+          
         </div>
       </div>
     </header>
+    {menuOpen && <div className="menu-scrim" onClick={()=>setMenuOpen(false)}><aside className="app-menu" onClick={e=>e.stopPropagation()}><button onClick={()=>{setTab('Profile');setMenuOpen(false)}}>My profile</button><button onClick={()=>{setTab('Requests');setMenuOpen(false)}}>My requests</button><button onClick={()=>{setTab('Settings');setMenuOpen(false)}}>Settings</button><button onClick={()=>{setTab('Terms and Conditions');setMenuOpen(false)}}>Terms and Conditions</button><button onClick={()=>{setTab('Privacy Policy');setMenuOpen(false)}}>Privacy Policy</button><button onClick={()=>{setTab('Contact');setMenuOpen(false)}}>Contact and support</button><a href="mailto:Support@bidxpro.online">Support@bidxpro.online</a><a href="mailto:Info@bidxpro.online">Info@bidxpro.online</a><span>bidxpro.online</span><button onClick={signOut}>Sign out</button></aside></div>}
 
     {selected ? <main className="content-wrap detail-wrap">
       <button className="back-link" onClick={() => setSelected(null)}><ArrowLeft size={17}/> Back to professionals</button>
@@ -98,8 +115,8 @@ function App() {
         </div>
         <aside className="profile-sidebar"><div className="contact-card"><span className="eyebrow">START A CONVERSATION</span><h2>Need help with a job?</h2><p>Contact {selected.name.split(' ')[0]} to discuss your project and agree on the next step.</p><div className="price-label">Indicative starting price</div><strong className="price">{selected.price}</strong><button className="primary-button full" onClick={() => startRequest(selected)}><MessageCircle size={17}/> Request a service</button><button className="outline-button full" onClick={() => notify('Phone contact will be available after account setup.')}><Phone size={17}/> Contact by phone</button><small className="safe-note"><ShieldCheck size={14}/> Keep your agreement clear before work begins.</small></div><div className="help-card"><ShieldCheck/><b>Book with confidence</b><p>Check profile details, discuss the scope and agree on price and timing before work starts.</p></div></aside>
       </section>
-    </main> : tab === 'How it works' ? <main className="content-wrap info-page"><div className="eyebrow">SIMPLE. DIRECT. LOCAL.</div><h1>Good work starts with the right connection.</h1><p className="lead">Bidx ProLink helps customers discover skilled professionals and helps technicians present their work to more people.</p><div className="steps-grid">{[['01','Find a professional','Search by trade, skill or location and compare professional profiles.'],['02','Discuss your job','Contact the professional, explain what you need and agree on the scope.'],['03','Confirm the details','Record the agreed work, cost and timeline before work begins.'],['04','Get the work done','Stay in touch and share feedback after the job is complete.']].map(([n,t,d])=><div className="step-card" key={n}><span>{n}</span><h3>{t}</h3><p>{d}</p></div>)}</div><button className="primary-button" onClick={()=>setTab('Explore')}>Explore professionals <ArrowUpRight size={16}/></button></main> : <main>
-      <section className="hero">
+    </main> : tab === 'Profile' ? <main className="content-wrap info-page"><h1>My profile</h1><p>{session.user.email}</p><section className="panel"><div className="form-grid"><label>Full legal name<input value={profile.full_name} onChange={e=>setProfile(p=>({...p,full_name:e.target.value}))}/></label><label>Email<input value={session.user.email||''} readOnly/></label><label>Date of birth<input type="date" value={profile.date_of_birth} onChange={e=>setProfile(p=>({...p,date_of_birth:e.target.value}))}/></label><label>Phone<input value={profile.phone} onChange={e=>setProfile(p=>({...p,phone:e.target.value}))}/></label><label>WhatsApp<input value={profile.whatsapp} onChange={e=>setProfile(p=>({...p,whatsapp:e.target.value}))}/></label><label>State<input value={profile.state} onChange={e=>setProfile(p=>({...p,state:e.target.value}))}/></label><label>LGA<input value={profile.lga} onChange={e=>setProfile(p=>({...p,lga:e.target.value}))}/></label><label>Address<input value={profile.address} onChange={e=>setProfile(p=>({...p,address:e.target.value}))}/></label><label>Profession<input value={profile.profession} onChange={e=>setProfile(p=>({...p,profession:e.target.value}))}/></label><label>About you<textarea value={profile.bio} onChange={e=>setProfile(p=>({...p,bio:e.target.value}))}/></label></div><button className="primary-button" onClick={saveProfile} disabled={savingProfile}>{savingProfile?'Saving…':'Save profile'}</button><button className="outline-button" onClick={signOut}>Sign out</button></section></main> : tab === 'Settings' ? <main className="content-wrap info-page"><h1>Settings</h1><p>Manage your account and location preferences.</p><button className="outline-button" onClick={()=>setTab('Profile')}>Personal information</button><button className="outline-button" onClick={signOut}>Sign out</button></main> : tab === 'Requests' ? <main className="content-wrap info-page"><h1>My requests</h1><p>Your service requests will appear here.</p></main> : tab === 'Contact' ? <main className="content-wrap info-page"><h1>Contact and support</h1><p>Support: <a href="mailto:Support@bidxpro.online">Support@bidxpro.online</a></p><p>General: <a href="mailto:Info@bidxpro.online">Info@bidxpro.online</a></p><p><a href="https://bidxpro.online">bidxpro.online</a></p></main> : tab === 'Terms and Conditions' || tab === 'Privacy Policy' ? <main className="content-wrap info-page"><h1>{tab}</h1><p>Use Bidx ProLink responsibly. Your account and profile information is used to provide the service. Contact Support@bidxpro.online for questions.</p></main> : tab === 'How it works' ? <main className="content-wrap info-page"><div className="eyebrow">SIMPLE. DIRECT. LOCAL.</div><h1>Good work starts with the right connection.</h1><p className="lead">Bidx ProLink helps customers discover skilled professionals and helps technicians present their work to more people.</p><div className="steps-grid">{[['01','Find a professional','Search by trade, skill or location and compare professional profiles.'],['02','Discuss your job','Contact the professional, explain what you need and agree on the scope.'],['03','Confirm the details','Record the agreed work, cost and timeline before work begins.'],['04','Get the work done','Stay in touch and share feedback after the job is complete.']].map(([n,t,d])=><div className="step-card" key={n}><span>{n}</span><h3>{t}</h3><p>{d}</p></div>)}</div><button className="primary-button" onClick={()=>setTab('Explore')}>Explore professionals <ArrowUpRight size={16}/></button></main> : <main>
+      <section className="hero prolink-home">
         <div className="hero-content">
           <div className="hero-kicker"><Sparkles size={15}/> NIGERIA'S SKILLED PROFESSIONAL NETWORK</div>
           <h1>Find the right hands<br/><em>for every job.</em></h1>
@@ -112,7 +129,7 @@ function App() {
           </div>
           <div className="hero-foot"><span><ShieldCheck size={15}/> Profiles with verification information</span><span><MapPin size={15}/> Discover professionals across Nigeria</span></div>
         </div>
-        <div className="hero-art"><div className="hero-orbit orbit-one"/><div className="hero-orbit orbit-two"/><div className="hero-person-card"><div className="hero-avatar">SO</div><div><b>Skilled professionals</b><small>Ready to help with your next project</small></div><span className="online-dot"/></div><div className="hero-tool tool-one"><Wrench size={25}/></div><div className="hero-tool tool-two"><Zap size={25}/></div><div className="hero-tool tool-three"><Hammer size={25}/></div><div className="hero-sticker"><Star size={15} fill="currentColor"/> Quality connections</div></div>
+        
       </section>
 
       <section className="content-wrap category-section"><div className="section-heading"><div><span className="eyebrow">BROWSE BY TRADE</span><h2>What do you need done?</h2></div><button className="text-link" onClick={()=>setActiveCategory('All')}>View all services <ChevronRight size={16}/></button></div><div className="category-grid">{categories.map(({name,icon:Icon,count})=><button className={activeCategory===name ? 'category-card category-active':'category-card'} key={name} onClick={()=>{setActiveCategory(name==='More services'?'All':name);document.getElementById('professionals')?.scrollIntoView({behavior:'smooth'});}}><span className="category-icon"><Icon size={21}/></span><span className="category-name">{name}</span><small>{count}</small></button>)}</div></section>
