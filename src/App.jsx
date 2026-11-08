@@ -3,6 +3,8 @@ import AuthModal from './AuthModal.jsx';
 import { TermsContent, PrivacyContent } from './LegalPages.jsx';
 import { PROFESSION_GROUPS, ALL_PROFESSIONS } from './professions.js';
 import { supabase } from './lib/supabase.js';
+import AdminPortal from './AdminPortal.jsx';
+import './admin.css';
 import {
   Search, MapPin, SlidersHorizontal, ChevronDown, ChevronRight, ArrowLeft,
   Menu, Bell, UserRound, BriefcaseBusiness, ShieldCheck, Star, Phone,
@@ -157,7 +159,7 @@ function App() {
   const startJoin = (category = '', service = '') => { setJoinData(p=>({...p,category:category||p.category,subcategory:service||p.subcategory})); setJoinStep(1); setShowCategories(false); setShowJoin(true); };
   const openCategoryBrowser = (group = '') => { setCategoryGroup(group); setCategorySearch(''); setShowCategories(true); };
 
-  if (!authReady) return <div className="app-loading">Loading Bidx ProLink…</div>;
+  if (window.location.pathname.replace(/\\/$/, '') === '/admin') return <AdminPortal />;\n  if (!authReady) return <div className="app-loading">Loading Bidx ProLink…</div>;
   if (!session) return <div className="auth-entry"><AuthModal onClose={()=>{}} /></div>;
   return <div className="app-shell">
     <header className="topbar prolink-mobile-topbar">
