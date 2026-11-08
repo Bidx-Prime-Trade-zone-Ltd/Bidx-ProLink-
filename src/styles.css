@@ -169,3 +169,19 @@
 .plan-card h2{font-size:18px}.plan-card strong{font-size:30px;color:#175b34}.plan-card strong small,.plan-card p,.plan-card li,.plan-card>small{font-size:13px;color:#647269}
 .deletion-form{max-width:650px}.deletion-form .danger-button{border:0;cursor:pointer}
 @media(max-width:700px){.plan-card{padding:18px}}
+
+
+/* Mobile navigation drawer must open from the right edge */
+@media(max-width:700px){
+  .prolink-drawer{
+    left:auto;
+    right:0;
+    transform:translateX(100%);
+    animation:prolink-drawer-enter .24s ease-out forwards;
+    box-shadow:-12px 0 40px #0002;
+  }
+}
+@keyframes prolink-drawer-enter{
+  from{transform:translateX(100%)}
+  to{transform:translateX(0)}
+}
