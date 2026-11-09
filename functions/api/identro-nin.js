@@ -15,7 +15,7 @@ export async function onRequestPost({ request, env }) {
   log("request_received", { method: request.method });
 
   try {
-    if (!env.BIDX_IDENTRO_PROLIINK_KEY) {
+    if (!env.PROLINK_IDENTRO_API_KEY) {
       log("secret_missing");
       return json({
         success: false,
@@ -53,7 +53,7 @@ export async function onRequestPost({ request, env }) {
       upstream = await fetch("https://api.identro.ng/api/v1/merchant-api/nin/verify", {
         method: "POST",
         headers: {
-          "x-api-key": env.BIDX_IDENTRO_PROLIINK_KEY,
+          "x-api-key": env.PROLINK_IDENTRO_API_KEY,
           "content-type": "application/json"
         },
         body: JSON.stringify({ nin, consentCaptured: true, consentReference })
