@@ -102,10 +102,8 @@ function App() {
   const openDrawer = () => { setMenuOpen(true); setNavStack(prev=>[...prev,{tab,menu:true}]); window.history.pushState({prolink:true,tab,menu:true},'','#menu'); };
   const back = () => { if (window.history.state?.prolink) window.history.back(); else {setMenuOpen(false);setTab('Explore');setSelected(null);} };
   useEffect(() => {
-    // Replace the OAuth callback entry so app Back does not expose its callback parameters.
-    if (window.location.search.includes('code=') || window.location.hash.includes('access_token=')) {
-      window.history.replaceState({prolink:true,tab:'Explore'},'',window.location.pathname);
-    }
+    // Do not remove OAuth callback parameters here. Supabase's PKCE client must
+    // read the ?code= parameter and exchange it for a session before URL cleanup.
     const onPop=event=>{
       const state=event.state;
       if(state?.prolink){setTab(state.tab||'Explore');setMenuOpen(Boolean(state.menu));}
