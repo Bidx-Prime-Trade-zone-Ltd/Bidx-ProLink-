@@ -106,14 +106,20 @@ export async function onRequestPost({ request, env }) {
       });
     }
 
-    const expectedName = legalName.toLocaleLowerCase("en").normalize("NFKD").replace(/[^a-z]/g, "");
-    const returnedName = [d.firstName, d.middleName, d.lastName]
-      .filter(Boolean)
-      .join("")
-      .toLocaleLowerCase("en")
+    // Compare complete name tokens without depending on punctuation,
+    // accents, spacing, or provider name-part order. Every token must match.
+    // Date of birth is deliberately not used.
+    const canonicalName = value => String(value || "")
       .normalize("NFKD")
-      .replace(/[^a-z]/g, "");
-    const nameMatches = expectedName === returnedName;
+      .replace(/\p{M}/gu, "")
+      .toLocaleLowerCase("en")
+      .split(/[^\p{L}\p{N}]+/u)
+      .filter(Boolean)
+      .sort()
+      .join(" ");
+    const expectedName = canonicalName(legalName);
+    const returnedName = canonicalName([d.firstName, d.middleName, d.lastName].filter(Boolean).join(" "));
+    const nameMatches = Boolean(expectedName) && expectedName === returnedName;
 
     if (!nameMatches) {
       log("legal_name_mismatch");
