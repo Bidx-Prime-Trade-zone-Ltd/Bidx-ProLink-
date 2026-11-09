@@ -255,3 +255,66 @@
   .prolink-mobile-topbar {position:sticky;top:0;z-index:40}
   .prolink-bottom-nav {z-index:45}
 }
+
+
+/* Slim compact drawer: narrower than half the viewport with restrained surfaces. */
+@media (max-width:700px) {
+  .app-menu.prolink-drawer {
+    width:min(44vw,290px);
+    max-width:44vw;
+    padding:10px 8px;
+    background:#fbfcfb;
+    border-radius:13px;
+  }
+  .app-menu.prolink-drawer .drawer-brand {
+    gap:6px;
+    padding-bottom:8px;
+    margin-bottom:3px;
+  }
+  .app-menu.prolink-drawer .drawer-brand .brand-mark {
+    font-size:11px;
+    gap:6px;
+    min-width:0;
+  }
+  .app-menu.prolink-drawer .drawer-brand .brand-mark small {
+    font-size:6px;
+    letter-spacing:.7px;
+  }
+  .app-menu.prolink-drawer .drawer-brand .brand-symbol {
+    width:27px;
+    height:27px;
+    flex:0 0 27px;
+    font-size:17px;
+  }
+  .app-menu.prolink-drawer .drawer-close {
+    width:30px;
+    min-width:30px;
+    height:30px;
+    flex:0 0 30px;
+    padding:0!important;
+    display:grid;
+    place-items:center;
+  }
+  .app-menu.prolink-drawer .drawer-close svg {
+    width:18px;
+    height:18px;
+  }
+  .app-menu.prolink-drawer .drawer-section {
+    gap:3px;
+    margin-bottom:3px;
+  }
+  .app-menu.prolink-drawer .drawer-section-heading {
+    font-size:9px;
+    line-height:1.2;
+    letter-spacing:.2px;
+  }
+  .app-menu.prolink-drawer .drawer-section button {
+    padding:6px 7px;
+    min-height:30px;
+    border-radius:7px;
+    font-size:9px;
+    line-height:1.15;
+    font-weight:600;
+    background:#f1f5f1;
+  }
+}
