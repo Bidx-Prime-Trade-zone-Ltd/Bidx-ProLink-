@@ -60,3 +60,7 @@ Do not place service-role keys, payment secrets or other private credentials in 
 Company: BIDX PRIME TRADE ZONE LTD
 Support: Support@bidxpro.online
 Information: Info@bidxpro.online
+
+## Latest deployment trigger — 18 November 2026
+
+The production branch includes the changes merged through pull requests #25 and #26: global professional registration and manual verification, the Supabase-backed approved-professional directory, and the private work-portfolio image gallery. This entry records the release contents; deployment status must be confirmed in the hosting dashboard.
