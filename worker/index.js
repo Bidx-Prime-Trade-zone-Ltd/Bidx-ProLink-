@@ -128,10 +128,104 @@ async function geography(request, ctx) {
   }
 }
 
+const PROLINK_ADMIN_EMAIL = "ojepaamedu@gmail.com";
+
+function adminConfig(env) {
+  return {
+    url: env.VITE_SUPABASE_URL || env.SUPABASE_URL || "",
+    serviceKey: env.SUPABASE_SERVICE_ROLE_KEY || "",
+    anonKey: env.VITE_SUPABASE_ANON_KEY || env.SUPABASE_ANON_KEY || env.SUPABASE_PUBLISHABLE_KEY || ""
+  };
+}
+
+async function requireProlinkAdmin(request, env) {
+  const config=adminConfig(env);
+  if(!config.url||!config.serviceKey||!config.anonKey) return {error:json({error:"Internal Admin server configuration is incomplete."},503)};
+  const authorization=request.headers.get("authorization")||"";
+  if(!authorization.startsWith("Bearer ")) return {error:json({error:"Sign in is required."},401)};
+  const verify=await fetch(config.url+"/auth/v1/user",{headers:{apikey:config.anonKey,authorization}});
+  if(!verify.ok) return {error:json({error:"Your session is invalid or expired."},401)};
+  const user=await verify.json();
+  if(String(user.email||"").toLowerCase()!==PROLINK_ADMIN_EMAIL) return {error:json({error:"You are not authorised to access ProLink Internal Admin."},403)};
+  return {config,user};
+}
+
+async function supabaseRest(config,path,options={}) {
+  const response=await fetch(config.url+path,{...options,headers:{
+    apikey:config.serviceKey,authorization:"Bearer "+config.serviceKey,
+    "content-type":"application/json",...(options.headers||{})
+  }});
+  const raw=await response.text();
+  let data=null;try{data=raw?JSON.parse(raw):null;}catch{data=raw;}
+  if(!response.ok)throw new Error(data?.message||data?.error||"Supabase request failed.");
+  return data;
+}
+
+async function adminDashboard(request,env) {
+  const auth=await requireProlinkAdmin(request,env);if(auth.error)return auth.error;
+  try{
+    const {config}=auth;
+    const [profiles,reviews]=await Promise.all([
+      supabaseRest(config,"/rest/v1/prolink_professional_profiles?select=user_id,full_name,professional_name,category,subcategory,country_name,region,district,city,local_area,is_published,approved_at,created_at&order=created_at.desc&limit=5000"),
+      supabaseRest(config,"/rest/v1/prolink_review_records?select=id,user_id,section,status,submitted_at,reviewed_at,reviewed_by,review_reason,document_path,submitted_data&order=submitted_at.desc&limit=5000")
+    ]);
+    let users=[],page=1;
+    for(;page<=100;page++){
+      const result=await supabaseRest(config,`/auth/v1/admin/users?page=${page}&per_page=1000`);
+      const batch=result?.users||[];
+      users.push(...batch.map(u=>({id:u.id,email:u.email||"",created_at:u.created_at||null,last_sign_in_at:u.last_sign_in_at||null,email_confirmed_at:u.email_confirmed_at||null,provider:u.app_metadata?.provider||"email"})));
+      if(batch.length<1000)break;
+    }
+    const counts={
+      totalUsers:users.length,
+      newUsersToday:users.filter(u=>u.created_at&&new Date(u.created_at).toDateString()===new Date().toDateString()).length,
+      professionalProfiles:profiles.length,
+      pendingDocuments:reviews.filter(r=>r.status==="pending"&&r.document_path).length,
+      pendingReviews:reviews.filter(r=>r.status==="pending").length,
+      approvedDocuments:reviews.filter(r=>r.status==="approved").length,
+      rejectedDocuments:reviews.filter(r=>r.status==="rejected").length
+    };
+    return json({counts,users,profiles,reviews,adminEmail:auth.user.email});
+  }catch(error){console.error("[prolink-admin] dashboard_failed",{name:error?.name||"Error"});return json({error:"Could not load the internal admin dashboard. Check the ProLink tables and service configuration."},502);}
+}
+
+async function adminReview(request,env) {
+  const auth=await requireProlinkAdmin(request,env);if(auth.error)return auth.error;
+  try{
+    const body=await request.json();
+    const recordId=String(body.recordId||"");
+    const action=String(body.action||"");
+    const reason=String(body.reason||"").trim();
+    if(!recordId||!["approve","reject"].includes(action))return json({error:"Choose a valid document review action."},400);
+    if(action==="reject"&&!reason)return json({error:"A reason is required when rejecting a document."},400);
+    const result=await supabaseRest(auth.config,"/rest/v1/rpc/prolink_admin_review",{method:"POST",body:JSON.stringify({p_record_id:recordId,p_action:action,p_reason:reason||null})});
+    return json({success:true,result});
+  }catch(error){console.error("[prolink-admin] review_failed",{name:error?.name||"Error"});return json({error:error?.message||"Document review could not be saved."},502);}
+}
+
+async function adminDocument(request,env) {
+  const auth=await requireProlinkAdmin(request,env);if(auth.error)return auth.error;
+  const url=new URL(request.url),path=url.searchParams.get("path")||"";
+  if(!path||path.startsWith("/")||path.split("/").some(part=>part===".."||!part))return json({error:"Invalid document path."},400);
+  try{
+    const response=await fetch(auth.config.url+"/storage/v1/object/sign/prolink-verification-documents/"+path.split("/").map(encodeURIComponent).join("/") ,{
+      method:"POST",headers:{apikey:auth.config.serviceKey,authorization:"Bearer "+auth.config.serviceKey,"content-type":"application/json"},
+      body:JSON.stringify({expiresIn:300})
+    });
+    const data=await response.json();
+    if(!response.ok)throw new Error(data?.message||"Document preview unavailable.");
+    const signed=data.signedURL||data.signedUrl||"";
+    return json({url:signed.startsWith("http")?signed:auth.config.url+"/storage/v1"+signed});
+  }catch(error){return json({error:error?.message||"Document preview unavailable."},502);}
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     if (url.pathname === "/api/geography" && request.method === "GET") return geography(request, ctx);
+    if (url.pathname === "/api/admin/dashboard" && request.method === "GET") return adminDashboard(request, env);
+    if (url.pathname === "/api/admin/review" && request.method === "POST") return adminReview(request, env);
+    if (url.pathname === "/api/admin/document" && request.method === "GET") return adminDocument(request, env);
 
     // National identity lookups are retired. Prolink now uses manual document review.
     if (url.pathname === "/api/identro-nin") {
