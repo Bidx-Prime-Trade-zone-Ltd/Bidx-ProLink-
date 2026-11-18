@@ -44,3 +44,7 @@
  .admin-header button{white-space:nowrap}
  .admin-security-note{font-size:10px}
 }
+
+.admin-drawer-section{border-top:1px solid #e8eee9;padding-top:10px;margin-top:4px}
+.admin-menu-entry{display:flex!important;align-items:center;gap:8px!important;background:#edf6ef!important;border:1px solid #d5e8d9!important;color:#1f6845!important;font-weight:800!important}
+.admin-menu-entry span{margin-left:auto;font-size:9px!important;color:#64806d!important;background:#fff;border-radius:20px;padding:3px 6px}
