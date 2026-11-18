@@ -1,25 +1,117 @@
 import React,{useEffect,useMemo,useState} from 'react';
 import {supabase} from './lib/supabase.js';
-import {ShieldCheck,Users,Clock3,CheckCircle2,Activity,Search,Send,LogOut,RefreshCw,Eye,Check,X,Trash2} from 'lucide-react';
-const ADMIN='Ojepaamedu@gmail.com';
+import {ShieldCheck,Users,Clock3,CheckCircle2,FileCheck,Search,LogOut,RefreshCw,Check,X,Eye,Globe2,UserRound,CalendarDays,LockKeyhole} from 'lucide-react';
+
+const ADMIN_EMAIL='ojepaamedu@gmail.com';
+const tabs=['Overview','Users','Professional profiles','Document review','Review history'];
+const fmt=value=>value?new Date(value).toLocaleString():'—';
+const label=value=>String(value||'').replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase());
+
 export default function AdminPortal(){
- const [user,setUser]=useState(null),[ready,setReady]=useState(false),[rows,setRows]=useState([]),[counts,setCounts]=useState({total:0,pending:0,approved:0,active:0,inactive:0}),[tab,setTab]=useState('Overview'),[query,setQuery]=useState(''),[selected,setSelected]=useState(null),[reason,setReason]=useState(''),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[subject,setSubject]=useState(''),[broadcast,setBroadcast]=useState(false),[documentUrl,setDocumentUrl]=useState(''),[documentLoading,setDocumentLoading]=useState(false);
- const admin=!!user&&user.email?.toLowerCase()===ADMIN.toLowerCase();
- const load=async()=>{setBusy(true);const {data,error}=await supabase.from('prolink_review_records').select('*').order('submitted_at',{ascending:false}).limit(300);if(error)setNotice(error.message);else setRows(data||[]);const {count:total}=await supabase.from('prolink_review_records').select('*',{count:'exact',head:true});const {count:pending}=await supabase.from('prolink_review_records').select('*',{count:'exact',head:true}).eq('status','pending');const {count:approved}=await supabase.from('prolink_review_records').select('*',{count:'exact',head:true}).eq('status','approved');setCounts({total:total||0,pending:pending||0,approved:approved||0,active:0,inactive:0});setBusy(false);};
- useEffect(()=>{supabase.auth.getUser().then(({data})=>{setUser(data.user);setReady(true);});const {data:{subscription}}=supabase.auth.onAuthStateChange((_e,s)=>setUser(s?.user||null));return()=>subscription.unsubscribe();},[]);
+ const [user,setUser]=useState(null),[ready,setReady]=useState(false),[tab,setTab]=useState('Overview');
+ const [dashboard,setDashboard]=useState({counts:{},users:[],profiles:[],reviews:[]});
+ const [query,setQuery]=useState(''),[selected,setSelected]=useState(null),[reason,setReason]=useState('');
+ const [notice,setNotice]=useState(''),[busy,setBusy]=useState(false),[documentUrl,setDocumentUrl]=useState('');
+ const [documentLoading,setDocumentLoading]=useState(false);
+ const admin=!!user&&String(user.email||'').toLowerCase()===ADMIN_EMAIL;
+
+ const load=async()=>{
+  if(!supabase)return;
+  setBusy(true);setNotice('');
+  try{
+   const {data:{session}}=await supabase.auth.getSession();
+   if(!session?.access_token)throw new Error('Your session has expired. Sign in again.');
+   const response=await fetch('/api/admin/dashboard',{headers:{authorization:'Bearer '+session.access_token}});
+   const payload=await response.json();
+   if(!response.ok)throw new Error(payload.error||'Dashboard could not be loaded.');
+   setDashboard({counts:payload.counts||{},users:payload.users||[],profiles:payload.profiles||[],reviews:payload.reviews||[]});
+  }catch(error){setNotice(error.message||'Dashboard could not be loaded.');}
+  finally{setBusy(false);}
+ };
+ useEffect(()=>{
+  if(!supabase){setReady(true);return;}
+  supabase.auth.getUser().then(({data})=>{setUser(data.user||null);setReady(true);});
+  const {data:{subscription}}=supabase.auth.onAuthStateChange((_event,session)=>setUser(session?.user||null));
+  return()=>subscription.unsubscribe();
+ },[]);
  useEffect(()=>{if(admin)load();},[admin]);
- useEffect(()=>{let active=true;setDocumentUrl('');if(!selected?.document_path)return()=>{active=false;};setDocumentLoading(true);supabase.storage.from('prolink-verification-documents').createSignedUrl(selected.document_path,300).then(({data,error})=>{if(!active)return;if(error)setNotice('Document preview unavailable: '+error.message);else setDocumentUrl(data?.signedUrl||'');}).finally(()=>{if(active)setDocumentLoading(false);});return()=>{active=false;};},[selected?.document_path]);
- const filtered=useMemo(()=>rows.filter(r=>(r.section+' '+r.status+' '+r.user_id).toLowerCase().includes(query.toLowerCase())),[rows,query]);
- const act=async action=>{if(!selected)return;if(action==='reject'&&!reason.trim()){setNotice('A rejection reason is required.');return;}setBusy(true);const {error}=await supabase.rpc('prolink_admin_review',{p_record_id:selected.id,p_action:action,p_reason:reason||null});setBusy(false);if(error){setNotice(error.message);return;}setNotice('Review action saved.');setSelected(null);setReason('');load();};
- const send=async()=>{if(!subject.trim()||!message.trim()){setNotice('Enter a subject and message.');return;}const {error}=await supabase.from('prolink_admin_messages').insert({sender_user_id:user.id,recipient_user_id:broadcast?null:selected?.user_id,broadcast,subject:subject.trim(),body:message.trim()});if(error){setNotice(error.message);return;}setNotice('Message sent.');setSubject('');setMessage('');};
- if(!ready)return <div className="admin-loading">Checking secure access…</div>;
- if(!user)return <div className="admin-login"><ShieldCheck size={36}/><h1>ProLink Admin</h1><p>Sign in with the authorised administrator account.</p><a href="/">Return to ProLink sign in</a></div>;
- if(!admin)return <div className="admin-login"><ShieldCheck size={36}/><h1>Access restricted</h1><p>This account is not authorised to access the private portal.</p><button onClick={()=>supabase.auth.signOut()}>Sign out</button></div>;
- const cards=[['Total submissions',counts.total,Users],['Pending approval',counts.pending,Clock3],['Approved',counts.approved,CheckCircle2],['Active subscribers',counts.active,Activity],['Inactive',counts.inactive,Users]];
- return <div className="admin-shell"><header className="admin-header"><div><span className="admin-kicker">PRIVATE MODERATION PORTAL</span><h1>Bidx ProLink Admin</h1></div><button onClick={()=>supabase.auth.signOut()}><LogOut size={16}/> Sign out</button></header><nav className="admin-tabs">{['Overview','Submissions','Messages','Broadcast'].map(t=><button className={tab===t?'active':''} onClick={()=>{setTab(t);setSelected(null);}}>{t}</button>)}</nav>{notice&&<p className="admin-notice">{notice}</p>}
- {tab==='Overview'&&<><div className="admin-metrics">{cards.map(([label,value,Icon])=><div className="admin-metric"><Icon size={17}/><span>{label}</span><b>{value}</b></div>)}</div><section className="admin-panel"><div className="admin-panel-heading"><h2>Recent submissions</h2><button onClick={load}><RefreshCw size={15}/> Refresh</button></div>{rows.slice(0,8).map(r=><button className="admin-row" onClick={()=>{setSelected(r);setTab('Submissions');}}><span><b>{r.section.replaceAll('_',' ')}</b><small>{r.user_id}</small></span><em>{r.status}</em><small>{new Date(r.submitted_at).toLocaleString()}</small></button>)}</section></>}
- {tab==='Submissions'&&<section className="admin-panel"><div className="admin-panel-heading"><h2>Review queue</h2><label><Search size={15}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search user or section"/></label></div><div className="admin-review-layout"><div>{filtered.map(r=><button className={'admin-row '+(selected?.id===r.id?'chosen':'')} onClick={()=>setSelected(r)}><span><b>{r.section.replaceAll('_',' ')}</b><small>{r.user_id}</small></span><em>{r.status}</em></button>)}</div>{selected&&<article className="admin-detail"><h3>Submission details</h3><p>Applicant ID: {selected.user_id}</p><p>Section: {selected.section}</p><p>Status: {selected.status}</p><p>Submitted: {new Date(selected.submitted_at).toLocaleString()}</p><pre>{JSON.stringify(selected.submitted_data,null,2)}</pre>{selected.document_path&&<div className="admin-document-preview"><h4>Submitted document: {selected.submitted_data?.document_type?.replaceAll('_',' ')||'Supporting document'}</h4>{documentLoading?<p>Preparing secure document preview…</p>:documentUrl?<><a href={documentUrl} target="_blank" rel="noreferrer">Open submitted document securely</a>{(selected.submitted_data?.mime_type||'').startsWith('image/')?<img src={documentUrl} alt="Submitted verification document" style={{display:'block',maxWidth:'100%',maxHeight:420,objectFit:'contain',marginTop:12}}/>:(selected.submitted_data?.mime_type==='application/pdf'?<iframe title="Submitted verification document" src={documentUrl} style={{width:'100%',height:480,border:0,marginTop:12}}/>:null)}</>:<p>Secure preview could not be prepared. Refresh the submission.</p>}</div>}<textarea value={reason} onChange={e=>setReason(e.target.value)} placeholder="Required reason for rejection"/><div className="admin-actions"><button onClick={()=>act('approve')} disabled={busy}><Check size={15}/> Approve</button><button onClick={()=>act('reject')} disabled={busy}><X size={15}/> Reject</button><button onClick={()=>act('remove')} disabled={busy}><Trash2 size={15}/> Remove</button></div></article>}</div></section>}
- {tab==='Messages'&&<section className="admin-panel"><h2>Send a message to an applicant</h2><p>Choose a submission first to select its user, or use Broadcast to notify everyone.</p><label className="admin-check"><input type="checkbox" checked={broadcast} onChange={e=>setBroadcast(e.target.checked)}/> Send as broadcast to all users</label><input value={subject} onChange={e=>setSubject(e.target.value)} placeholder="Message subject"/><textarea value={message} onChange={e=>setMessage(e.target.value)} placeholder="Write your message"/><button onClick={send}><Send size={15}/> Send message</button></section>}
- {tab==='Broadcast'&&<section className="admin-panel"><h2>Broadcast announcement</h2><p>One-way message to all users. Replies are not enabled in this announcement channel.</p><input value={subject} onChange={e=>setSubject(e.target.value)} placeholder="Announcement title"/><textarea value={message} onChange={e=>setMessage(e.target.value)} placeholder="Announcement message"/><button onClick={()=>{setBroadcast(true);send();}}><Send size={15}/> Send to all users</button></section>}
+ useEffect(()=>{
+  let active=true;setDocumentUrl('');
+  if(!selected?.document_path)return()=>{active=false;};
+  (async()=>{
+   setDocumentLoading(true);
+   try{
+    const {data:{session}}=await supabase.auth.getSession();
+    const response=await fetch('/api/admin/document?path='+encodeURIComponent(selected.document_path),{headers:{authorization:'Bearer '+session.access_token}});
+    const payload=await response.json();if(!response.ok)throw new Error(payload.error||'Document preview unavailable.');
+    if(active)setDocumentUrl(payload.url);
+   }catch(error){if(active)setNotice(error.message);}
+   finally{if(active)setDocumentLoading(false);}
+  })();
+  return()=>{active=false;};
+ },[selected?.document_path]);
+
+ const counts=dashboard.counts||{};
+ const users=useMemo(()=>dashboard.users.filter(u=>(u.email+' '+u.id).toLowerCase().includes(query.toLowerCase())),[dashboard.users,query]);
+ const profiles=useMemo(()=>dashboard.profiles.filter(p=>(p.full_name+' '+p.professional_name+' '+p.country_name+' '+p.region+' '+p.city+' '+p.user_id).toLowerCase().includes(query.toLowerCase())),[dashboard.profiles,query]);
+ const reviews=useMemo(()=>dashboard.reviews.filter(r=>(r.section+' '+r.status+' '+r.user_id+' '+(r.submitted_data?.document_name||'')).toLowerCase().includes(query.toLowerCase())),[dashboard.reviews,query]);
+ const pending=reviews.filter(r=>r.status==='pending');
+ const act=async action=>{
+  if(!selected)return;
+  if(action==='reject'&&!reason.trim()){setNotice('Enter a reason before rejecting this document.');return;}
+  setBusy(true);setNotice('');
+  try{
+   const {data:{session}}=await supabase.auth.getSession();
+   const response=await fetch('/api/admin/review',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+session.access_token},body:JSON.stringify({recordId:selected.id,action,reason})});
+   const payload=await response.json();if(!response.ok)throw new Error(payload.error||'Review action failed.');
+   setNotice(action==='approve'?'Document approved.':'Document rejected.');
+   setSelected(null);setReason('');await load();
+  }catch(error){setNotice(error.message||'Review action failed.');}
+  finally{setBusy(false);}
+ };
+
+ if(!ready)return <div className="admin-loading"><ShieldCheck/><p>Checking secure administrator access…</p></div>;
+ if(!user)return <div className="admin-login"><ShieldCheck size={38}/><h1>Bidx ProLink Internal Admin</h1><p>Sign in with the authorised administrator account.</p><a href="/">Return to ProLink sign in</a></div>;
+ if(!admin)return <div className="admin-login"><LockKeyhole size={38}/><h1>Access restricted</h1><p>This account is not authorised to access ProLink Internal Admin.</p><button onClick={()=>supabase.auth.signOut()}>Sign out</button></div>;
+
+ const metrics=[
+  ['Registered users',counts.totalUsers??'—',Users],
+  ['New users today',counts.newUsersToday??'—',CalendarDays],
+  ['Professional profiles',counts.professionalProfiles??'—',UserRound],
+  ['Documents awaiting review',counts.pendingDocuments??'—',Clock3],
+  ['Approved documents',counts.approvedDocuments??'—',CheckCircle2],
+  ['Rejected documents',counts.rejectedDocuments??'—',FileCheck]
+ ];
+ return <div className="admin-shell">
+  <header className="admin-header"><div><span className="admin-kicker">RESTRICTED · DOCUMENT APPROVAL ONLY</span><h1>Bidx ProLink Internal Admin</h1><p className="admin-subtitle">{ADMIN_EMAIL}</p></div><button onClick={()=>supabase.auth.signOut()}><LogOut size={16}/> Sign out</button></header>
+  <div className="admin-security-note"><LockKeyhole size={16}/><span>Read-only access to account and professional information. This administrator can approve or reject submitted documents only. Profile details cannot be edited here.</span></div>
+  <nav className="admin-tabs">{tabs.map(t=><button key={t} className={tab===t?'active':''} onClick={()=>{setTab(t);setSelected(null);setQuery('');}}>{t}</button>)}</nav>
+  {notice&&<p className="admin-notice" role="status">{notice}</p>}
+  {tab==='Overview'&&<>
+   <div className="admin-metrics">{metrics.map(([name,value,Icon])=><article className="admin-metric" key={name}><Icon size={18}/><span>{name}</span><b>{value}</b></article>)}</div>
+   <section className="admin-panel"><div className="admin-panel-heading"><div><h2>Pending document reviews</h2><p>Latest submissions requiring an approval decision.</p></div><button onClick={load} disabled={busy}><RefreshCw size={15}/> Refresh</button></div>
+    {dashboard.reviews.filter(r=>r.status==='pending').slice(0,8).map(r=><button key={r.id} className="admin-row" onClick={()=>{setSelected(r);setTab('Document review');}}><span><b>{label(r.submitted_data?.document_type||r.section)}</b><small>{r.submitted_data?.document_name||r.user_id}</small></span><em>Pending</em><small>{fmt(r.submitted_at)}</small></button>)}
+    {!pending.length&&<p className="admin-empty">There are no pending document reviews.</p>}
+   </section>
+  </>}
+  {tab==='Users'&&<section className="admin-panel"><div className="admin-panel-heading"><div><h2>Registered users</h2><p>Account details are view-only. Total: {counts.totalUsers??dashboard.users.length}</p></div><label className="admin-search"><Search size={15}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search email or user ID"/></label></div>
+   <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Email</th><th>User ID</th><th>Sign-up date</th><th>Last sign-in</th><th>Provider</th><th>Email status</th></tr></thead><tbody>{users.map(u=><tr key={u.id}><td>{u.email||'—'}</td><td className="admin-id">{u.id}</td><td>{fmt(u.created_at)}</td><td>{fmt(u.last_sign_in_at)}</td><td>{label(u.provider)}</td><td>{u.email_confirmed_at?'Confirmed':'Not confirmed'}</td></tr>)}</tbody></table></div>
+   {!users.length&&<p className="admin-empty">No matching registered users.</p>}
+  </section>}
+  {tab==='Professional profiles'&&<section className="admin-panel"><div className="admin-panel-heading"><div><h2>Professional profiles</h2><p>View-only professional information.</p></div><label className="admin-search"><Search size={15}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search name, country or area"/></label></div>
+   <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Professional</th><th>Trade</th><th>Country</th><th>Region / State</th><th>District</th><th>City</th><th>Published</th></tr></thead><tbody>{profiles.map(p=><tr key={p.user_id}><td>{p.professional_name||p.full_name||'—'}<small className="admin-cell-sub">{p.user_id}</small></td><td>{p.subcategory||p.category||'—'}</td><td>{p.country_name||'—'}</td><td>{p.region||'—'}</td><td>{p.district||'—'}</td><td>{p.city||'—'}</td><td>{p.is_published?'Yes':'No'}</td></tr>)}</tbody></table></div>
+  </section>}
+  {tab==='Document review'&&<section className="admin-panel"><div className="admin-panel-heading"><div><h2>Document approval queue</h2><p>Inspect the submitted file, then approve or reject it. Submitted personal details are not editable.</p></div><label className="admin-search"><Search size={15}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search applicant or document"/></label></div>
+   <div className="admin-review-layout"><div className="admin-review-list">{reviews.map(r=><button key={r.id} className={'admin-row '+(selected?.id===r.id?'chosen':'')} onClick={()=>setSelected(r)}><span><b>{label(r.submitted_data?.document_type||r.section)}</b><small>{r.submitted_data?.document_name||r.user_id}</small></span><em>{label(r.status)}</em></button>)}</div>
+    {selected?<article className="admin-detail"><h3>Document review</h3><dl className="admin-readonly"><div><dt>Applicant ID</dt><dd>{selected.user_id}</dd></div><div><dt>Document type</dt><dd>{label(selected.submitted_data?.document_type||selected.section)}</dd></div><div><dt>File name</dt><dd>{selected.submitted_data?.document_name||'—'}</dd></div><div><dt>Submitted</dt><dd>{fmt(selected.submitted_at)}</dd></div><div><dt>Status</dt><dd>{label(selected.status)}</dd></div></dl>
+     {selected.document_path&&<div className="admin-document-preview"><h4>Submitted document</h4>{documentLoading?<p>Preparing secure preview…</p>:documentUrl?<><a href={documentUrl} target="_blank" rel="noreferrer">Open document in a new tab</a>{(selected.submitted_data?.mime_type||'').startsWith('image/')?<img src={documentUrl} alt="Submitted document" style={{display:'block',maxWidth:'100%',maxHeight:480,objectFit:'contain',marginTop:12}}/>:selected.submitted_data?.mime_type==='application/pdf'?<iframe title="Submitted document" src={documentUrl} style={{width:'100%',height:480,border:0,marginTop:12}}/>:null}</>:<p>Document preview is unavailable.</p>}</div>}
+     {selected.status==='pending'?<><label className="admin-reason">Rejection reason (required only when rejecting)<textarea value={reason} onChange={e=>setReason(e.target.value)} placeholder="Explain what is missing or unclear"/></label><div className="admin-actions"><button onClick={()=>act('approve')} disabled={busy}><Check size={15}/> Approve document</button><button className="admin-reject" onClick={()=>act('reject')} disabled={busy}><X size={15}/> Reject document</button></div></>:<p className="admin-readonly-status">This item has already been reviewed. No further changes are available here.</p>}
+    </article>:<div className="admin-detail admin-detail-empty"><Eye size={22}/><p>Select a document to inspect it.</p></div>}
+   </div>
+  </section>}
+  {tab==='Review history'&&<section className="admin-panel"><div className="admin-panel-heading"><div><h2>Document review history</h2><p>Audit view of completed approval decisions.</p></div><label className="admin-search"><Search size={15}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search history"/></label></div>
+   <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Document</th><th>Applicant ID</th><th>Decision</th><th>Submitted</th><th>Reviewed</th><th>Reason</th></tr></thead><tbody>{reviews.filter(r=>r.status!=='pending').map(r=><tr key={r.id}><td>{label(r.submitted_data?.document_type||r.section)}</td><td className="admin-id">{r.user_id}</td><td><span className={'admin-status '+r.status}>{label(r.status)}</span></td><td>{fmt(r.submitted_at)}</td><td>{fmt(r.reviewed_at)}</td><td>{r.review_reason||'—'}</td></tr>)}</tbody></table></div>
+  </section>}
+  <footer className="admin-footer"><ShieldCheck size={15}/> Bidx ProLink · Internal document moderation · Read-only user records</footer>
  </div>;
 }
