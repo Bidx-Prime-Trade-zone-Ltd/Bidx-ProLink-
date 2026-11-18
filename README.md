@@ -43,7 +43,7 @@ npx wrangler deploy
 
 Project: `ljttcncfcetgdqfmtdhm` (Bidx ProLink).
 
-The private verification-document bucket and row-level security policies are provisioned by the migration `prolink_verification_document_storage`. The Admin review foundation is provisioned by `prolink_admin_foundation`.
+The private verification-document bucket and row-level security policies are provisioned by the migration `prolink_verification_document_storage`. The Admin review foundation is provisioned by `prolink_admin_foundation`. Admin decisions update the applicant's manual verification and professional onboarding statuses through `prolink_sync_manual_review_status`.
 
 Do not place service-role keys, payment secrets or other private credentials in frontend code or source control.
 
