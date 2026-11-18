@@ -52,7 +52,6 @@ function App() {
   }, []);
   const loadProfessionals = async (append = false) => {
     if(!supabase){setProfessionals([]);setDirectoryHasMore(false);setDirectoryLoading(false);return;}
-    if(directoryLoading)return;
     setDirectoryLoading(true);
     if(!append)setDirectoryError('');
     const from=append?professionals.length:0;
