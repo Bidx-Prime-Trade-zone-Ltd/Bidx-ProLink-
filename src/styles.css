@@ -51,7 +51,7 @@
 .prolink-bottom-nav button{min-width:72px;gap:5px;font-size:11px;color:#7d8981}
 .prolink-bottom-nav button.selected{color:#27834d}
 .prolink-bottom-nav button svg{width:23px;height:23px}
-.prolink-drawer{padding:12px 10px;gap:5px}.prolink-drawer .brand-mark{font-size:13px}.prolink-drawer .brand-symbol{width:29px;height:29px}.prolink-drawer .drawer-brand{padding-bottom:10px;margin-bottom:4px}.prolink-drawer .drawer-section{display:flex;flex-direction:column;gap:4px}.prolink-drawer .drawer-section-heading{font-size:10px;letter-spacing:.3px}.prolink-drawer .drawer-section button{font-size:11px;padding:8px 9px;line-height:1.2}
+.prolink-drawer{padding:12px 10px;gap:5px}.prolink-drawer .brand-mark{font-size:13px}.prolink-drawer .brand-symbol{width:29px;height:29px}.prolink-drawer .drawer-brand{padding-bottom:10px;margin-bottom:4px}.prolink-drawer .drawer-section{display:flex;flex-direction:column;gap:4px}.prolink-drawer .drawer-section-heading{font-size:10px;letter-spacing:.3px;font-weight:700}.prolink-drawer .drawer-section button{font-size:11px;padding:8px 9px;line-height:1.2;font-weight:650}
 .drawer-brand{display:flex;align-items:center;justify-content:space-between;padding:2px 0 20px;margin-bottom:8px;border-bottom:1px solid #edf1ed}
 .drawer-close{width:36px;height:36px;display:grid;place-items:center!important;padding:0!important;background:#f2f6f2!important}
 .drawer-contact{display:flex;flex-direction:column;gap:9px;padding:16px 8px;color:#52675a}
@@ -314,7 +314,7 @@
     border-radius:7px;
     font-size:9px;
     line-height:1.15;
-    font-weight:600;
+    font-weight:650;
     background:#f1f5f1;
   }
 }
