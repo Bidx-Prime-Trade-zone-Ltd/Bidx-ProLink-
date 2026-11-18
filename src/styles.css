@@ -345,4 +345,4 @@
 
 
 /* Account and settings destinations open as contained pages inside the app shell. */
-.account-page-shell{width:min(100% - 40px,920px);margin:24px auto 54px;padding:28px 30px;background:#fff;border:1px solid var(--line);border-radius:16px;box-shadow:0 12px 36px #173a260a;min-height:260px}.account-page-shell h1{margin-top:4px}.account-page-shell .panel{margin-top:18px}.account-page-shell .back-link{margin-bottom:16px}@media(max-width:700px){.account-page-shell{width:calc(100% - 24px);margin:14px auto 90px;padding:20px 16px;border-radius:13px}.account-page-shell .form-grid{grid-template-columns:1fr}}
+.account-page-shell{width:min(calc(100% - 40px),920px);margin:24px auto 54px;padding:28px 30px;background:#fff;border:1px solid var(--line);border-radius:16px;box-shadow:0 12px 36px #173a260a;min-height:260px}.account-page-shell h1{margin-top:4px}.account-page-shell .panel{margin-top:18px}.account-page-shell .back-link{margin-bottom:16px}@media(max-width:700px){.account-page-shell{width:calc(100% - 24px);margin:14px auto 90px;padding:20px 16px;border-radius:13px}.account-page-shell .form-grid{grid-template-columns:1fr}}
