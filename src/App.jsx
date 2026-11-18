@@ -76,7 +76,7 @@ function App() {
     let active=true;
     setAdminAreas({level1:[],level2:[],level3:[],level4:[]});
     setAdminAreaLabels({level1:'State / province / region',level2:'County / district',level3:'City / municipality',level4:'Local area'});
-    if(!joinData.country_iso3)return;
+    if(!showJoin||!joinData.country_iso3)return;
     setAdminAreasLoading(true);
     Promise.all([1,2,3,4].map(level=>getAdministrativeAreas(joinData.country_iso3,level).catch(()=>null))).then(results=>{
       if(!active)return;
@@ -86,7 +86,7 @@ function App() {
       setAdminAreas(nextAreas);setAdminAreaLabels(nextLabels);
     }).finally(()=>{if(active)setAdminAreasLoading(false);});
     return()=>{active=false;};
-  },[joinData.country_iso3]);
+  },[joinData.country_iso3,showJoin]);
   const [showCategories, setShowCategories] = useState(false);
   const [categorySearch, setCategorySearch] = useState('');
   const [categoryGroup, setCategoryGroup] = useState('');
