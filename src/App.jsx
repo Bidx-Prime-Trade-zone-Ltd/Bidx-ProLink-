@@ -65,27 +65,6 @@ function App() {
     setDirectoryLoading(false);
   };
   useEffect(()=>{if(authReady)loadProfessionals();},[authReady,session?.user?.id]);
-  useEffect(()=>{
-    let active=true;
-    if(!selected?.id){setSelectedGallery([]);return()=>{active=false;};}
-    setGalleryLoading(true);
-    supabase.from('prolink_work_gallery').select('id,user_id,object_path,caption,created_at').eq('user_id',selected.id).eq('is_public',true).order('created_at',{ascending:false}).then(async ({data,error})=>{
-      if(!active)return;
-      if(error){setSelectedGallery([]);return;}
-      const gallery=await Promise.all((data||[]).map(async item=>{const {data:signed}=await supabase.storage.from('prolink-work-gallery').createSignedUrl(item.object_path,3600);return {...item,url:signed?.signedUrl||''};}));
-      if(active)setSelectedGallery(gallery.filter(item=>item.url));
-    }).finally(()=>{if(active)setGalleryLoading(false);});
-    return()=>{active=false;};
-  },[selected?.id]);
-  useEffect(()=>{
-    let active=true;
-    if(tab!=='My Work Portfolio'||!session?.user?.id)return()=>{active=false;};
-    supabase.from('prolink_work_gallery').select('id,user_id,object_path,caption,created_at').eq('user_id',session.user.id).order('created_at',{ascending:false}).then(async ({data,error})=>{
-      if(!active)return;
-      if(!error){const gallery=await Promise.all((data||[]).map(async item=>{const {data:signed}=await supabase.storage.from('prolink-work-gallery').createSignedUrl(item.object_path,3600);return {...item,url:signed?.signedUrl||''};}));if(active)setMyGallery(gallery.filter(item=>item.url));}
-    });
-    return()=>{active=false;};
-  },[tab,session?.user?.id]);
   const [tab, setTab] = useState('Explore');
   const [query, setQuery] = useState('');
   const [location, setLocation] = useState('');
@@ -162,6 +141,27 @@ function App() {
   }, []);
   useEffect(() => { try { localStorage.setItem('prolink-onboarding-draft',JSON.stringify(joinData)); } catch {} }, [joinData]);
 
+  useEffect(()=>{
+    let active=true;
+    if(!selected?.id){setSelectedGallery([]);return()=>{active=false;};}
+    setGalleryLoading(true);
+    supabase.from('prolink_work_gallery').select('id,user_id,object_path,caption,created_at').eq('user_id',selected.id).eq('is_public',true).order('created_at',{ascending:false}).then(async ({data,error})=>{
+      if(!active)return;
+      if(error){setSelectedGallery([]);return;}
+      const gallery=await Promise.all((data||[]).map(async item=>{const {data:signed}=await supabase.storage.from('prolink-work-gallery').createSignedUrl(item.object_path,3600);return {...item,url:signed?.signedUrl||''};}));
+      if(active)setSelectedGallery(gallery.filter(item=>item.url));
+    }).finally(()=>{if(active)setGalleryLoading(false);});
+    return()=>{active=false;};
+  },[selected?.id]);
+  useEffect(()=>{
+    let active=true;
+    if(tab!=='My Work Portfolio'||!session?.user?.id)return()=>{active=false;};
+    supabase.from('prolink_work_gallery').select('id,user_id,object_path,caption,created_at').eq('user_id',session.user.id).order('created_at',{ascending:false}).then(async ({data,error})=>{
+      if(!active)return;
+      if(!error){const gallery=await Promise.all((data||[]).map(async item=>{const {data:signed}=await supabase.storage.from('prolink-work-gallery').createSignedUrl(item.object_path,3600);return {...item,url:signed?.signedUrl||''};}));if(active)setMyGallery(gallery.filter(item=>item.url));}
+    });
+    return()=>{active=false;};
+  },[tab,session?.user?.id]);
   const filtered = useMemo(() => professionals.filter(p => {
     const text = `${p.name} ${p.trade} ${p.city} ${p.skills.join(' ')} ${p.about}`.toLowerCase();
     const matchesText = text.includes(query.toLowerCase());
