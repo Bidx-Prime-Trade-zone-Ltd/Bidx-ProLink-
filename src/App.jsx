@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import AuthModal from './AuthModal.jsx';
 import { TermsContent, PrivacyContent } from './LegalPages.jsx';
 import { PROFESSION_GROUPS, ALL_PROFESSIONS } from './professions.js';
+import { INITIAL_COUNTRIES, COUNTRY_BY_CODE } from './globalCountries.js';
+import { getAdministrativeAreas } from './lib/geography.js';
 import { supabase } from './lib/supabase.js';
 import AdminPortal from './AdminPortal.jsx';
 import './admin.css';
@@ -15,25 +17,6 @@ import {
 } from 'lucide-react';
 
 const categories = PROFESSION_GROUPS.slice(0,7).map(g=>({name:g.name,sub:g.services})).concat([{name:'More categories',sub:[]}]);
-
-const NIGERIAN_STATES = ['Abia','Adamawa','Akwa Ibom','Anambra','Bauchi','Bayelsa','Benue','Borno','Cross River','Delta','Ebonyi','Edo','Ekiti','Enugu','FCT','Gombe','Imo','Jigawa','Kaduna','Kano','Katsina','Kebbi','Kogi','Kwara','Lagos','Nasarawa','Niger','Ogun','Ondo','Osun','Oyo','Plateau','Rivers','Sokoto','Taraba','Yobe','Zamfara'];
-const LGA_OPTIONS = {
-'Lagos':['Agege','Ajeromi-Ifelodun','Alimosho','Amuwo-Odofin','Apapa','Badagry','Epe','Eti-Osa','Ibeju-Lekki','Ifako-Ijaiye','Ikeja','Ikorodu','Kosofe','Lagos Island','Lagos Mainland','Mushin','Ojo','Oshodi-Isolo','Shomolu','Surulere'],
-'FCT':['Abaji','Bwari','Gwagwalada','Kuje','Kwali','Municipal Area Council'],
-'Ogun':['Abeokuta North','Abeokuta South','Ado-Odo/Ota','Ewekoro','Ifo','Ijebu East','Ijebu North','Ijebu Ode','Ikenne','Imeko-Afon','Ipokia','Obafemi-Owode','Odeda','Odogbolu','Remo North','Sagamu','Yewa North','Yewa South'],
-'Oyo':['Afijio','Akinyele','Atiba','Egbeda','Ibadan North','Ibadan North-East','Ibadan North-West','Ibadan South-East','Ibadan South-West','Ibarapa Central','Ibarapa East','Ibarapa North','Ido','Irepo','Ogbomoso North','Ogbomoso South','Ona Ara','Oyo East','Oyo West'],
-'Rivers':['Abua/Odual','Ahoada East','Ahoada West','Akuku-Toru','Andoni','Asari-Toru','Bonny','Degema','Eleme','Emohua','Etche','Gokana','Ikwerre','Khana','Obio/Akpor','Ogba/Egbema/Ndoni','Okrika','Omuma','Port Harcourt','Tai'],
-'Kano':['Ajingi','Albasu','Bagwai','Bebeji','Bichi','Dala','Dawakin Kudu','Fagge','Gaya','Gwale','Kano Municipal','Nassarawa','Tarauni','Ungogo'],
-'Kaduna':['Birnin Gwari','Chikun','Giwa','Igabi','Jaba','Jema’a','Kaduna North','Kaduna South','Kachia','Kagarko','Kajuru','Kaura','Kauru','Kubau','Zaria'],
-'Enugu':['Aninri','Awgu','Enugu East','Enugu North','Enugu South','Ezeagu','Igbo-Etiti','Igbo-Eze North','Igbo-Eze South','Isi-Uzo','Nkanu East','Nkanu West','Nsukka','Oji River','Udenu','Udi','Uzo-Uwani'],
-'Delta':['Aniocha North','Aniocha South','Ethiope East','Ethiope West','Ika North-East','Ika South','Ndokwa East','Ndokwa West','Okpe','Oshimili North','Oshimili South','Sapele','Udu','Ughelli North','Ughelli South','Warri North','Warri South','Warri South-West'],
-'Abia':['Aba North','Aba South','Arochukwu','Bende','Ikwuano','Isiala Ngwa North','Isiala Ngwa South','Isuikwuato','Obi Ngwa','Ohafia','Osisioma','Ugwunagbo','Ukwa East','Ukwa West','Umuahia North','Umuahia South'],
-'Anambra':['Aguata','Anambra East','Anambra West','Awka North','Awka South','Ayamelum','Dunukofia','Idemili North','Idemili South','Ihiala','Njikoka','Nnewi North','Nnewi South','Ogbaru','Onitsha North','Onitsha South','Orumba North','Orumba South','Oyi'],
-'Edo':['Akoko-Edo','Egor','Esan Central','Esan North-East','Esan South-East','Esan West','Etsako Central','Etsako East','Etsako West','Igueben','Ikpoba-Okha','Oredo','Orhionmwon','Ovia North-East','Ovia South-West','Uhunmwonde'],
-'Akwa Ibom':['Abak','Eastern Obolo','Eket','Esit Eket','Etim Ekpo','Etinan','Ibeno','Ibesikpo Asutan','Ibiono-Ibom','Ika','Ikono','Ikot Abasi','Ikot Ekpene','Ini','Itu','Mbo','Mkpat-Enin','Nsit Atai','Nsit Ibom','Nsit Ubium','Obot Akara','Okobo','Onna','Oron','Oruk Anam','Udung Uko','Ukanafun','Uruan','Urue-Offong/Oruko','Uyo'],
-'Borno':['Askira/Uba','Bama','Bayo','Biu','Chibok','Damboa','Dikwa','Gubio','Guzamala','Gwoza','Hawul','Jere','Kaga','Kala/Balge','Konduga','Maiduguri','Monguno'],
-'Imo':['Aboh Mbaise','Ahiazu Mbaise','Ehime Mbano','Ezinihitte','Ideato North','Ideato South','Ihitte/Uboma','Ikeduru','Isiala Mbano','Mbaitoli','Ngor Okpala','Njaba','Nkwerre','Nwangele','Obowo','Oguta','Ohaji/Egbema','Okigwe','Orlu','Orsu','Oru East','Oru West','Owerri Municipal','Owerri North','Owerri West']
-};
 
 const professionals = [
   { id: 1, name: 'Samuel Okafor', trade: 'Electrical technician', city: 'Lekki, Lagos', rating: '4.9', reviews: 84, jobs: 126, verified: true, price: '₦8,000', initials: 'SO', color: 'avatar-green', skills: ['House wiring', 'Inverter installation', 'Fault tracing'], about: 'Experienced electrical technician for homes, offices and small businesses. I focus on safe installations, neat finishing and clear communication.', years: '8 years' },
@@ -66,7 +49,7 @@ function App() {
   }, []);
   const [tab, setTab] = useState('Explore');
   const [query, setQuery] = useState('');
-  const [location, setLocation] = useState('Lagos, Nigeria');
+  const [location, setLocation] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
   const [selected, setSelected] = useState(null);
   const [saved, setSaved] = useState([]);
@@ -74,11 +57,33 @@ function App() {
   const [authMode, setAuthMode] = useState('Sign in');
   const [showJoin, setShowJoin] = useState(false);
   const [joinStep, setJoinStep] = useState(1);
-  const [joinData, setJoinData] = useState(() => { const empty={full_name:'',email:'',phone:'',whatsapp:'',dob_day:'',dob_month:'',dob_year:'',state:'',lga:'',address:'',category:'',subcategory:'',experience:'',skills:'',nin:'',business_name:'',cac_number:'',trade_test:'',other_certificate:'',about:''}; try{return {...empty,...JSON.parse(localStorage.getItem('prolink-onboarding-draft')||'{}'),nin:''};}catch{return empty;} });
+  const [joinData, setJoinData] = useState(() => { const empty={full_name:'',email:'',phone:'',whatsapp:'',dob_day:'',dob_month:'',dob_year:'',country_code:'',country_iso3:'',country_name:'',region:'',district:'',city:'',local_area:'',postal_code:'',address:'',category:'',subcategory:'',experience:'',skills:'',business_name:'',about:''}; try{return {...empty,...JSON.parse(localStorage.getItem('prolink-onboarding-draft')||'{}')};}catch{return empty;} });
+  const [adminAreas,setAdminAreas] = useState([]);
+  const [adminAreaLabel,setAdminAreaLabel] = useState('State / province / region');
+  const [adminAreasLoading,setAdminAreasLoading] = useState(false);
+  const [workingIdFile,setWorkingIdFile] = useState(null);
+  const [competencyFile,setCompetencyFile] = useState(null);
+  const [extraSkillFile,setExtraSkillFile] = useState(null);
   const [joinSaving, setJoinSaving] = useState(false);
-  const [ninConsent, setNinConsent] = useState(false);
-  const [ninLookupStatus, setNinLookupStatus] = useState('idle');
-  const [ninVerifiedLegalName, setNinVerifiedLegalName] = useState('');
+  useEffect(() => {
+    const meta=session?.user?.user_metadata||{};
+    if(meta.country_code && !joinData.country_code){
+      const country=COUNTRY_BY_CODE[meta.country_code];
+      setJoinData(p=>({...p,country_code:meta.country_code,country_iso3:country?.iso3||meta.country_iso3||'',country_name:country?.name||meta.country_name||''}));
+    }
+  },[session]);
+  useEffect(() => {
+    let active=true;
+    setAdminAreas([]);setAdminAreaLabel('State / province / region');
+    if(!joinData.country_iso3)return;
+    setAdminAreasLoading(true);
+    getAdministrativeAreas(joinData.country_iso3,1).then(data=>{
+      if(!active)return;
+      setAdminAreas(data.areas||[]);
+      setAdminAreaLabel(data.levelName||'State / province / region');
+    }).catch(()=>{if(active)setAdminAreas([]);}).finally(()=>{if(active)setAdminAreasLoading(false);});
+    return()=>{active=false;};
+  },[joinData.country_iso3]);
   const [showCategories, setShowCategories] = useState(false);
   const [categorySearch, setCategorySearch] = useState('');
   const [categoryGroup, setCategoryGroup] = useState('');
@@ -119,7 +124,7 @@ function App() {
     const text = `${p.name} ${p.trade} ${p.city} ${p.skills.join(' ')}`.toLowerCase();
     const matchesText = text.includes(query.toLowerCase());
     const matchesCategory = activeCategory === 'All' || p.trade.toLowerCase().includes(activeCategory.toLowerCase()) || p.skills.join(' ').toLowerCase().includes(activeCategory.toLowerCase());
-    const matchesCity = location.trim() === '' || p.city.toLowerCase().includes(location.split(',')[0].trim().toLowerCase()) || location.toLowerCase().includes('nigeria') || p.city.toLowerCase().includes(location.toLowerCase());
+    const matchesCity = location.trim() === '' || p.city.toLowerCase().includes(location.split(',')[0].trim().toLowerCase()) || p.city.toLowerCase().includes(location.toLowerCase());
     return matchesText && matchesCategory && matchesCity;
   }), [query, activeCategory, location]);
 
@@ -128,30 +133,6 @@ function App() {
 
   const openAuth = (mode = 'Sign in') => { setAuthMode(mode); setShowAuth(true); setMobileMenu(false); };
   const saveProfile = async () => { setSavingProfile(true); const {error}=await supabase.auth.updateUser({data:profile}); setSavingProfile(false); notify(error ? error.message : 'Profile saved.'); };
-  const verifyNin = async () => {
-    if (!joinData.full_name.trim() || !/^\d{11}$/.test(joinData.nin) || !ninConsent) {
-      notify('Enter your full legal name and 11-digit NIN, then provide consent before lookup.');
-      return;
-    }
-    setNinLookupStatus('loading');
-    setNinVerifiedLegalName('');
-    try {
-      const consentReference='PROLINK-'+session.user.id+'-'+Date.now();
-      const response=await fetch('/api/identro-nin',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({nin:joinData.nin,legalName:joinData.full_name,consentCaptured:true,consentReference})});
-      const result=await response.json().catch(()=>null);
-      if (!response.ok || result?.success!==true || !result?.legalName) {
-        setNinLookupStatus('failed');
-        notify('We could not complete your verification right now. Please continue with manual submission.');
-        return;
-      }
-      setNinVerifiedLegalName(result.legalName);
-      setNinLookupStatus('success');
-      notify('NIN lookup successful. Your legal name has been verified.');
-    } catch {
-      setNinLookupStatus('failed');
-      notify('We could not complete your verification right now. Please continue with manual submission.');
-    }
-  };
   const signOut = async () => { const {error}=await supabase.auth.signOut(); if(error) notify(error.message); };
   const startRequest = (person) => { setSelected(person); setRequestSent(false); setShowRequest(true); };
   const startJoin = (category = '', service = '') => { setJoinData(p=>({...p,category:category||p.category,subcategory:service||p.subcategory})); setJoinStep(1); setShowCategories(false); setShowJoin(true); };
@@ -196,7 +177,6 @@ function App() {
         <div className="prolink-search-inner">
           <div className="prolink-search-title">What service do you need?</div>
           <div className="prolink-search-row">
-            <label className="prolink-location-select"><MapPin size={17}/><select aria-label="Country"><option>Nigeria</option></select><ChevronDown size={15}/></label>
             <label className="prolink-search-input"><Search size={19}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search for a service..."/></label>
           </div>
           <label className="prolink-area-input"><MapPin size={16}/><input value={location} onChange={e=>setLocation(e.target.value)} placeholder="Select your state or location"/></label>
@@ -204,7 +184,7 @@ function App() {
         </div>
       </section>
       <section className="prolink-category-section">
-        <div className="prolink-category-intro"><h2>Find skilled professionals. Build your profile. Grow your work.</h2><p>Join Bidx ProLink to showcase your skills and connect with customers across Nigeria.</p><button onClick={()=>openCategoryBrowser()}>Register as a professional <ChevronRight size={14}/></button></div>
+        <div className="prolink-category-intro"><h2>Find skilled professionals. Build your profile. Grow your work.</h2><p>Join Pedes Prolink to showcase your skills and connect with customers around the world.</p><button onClick={()=>openCategoryBrowser()}>Register as a professional <ChevronRight size={14}/></button></div>
         <div className="prolink-category-grid">{categories.map((category,index)=><button key={category.name} className={index===7?'prolink-category-card more-category':'prolink-category-card'} onClick={()=>openCategoryBrowser(index===7?'':category.name)}><span>{category.name}</span>{index===7&&<small>View all services</small>}</button>)}</div>
       </section>
     </main>}
@@ -224,10 +204,14 @@ function App() {
         <label className="form-label">Phone number *<input type="tel" inputMode="numeric" value={joinData.phone} onChange={e=>setJoinData(p=>({...p,phone:e.target.value.replace(/\D/g,'').slice(0,15)}))} placeholder="08012345678"/></label>
         <label className="form-label">WhatsApp number<input type="tel" inputMode="numeric" value={joinData.whatsapp} onChange={e=>setJoinData(p=>({...p,whatsapp:e.target.value.replace(/\D/g,'').slice(0,15)}))} placeholder="WhatsApp number"/></label>
         <div className="form-label dob-field"><span>Date of birth</span><div className="dob-controls"><input aria-label="Day" inputMode="numeric" pattern="[0-9]*" maxLength={2} value={joinData.dob_day} onChange={e=>setJoinData(p=>({...p,dob_day:e.target.value.replace(/\D/g,'').slice(0,2)}))} placeholder="DD"/><select aria-label="Month" value={joinData.dob_month} onChange={e=>setJoinData(p=>({...p,dob_month:e.target.value}))}><option value="">Month</option>{['January','February','March','April','May','June','July','August','September','October','November','December'].map((m,i)=><option key={m} value={String(i+1).padStart(2,'0')}>{m}</option>)}</select><input aria-label="Year" inputMode="numeric" pattern="[0-9]*" maxLength={4} value={joinData.dob_year} onChange={e=>setJoinData(p=>({...p,dob_year:e.target.value.replace(/\D/g,'').slice(0,4)}))} placeholder="YYYY"/></div><small>Date of birth is collected for your profile only. A DOB mismatch will not fail NIN verification.</small></div>
-        <label className="form-label">State *<select value={joinData.state} onChange={e=>setJoinData(p=>({...p,state:e.target.value,lga:''}))}><option value="">Select state</option>{NIGERIAN_STATES.map(st=><option key={st}>{st}</option>)}</select></label>
-        <label className="form-label">Local Government Area *<select value={joinData.lga} onChange={e=>setJoinData(p=>({...p,lga:e.target.value}))}><option value="">Select LGA</option>{(LGA_OPTIONS[joinData.state]||['Other / not listed']).map(lga=><option key={lga}>{lga}</option>)}</select></label>
-        <label className="form-label wide-field">Residential address *<input value={joinData.address} onChange={e=>setJoinData(p=>({...p,address:e.target.value}))} placeholder="Street, area and city"/></label>
-        <div className="document-required wide-field"><b>National Identification Number (NIN) *</b><small>Enter your 11-digit NIN. Tap Verify NIN to run the secure Identro lookup. Your NIN is sent server-to-server and is not saved in your profile.</small><input inputMode="numeric" pattern="[0-9]*" maxLength={11} value={joinData.nin} onChange={e=>{setJoinData(p=>({...p,nin:e.target.value.replace(/\D/g,'').slice(0,11)}));setNinLookupStatus('idle');setNinVerifiedLegalName('');}} placeholder="Enter your 11-digit NIN"/><label className="form-label consent-line"><input type="checkbox" checked={ninConsent} onChange={e=>{setNinConsent(e.target.checked);setNinLookupStatus('idle');setNinVerifiedLegalName('');}}/> I consent to Bidx ProLink submitting my NIN to Identro for identity verification.</label><button type="button" className="outline-button" disabled={ninLookupStatus==='loading'} onClick={verifyNin}>{ninLookupStatus==='loading'?'Checking NIN…':'Verify NIN'}</button>{ninLookupStatus==='success'&&<p role="status">NIN lookup successful. Verified legal name: <b>{ninVerifiedLegalName}</b></p>}{ninLookupStatus==='failed'&&<p role="status">We could not complete your verification right now. Please continue with manual submission. You may submit your legal details for manual review.</p>}</div>
+        {!joinData.country_code && <label className="form-label">Country of residence *<select value={joinData.country_code} onChange={e=>{const c=COUNTRY_BY_CODE[e.target.value];setJoinData(p=>({...p,country_code:c?.code||'',country_iso3:c?.iso3||'',country_name:c?.name||'',region:''}));}}><option value="">Select your country</option>{INITIAL_COUNTRIES.map(c=><option key={c.code} value={c.code}>{c.name}</option>)}</select><small>Your country is a permanent part of your registration profile.</small></label>}
+        <label className="form-label">{adminAreaLabel} *<select value={joinData.region} onChange={e=>setJoinData(p=>({...p,region:e.target.value}))} disabled={!joinData.country_iso3||adminAreasLoading}><option value="">Select {adminAreaLabel.toLowerCase()}</option>{adminAreas.map(a=><option key={a.id} value={a.name}>{a.name}</option>)}</select><small>{adminAreasLoading?'Loading official administrative areas…':adminAreas.length?'Administrative boundaries provided by geoBoundaries.':'If your area is not listed, enter it below.'}</small></label>
+        <label className="form-label">County / district / department<input value={joinData.district} onChange={e=>setJoinData(p=>({...p,district:e.target.value}))} placeholder="Enter county, district or equivalent"/></label>
+        <label className="form-label">City / town / municipality *<input value={joinData.city} onChange={e=>setJoinData(p=>({...p,city:e.target.value}))} placeholder="Enter your city or town"/></label>
+        <label className="form-label">Local area / suburb *<input value={joinData.local_area} onChange={e=>setJoinData(p=>({...p,local_area:e.target.value}))} placeholder="Enter your local area or neighbourhood"/></label>
+        <label className="form-label">Postal / ZIP code<input value={joinData.postal_code} onChange={e=>setJoinData(p=>({...p,postal_code:e.target.value}))} placeholder="Postal or ZIP code (if applicable)"/></label>
+        <label className="form-label wide-field">Residential street address *<input value={joinData.address} onChange={e=>setJoinData(p=>({...p,address:e.target.value}))} placeholder="House number, street and additional address details"/></label>
+        <div className="document-required wide-field"><b>Working ID / professional ID card *</b><small>Upload a clear photo or scan of your current work ID, staff ID, professional ID or trade identification card. National identity numbers and government database lookups are not required.</small><input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={e=>setWorkingIdFile(e.target.files?.[0]||null)}/>{workingIdFile&&<small>Selected: {workingIdFile.name}</small>}</div>
       </div>:<div className="onboard-fields">
         <label className="form-label">Professional / business name *<input value={joinData.business_name} onChange={e=>setJoinData(p=>({...p,business_name:e.target.value}))} placeholder="Name customers will see"/></label>
         <label className="form-label">Professional category *<select value={joinData.category} onChange={e=>setJoinData(p=>({...p,category:e.target.value,subcategory:''}))}><option value="">Select category</option>{categories.slice(0,7).map(c=><option key={c.name}>{c.name}</option>)}{PROFESSION_GROUPS.slice(7).map(g=><option key={g.name}>{g.name}</option>)}<option>Other</option></select></label>
@@ -235,6 +219,8 @@ function App() {
         <label className="form-label">Years of experience *<select value={joinData.experience} onChange={e=>setJoinData(p=>({...p,experience:e.target.value}))}><option value="">Select experience</option><option>Less than 1 year</option><option>1–2 years</option><option>3–5 years</option><option>6–10 years</option><option>More than 10 years</option></select></label>
         <label className="form-label wide-field">Skills and services offered *<textarea rows="3" value={joinData.skills} onChange={e=>setJoinData(p=>({...p,skills:e.target.value}))} placeholder="List the services and skills you provide"/></label>
         <label className="form-label wide-field">About your professional work<textarea rows="3" value={joinData.about} onChange={e=>setJoinData(p=>({...p,about:e.target.value}))} placeholder="Describe your experience and work"/></label>
+        <div className="document-required wide-field"><b>Competency / trade-test / skills certificate *</b><small>Upload a certificate of competency, trade-test certificate, apprenticeship completion certificate, professional qualification or another relevant document proving your skills. This is reviewed manually by Prolink Admin.</small><input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={e=>setCompetencyFile(e.target.files?.[0]||null)}/>{competencyFile&&<small>Selected: {competencyFile.name}</small>}</div>
+        <div className="document-required wide-field"><b>Additional skills document (optional)</b><small>Upload another certificate, licence or supporting document if applicable.</small><input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={e=>setExtraSkillFile(e.target.files?.[0]||null)}/>{extraSkillFile&&<small>Selected: {extraSkillFile.name}</small>}</div>
         <label className="form-label">Business phone<input type="tel" inputMode="numeric" value={joinData.business_phone||''} onChange={e=>setJoinData(p=>({...p,business_phone:e.target.value.replace(/\D/g,'').slice(0,15)}))} placeholder="Business contact number"/></label>
         <label className="form-label">Business email<input type="email" value={joinData.business_email||''} onChange={e=>setJoinData(p=>({...p,business_email:e.target.value}))} placeholder="Separate business email (optional)"/></label>
         <label className="form-label">Website (optional)<input type="url" value={joinData.website||''} onChange={e=>setJoinData(p=>({...p,website:e.target.value}))} placeholder="https://"/></label>
@@ -256,19 +242,31 @@ function App() {
           notify(ninLookupStatus==='success'?'Legal details submitted successfully. NIN name verified.':'Legal details submitted successfully for manual identity review.');
           setJoinStep(2);return;
         }
-        if(!joinData.business_name.trim()||!joinData.category||!joinData.subcategory||!joinData.experience||!joinData.skills.trim()){notify('Complete your professional name, category, specialisation, experience and skills.');return;}
+        if(!joinData.business_name.trim()||!joinData.category||!joinData.subcategory||!joinData.experience||!joinData.skills.trim()||!competencyFile){notify('Complete your professional details and upload a competency or trade-test certificate.');return;}
         setJoinSaving(true);
-        const businessPayload={professional_name:joinData.business_name.trim(),category:joinData.category,subcategory:joinData.subcategory,experience:joinData.experience,skills:joinData.skills,about:joinData.about,business_phone:joinData.business_phone||'',business_email:joinData.business_email||'',website:joinData.website||'',business_address:joinData.business_address||'',cac_number:joinData.cac_number||'',professional_onboarding_status:'submitted_for_review',business_review_status:'pending',business_approval_blocked_until_legal_approval:true,professional_documents_pending_review:true};
+        const businessPayload={professional_name:joinData.business_name.trim(),category:joinData.category,subcategory:joinData.subcategory,experience:joinData.experience,skills:joinData.skills,about:joinData.about,business_phone:joinData.business_phone||'',business_email:joinData.business_email||'',website:joinData.website||'',business_address:joinData.business_address||'',professional_onboarding_status:'submitted_for_review',business_review_status:'pending',manual_document_review_required:true,professional_documents_pending_review:true};
         const {error}=await supabase.auth.updateUser({data:{...profile,...businessPayload}});
         setJoinSaving(false);
         if(error){notify('We could not save your professional information. Please try again.');return;}
         const {error:businessReviewError}=await supabase.from('prolink_review_records').insert({user_id:session.user.id,section:'professional_profile',status:'pending',submitted_data:businessPayload});
-        if(businessReviewError){notify('Your profile details were saved, but the review record could not be created. Please retry.');return;}
+        if(businessReviewError){setJoinSaving(false);notify('Your profile details were saved, but the review record could not be created. Please retry.');return;}
+        const uploadDocument=async(file,type)=>{
+          if(!file)return null;
+          const path=`${session.user.id}/${type}-${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9._-]/g,'_')}`;
+          const {error:uploadError}=await supabase.storage.from('prolink-verification-documents').upload(path,file,{upsert:false,contentType:file.type});
+          if(uploadError)throw uploadError;
+          const {error:recordError}=await supabase.from('prolink_review_records').insert({user_id:session.user.id,section:'supporting_document',status:'pending',document_path:path,submitted_data:{document_type:type,document_name:file.name,mime_type:file.type}});
+          if(recordError)throw recordError;
+          return path;
+        };
+        try{await uploadDocument(competencyFile,'competency_certificate');if(extraSkillFile)await uploadDocument(extraSkillFile,'additional_skill_document');}
+        catch(uploadError){setJoinSaving(false);notify('Your profile was saved, but a certificate could not be submitted: '+uploadError.message);return;}
+        setJoinSaving(false);
         setProfile(p=>({...p,...businessPayload}));
-        setShowJoin(false);setJoinStep(1);setNinLookupStatus('idle');setNinVerifiedLegalName('');setJoinData(p=>({...p,nin:''}));
-        notify('Your legal and professional information has been submitted. Business review can proceed after legal identity approval.');
+        setShowJoin(false);setJoinStep(1);setWorkingIdFile(null);setCompetencyFile(null);setExtraSkillFile(null);
+        notify('Your professional profile and skill documents have been submitted for manual Admin review.');
       }}>{joinSaving?'Saving…':joinStep===1?'Submit legal details':'Submit professional details'} <ChevronRight size={15}/></button></div>
-      <small className="legal-copy">NIN is checked against the legal name only. Date-of-birth differences do not affect the result. NIN is not saved in your profile. Manual review can proceed if the lookup cannot be completed.</small>
+      <small className="legal-copy">All personal details, working ID cards and skills certificates are reviewed manually by Prolink Admin. No national ID lookup or automated identity verification is used.</small>
     </div></div>}
 
     {showRequest&&<div className="modal-backdrop" onClick={()=>setShowRequest(false)}><div className="modal request-modal" onClick={e=>e.stopPropagation()}><button className="modal-close" onClick={()=>setShowRequest(false)}><X/></button>{requestSent?<div className="success-state"><span><Check/></span><h2>Request prepared</h2><p>Your service request is ready. Sign in will be required to send and track it.</p><button className="primary-button full" onClick={()=>{setShowRequest(false);openAuth();}}>Continue to sign in</button></div>:<><span className="eyebrow">SERVICE REQUEST</span><h2>Tell {selected?.name.split(' ')[0]} what you need</h2><p>Share a few details so the professional can understand your job.</p><label className="form-label">What do you need done?<textarea rows="4" placeholder="Describe the job, location and any important details..."/></label><label className="form-label">Preferred date<input type="date"/></label><label className="form-label">Job location<input placeholder="Enter the job address or area"/></label><button className="primary-button full" onClick={()=>setRequestSent(true)}>Review request <ArrowUpRight size={16}/></button><small className="legal-copy">No payment is collected in Bidx ProLink. Agree on price and terms directly with the professional.</small></>}</div></div>}
