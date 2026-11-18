@@ -67,6 +67,22 @@ export default {
       return json({ success: false, retired: true, message: "National identity lookup is not used by Prolink." }, 410);
     }
     if (url.pathname.startsWith("/api/")) return json({ error: "Not found" }, 404);
-    return env.ASSETS.fetch(request);
+
+    // Supabase public credentials are stored as Worker runtime secrets in the
+    // hosting environment. Inject only the URL and publishable/anon key into
+    // the HTML shell so Vite does not need them at build time.
+    const assetsResponse = await env.ASSETS.fetch(request);
+    const contentType = assetsResponse.headers.get("content-type") || "";
+    if (!contentType.includes("text/html")) return assetsResponse;
+
+    const runtimeConfig = {
+      supabaseUrl: env.VITE_SUPABASE_URL || env.SUPABASE_URL || "",
+      supabaseAnonKey: env.VITE_SUPABASE_ANON_KEY || env.SUPABASE_ANON_KEY || env.SUPABASE_PUBLISHABLE_KEY || ""
+    };
+    const safeConfig = JSON.stringify(runtimeConfig).replace(/</g, "\\u003c");
+    const configScript = `<script>window.__BIDX_PROLINK_CONFIG__=${safeConfig};</script>`;
+    return new HTMLRewriter()
+      .on("head", { element(element) { element.append(configScript, { html: true }); } })
+      .transform(assetsResponse);
   }
 };
