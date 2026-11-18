@@ -33,6 +33,7 @@ function App() {
   const [professionals,setProfessionals] = useState([]);
   const [directoryLoading,setDirectoryLoading] = useState(true);
   const [directoryError,setDirectoryError] = useState('');
+  const [directoryHasMore,setDirectoryHasMore] = useState(false);
   const [selectedGallery,setSelectedGallery] = useState([]);
   const [galleryLoading,setGalleryLoading] = useState(false);
   const [myGallery,setMyGallery] = useState([]);
@@ -49,18 +50,27 @@ function App() {
     const {data:{subscription}} = supabase.auth.onAuthStateChange((_event,next) => { setSession(next); setProfile(p=>({...p,...(next?.user?.user_metadata||{})})); setAuthReady(true); });
     return () => subscription.unsubscribe();
   }, []);
-  const loadProfessionals = async () => {
-    if(!supabase){setProfessionals([]);setDirectoryLoading(false);return;}
-    setDirectoryLoading(true);setDirectoryError('');
-    const {data,error}=await supabase.from('prolink_professional_profiles').select('user_id,full_name,professional_name,category,subcategory,experience,skills,about,country_code,country_name,region,district,city,local_area,business_phone,whatsapp,is_published,approved_at').eq('is_published',true).order('approved_at',{ascending:false}).limit(250);
-    if(error){setDirectoryError('The professional directory is temporarily unavailable. Please try again.');setProfessionals([]);}
-    else {
-      setProfessionals((data||[]).map(row=>{
+  const loadProfessionals = async (append = false) => {
+    if(!supabase){setProfessionals([]);setDirectoryHasMore(false);setDirectoryLoading(false);return;}
+    if(directoryLoading)return;
+    setDirectoryLoading(true);
+    if(!append)setDirectoryError('');
+    const from=append?professionals.length:0;
+    const {data,error}=await supabase.from('prolink_professional_profiles')
+      .select('user_id,full_name,professional_name,category,subcategory,experience,skills,about,country_code,country_name,region,district,city,local_area,business_phone,whatsapp,is_published,approved_at')
+      .eq('is_published',true).order('approved_at',{ascending:false}).range(from,from+49);
+    if(error){
+      setDirectoryError('The professional directory is temporarily unavailable. Please try again.');
+      if(!append)setProfessionals([]);
+    } else {
+      const rows=(data||[]).filter(row=>row.is_published===true).map(row=>{
         const name=row.professional_name||row.full_name||'Prolink professional';
         const initials=name.split(/\s+/).slice(0,2).map(part=>part[0]||'').join('').toUpperCase()||'P';
-        const city=[row.local_area,row.city,row.region,row.country_name].filter(Boolean).join(', ');
-        return {...row,id:row.user_id,name,trade:row.subcategory||row.category||'Skilled professional',city:city||row.country_name||'Location not provided',rating:'New',reviews:0,jobs:0,verified:row.is_published===true,price:'Request quote',initials,color:'avatar-green',skills:Array.isArray(row.skills)?row.skills:[],about:row.about||'Contact this professional to learn more about their services.',years:row.experience||'Experience not specified',phone:row.business_phone||'',whatsapp:row.whatsapp||''};
-      }));
+        const city=[row.local_area,row.city,row.district,row.region,row.country_name].filter(Boolean).join(', ');
+        return {...row,id:row.user_id,name,trade:row.subcategory||row.category||'Skilled professional',city:city||row.country_name||'Location not provided',rating:'New',reviews:0,jobs:0,verified:true,price:'Request quote',initials,color:'avatar-green',skills:Array.isArray(row.skills)?row.skills:[],about:row.about||'Contact this professional to learn more about their services.',years:row.experience||'Experience not specified',phone:row.business_phone||'',whatsapp:row.whatsapp||''};
+      });
+      setProfessionals(previous=>append?[...previous,...rows]:rows);
+      setDirectoryHasMore((data||[]).length===50);
     }
     setDirectoryLoading(false);
   };
@@ -231,7 +241,7 @@ function App() {
       </section>
       <section className="prolink-category-section">
         <div className="section-heading"><div><h2>Approved professionals</h2><p>Real professionals who have completed Prolink's manual review</p></div><div style={{display:'flex',alignItems:'center',gap:10}}><span className="muted-small">{filtered.length} listed</span><button className="outline-button" disabled={directoryLoading} onClick={loadProfessionals}>{directoryLoading?'Refreshing…':'Refresh'}</button></div></div>
-        {directoryLoading?<p>Loading approved professionals…</p>:directoryError?<div className="panel"><p>{directoryError}</p><button className="outline-button" onClick={loadProfessionals}>Try again</button></div>:filtered.length?<div className="prolink-directory-grid">{filtered.map(person=><article className="prolink-directory-card" key={person.id}><button className="directory-card-main" onClick={()=>setSelected(person)}><Avatar person={person}/><span className="directory-card-copy"><b>{person.name}</b><small>{person.trade}</small><small><MapPin size={13}/>{person.city}</small></span><span className="verified-pill"><BadgeCheck size={13}/> Approved</span></button><div className="skill-tags">{person.skills.slice(0,3).map(skill=><span key={skill}>{skill}</span>)}</div><button className="outline-button full" onClick={()=>setSelected(person)}>View professional profile</button></article>)}</div>:<div className="panel"><p>{professionals.length?'No approved professionals match your search yet.':'No professionals have completed manual approval yet. New approved professionals will appear here automatically.'}</p></div>}
+        {directoryLoading?<p>Loading approved professionals…</p>:directoryError?<div className="panel"><p>{directoryError}</p><button className="outline-button" onClick={loadProfessionals}>Try again</button></div>:filtered.length?<div className="prolink-directory-grid">{filtered.map(person=><article className="prolink-directory-card" key={person.id}><button className="directory-card-main" onClick={()=>setSelected(person)}><Avatar person={person}/><span className="directory-card-copy"><b>{person.name}</b><small>{person.trade}</small><small><MapPin size={13}/>{person.city}</small></span><span className="verified-pill"><BadgeCheck size={13}/> Approved</span></button><div className="skill-tags">{person.skills.slice(0,3).map(skill=><span key={skill}>{skill}</span>)}</div><button className="outline-button full" onClick={()=>setSelected(person)}>View professional profile</button></article>)}</div>{directoryHasMore&&<button className="outline-button full" disabled={directoryLoading} onClick={()=>loadProfessionals(true)} style={{marginTop:16}}>{directoryLoading?'Loading more professionals…':'Load more professionals'}</button>}:<div className="panel"><p>{professionals.length?'No approved professionals match your search yet.':'No professionals have completed manual approval yet. New approved professionals will appear here automatically.'}</p></div>}
       </section>
     </main>}
 
