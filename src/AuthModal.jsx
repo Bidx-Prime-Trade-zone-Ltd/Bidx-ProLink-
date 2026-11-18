@@ -1,12 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { supabase, supabaseConfigError } from './lib/supabase.js';
 import { LoaderCircle, CheckCircle2, Eye, EyeOff } from 'lucide-react';
-import { INITIAL_COUNTRIES, COUNTRY_BY_CODE } from './globalCountries.js';
 
 export default function AuthModal({ onClose }) {
   const [mode,setMode]=useState('Sign in');
   const [email,setEmail]=useState('');
-  const [countryCode,setCountryCode]=useState('');
   const [password,setPassword]=useState('');
   const [confirmPassword,setConfirmPassword]=useState('');
   const [showPassword,setShowPassword]=useState(false);
@@ -38,14 +36,12 @@ export default function AuthModal({ onClose }) {
     e.preventDefault();
     if(!supabase){setError(supabaseConfigError);return;}
     if(mode==='Create account'&&!acceptedTerms){setError('Please accept the Terms and Conditions and Privacy Policy.');return;}
-    if(mode==='Create account'&&!countryCode){setError('Select your country of residence to create your Prolink account.');return;}
     if(mode==='Reset password'&&!recovery){setError('Open the password-reset link from your email first.');return;}
     if(mode==='Reset password'&&password!==confirmPassword){setError('The passwords do not match.');return;}
     if(mode!=='Forgot password'&&password.length<8){setError('Use a password with at least 8 characters.');return;}
     await run(mode==='Sign in'?'Signing in…':mode==='Create account'?'Creating account…':mode==='Forgot password'?'Sending reset link…':'Updating password…',async()=>{
       if(mode==='Create account'){
-        const country=COUNTRY_BY_CODE[countryCode];
-        const {data,error:e}=await supabase.auth.signUp({email:email.trim(),password,options:{emailRedirectTo:window.location.origin,data:{country_code:country.code,country_iso3:country.iso3,country_name:country.name,preferred_language:'en'}}});
+        const {data,error:e}=await supabase.auth.signUp({email:email.trim(),password,options:{emailRedirectTo:window.location.origin,data:{preferred_language:'en'}}});
         if(e)throw e;
         if(data.session){setMessage('Account created. Opening ProLink…');}
         else{setMessage('Confirmation email sent. Confirm your email, then return here to sign in.');setBusy(false);setBusyLabel('');}
@@ -80,7 +76,6 @@ export default function AuthModal({ onClose }) {
         {mode!=='Forgot password'&&mode!=='Reset password'&&<div className="or-divider"><span>or continue with email</span></div>}
         <form onSubmit={submit}>
           <label className="form-label">Email address<input type="email" autoComplete="email" required value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com"/></label>
-          {mode==='Create account'&&<label className="form-label">Country of residence *<select required value={countryCode} onChange={e=>setCountryCode(e.target.value)}><option value="">Select your country</option>{INITIAL_COUNTRIES.map(country=><option key={country.code} value={country.code}>{country.name}</option>)}</select><small>Country is selected during registration and becomes part of your Prolink profile.</small></label>}
           {mode!=='Forgot password'&&<label className="form-label">Password<div className="password-input-wrap"><input type={showPassword?'text':'password'} required minLength={8} autoComplete={mode==='Sign in'?'current-password':'new-password'} value={password} onChange={e=>setPassword(e.target.value)} placeholder="At least 8 characters"/><button className="password-visibility" type="button" onClick={()=>setShowPassword(v=>!v)} aria-label={showPassword?'Hide password':'Show password'}>{showPassword?<EyeOff size={16}/>:<Eye size={16}/>}</button></div></label>}
           {mode==='Reset password'&&<label className="form-label">Confirm new password<input type="password" required minLength={8} value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)}/></label>}
           {mode==='Create account'&&<label className="auth-terms-check"><input type="checkbox" checked={acceptedTerms} onChange={e=>setAcceptedTerms(e.target.checked)}/><span>I confirm I am at least 18 and agree to the <a href="/terms" target="_blank" rel="noreferrer">Terms</a> and <a href="/privacy" target="_blank" rel="noreferrer">Privacy Policy</a>.</span></label>}
