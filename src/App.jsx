@@ -228,7 +228,7 @@ function App() {
         <label className="form-label">Business email<input type="email" value={joinData.business_email||''} onChange={e=>setJoinData(p=>({...p,business_email:e.target.value}))} placeholder="Separate business email (optional)"/></label>
         <label className="form-label">Website (optional)<input type="url" value={joinData.website||''} onChange={e=>setJoinData(p=>({...p,website:e.target.value}))} placeholder="https://"/></label>
         <label className="form-label">Business / operating address<input value={joinData.business_address||''} onChange={e=>setJoinData(p=>({...p,business_address:e.target.value}))} placeholder="Where you operate"/></label>
-        <label className="form-label">CAC number (optional)<input value={joinData.cac_number} onChange={e=>setJoinData(p=>({...p,cac_number:e.target.value}))} placeholder="RC / BN number"/></label>
+
       </div>}
       <div className="modal-actions">{joinStep>1&&<button className="outline-button" onClick={()=>setJoinStep(1)}>Back</button>}<button className="primary-button" disabled={joinSaving} onClick={async()=>{
         if(joinStep===1){
