@@ -102,19 +102,25 @@ function App() {
   // Professional onboarding requires an explicit country choice; account sign-up metadata is not used to preselect it.
   useEffect(() => {
     let active=true;
-    setAdminAreas({level1:[],level2:[],level3:[],level4:[]});
-    setAdminAreaLabels({level1:'State / province / region',level2:'County / district',level3:'City / municipality',level4:'Local area'});
+    const empty={level1:[],level2:[],level3:[],level4:[]};
+    setAdminAreas(empty);
+    setAdminAreaLabels({level1:'State / province / region',level2:'District / county / local government area',level3:'City / town',level4:'Local area / ward'});
     if(!showJoin||!joinData.country_iso3)return;
     setAdminAreasLoading(true);
-    Promise.all([1,2,3,4].map(level=>getAdministrativeAreas(joinData.country_iso3,level).catch(()=>null))).then(results=>{
+    const requests=[
+      getAdministrativeAreas(joinData.country_iso3,1),
+      joinData.region?getAdministrativeAreas(joinData.country_iso3,2,joinData.region):Promise.resolve(null),
+      joinData.district?getAdministrativeAreas(joinData.country_iso3,3,joinData.district):Promise.resolve(null),
+      joinData.city?getAdministrativeAreas(joinData.country_iso3,4,joinData.city):Promise.resolve(null)
+    ];
+    Promise.all(requests.map(p=>p.catch(()=>null))).then(results=>{
       if(!active)return;
-      const keys=['level1','level2','level3','level4'];
-      const nextAreas={},nextLabels={};
-      results.forEach((data,index)=>{nextAreas[keys[index]]=data?.areas||[];nextLabels[keys[index]]=data?.levelName||['State / province / region','County / district','City / municipality','Local area'][index];});
-      setAdminAreas(nextAreas);setAdminAreaLabels(nextLabels);
+      const keys=['level1','level2','level3','level4'],areas={},labels={};
+      results.forEach((data,index)=>{areas[keys[index]]=data?.areas||[];labels[keys[index]]=data?.levelName||['State / province / region','District / county / local government area','City / town','Local area / ward'][index];});
+      setAdminAreas(areas);setAdminAreaLabels(labels);
     }).finally(()=>{if(active)setAdminAreasLoading(false);});
     return()=>{active=false;};
-  },[joinData.country_iso3,showJoin]);
+  },[joinData.country_iso3,joinData.region,joinData.district,joinData.city,showJoin]);
   useEffect(() => {
     let active=true;
     const country=COUNTRY_BY_CODE[String(profile.country_code||'').toUpperCase()];
@@ -122,14 +128,20 @@ function App() {
     setProfileAreaLabels({level1:'State / province / region',level2:'District / county / local government area',level3:'City / town',level4:'Local area / ward'});
     if(!country?.iso3)return;
     setProfileAreasLoading(true);
-    Promise.all([1,2,3,4].map(level=>getAdministrativeAreas(country.iso3,level).catch(()=>null))).then(results=>{
+    const requests=[
+      getAdministrativeAreas(country.iso3,1),
+      profile.region?getAdministrativeAreas(country.iso3,2,profile.region):Promise.resolve(null),
+      profile.district?getAdministrativeAreas(country.iso3,3,profile.district):Promise.resolve(null),
+      profile.city?getAdministrativeAreas(country.iso3,4,profile.city):Promise.resolve(null)
+    ];
+    Promise.all(requests.map(p=>p.catch(()=>null))).then(results=>{
       if(!active)return;
       const keys=['level1','level2','level3','level4'],areas={},labels={};
       results.forEach((data,index)=>{areas[keys[index]]=data?.areas||[];labels[keys[index]]=data?.levelName||['State / province / region','District / county / local government area','City / town','Local area / ward'][index];});
       setProfileAreas(areas);setProfileAreaLabels(labels);
     }).finally(()=>{if(active)setProfileAreasLoading(false);});
     return()=>{active=false;};
-  },[profile.country_code]);
+  },[profile.country_code,profile.region,profile.district,profile.city]);
   const [showCategories, setShowCategories] = useState(false);
   const [categorySearch, setCategorySearch] = useState('');
   const [categoryGroup, setCategoryGroup] = useState('');
