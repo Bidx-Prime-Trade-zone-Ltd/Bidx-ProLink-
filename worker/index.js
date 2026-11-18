@@ -166,8 +166,8 @@ async function adminDashboard(request,env) {
   try{
     const {config}=auth;
     const [profiles,reviews]=await Promise.all([
-      supabaseRest(config,"/rest/v1/prolink_professional_profiles?select=user_id,full_name,professional_name,category,subcategory,country_name,region,district,city,local_area,is_published,approved_at,created_at&order=created_at.desc&limit=5000"),
-      supabaseRest(config,"/rest/v1/prolink_review_records?select=id,user_id,section,status,submitted_at,reviewed_at,reviewed_by,review_reason,document_path,submitted_data&order=submitted_at.desc&limit=5000")
+      supabaseRest(config,"/rest/v1/prolink_professional_profiles?select=*&order=approved_at.desc&limit=5000"),
+      supabaseRest(config,"/rest/v1/prolink_review_records?select=*&order=submitted_at.desc&limit=5000")
     ]);
     let users=[],page=1;
     for(;page<=100;page++){
