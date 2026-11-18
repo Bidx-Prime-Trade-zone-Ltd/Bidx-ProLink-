@@ -50,7 +50,10 @@ Do not place service-role keys, payment secrets or other private credentials in 
 ## Product rules retained
 
 - Existing account authentication and persistent sessions are preserved.
-- Professional profiles retain skills, experience, and portfolio/work-gallery areas.
+- The customer directory is populated only from real Supabase professional profiles whose personal details, work ID, competency certificate and professional profile have all been approved by Admin.
+- Directory search matches professional name, trade, skills and country-aware location text; profiles display only approved professional information and supplied contact channels.
+- Professionals can manage their Work Portfolio from the app menu: upload JPEG/PNG/WebP photos (8 MB maximum), add captions and remove their own photos. Portfolio images appear on the public professional profile after manual approval.
+- Portfolio image objects are kept in a private Storage bucket and served to signed-in customers using short-lived signed URLs.
 - Existing customer contact and service-request flows remain in place.
 - Prolink remains separate from the BIDX Marketplace database.
 
