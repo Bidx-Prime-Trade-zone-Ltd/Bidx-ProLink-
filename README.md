@@ -1,45 +1,58 @@
-# Bidx ProLink
+# Pedes Prolink
 
-Mobile-first professional services marketplace for Nigeria, built for electricians, plumbers, bricklayers, carpenters, painters, technicians and other skilled professionals.
+Global professional and skilled-worker discovery platform, launching registration in selected English-language markets first and expanding to additional languages and countries in phases.
 
 ## Development
 
 - Vite + React
+- Supabase Auth and private Storage
+- Cloudflare Worker and static assets
 - `npm install`
 - `npm run dev`
 - `npm run build`
 
-## Cloudflare Workers deployment
+## Global registration and locations
 
-The production app is served by the `bidx-prolink` Worker. Build the Vite frontend first, then deploy the Worker with Wrangler:
+- New accounts select a supported initial launch country during registration.
+- Country is stored with the account profile; there is no country-switching or country-browsing control.
+- Administrative area suggestions are loaded by country from geoBoundaries (ADM1–ADM4 where data is available).
+- District, city, local area, postal code and street address remain editable so users can enter local names not covered by boundary datasets.
+- geoBoundaries attribution and each layer's licence must be respected. The app uses the dataset for names/suggestions, not identity checks.
+
+## Manual professional verification
+
+- National identity number lookup and automated government identity verification are not used.
+- Applicants submit personal/contact details and a current work ID, staff ID or professional ID card.
+- Applicants must submit at least one relevant skills document, such as a competency certificate, trade-test certificate, apprenticeship certificate or professional qualification.
+- Documents are stored in the private `prolink-verification-documents` bucket and reviewed manually by the authorised Prolink Admin.
+- The bucket accepts PDF, JPEG, PNG and WebP files up to 10 MB. Admin document previews use short-lived signed URLs.
+- No national ID card is mandatory.
+
+## Cloudflare Worker
+
+The `bidx-prolink` Worker serves the Vite build and exposes `GET /api/geography?country=ISO3&level=1..5`. The endpoint caches geoBoundaries administrative-area suggestions. National identity lookup routes return HTTP 410 and are retired.
+
+Build and deploy:
 
 ```sh
 npm run build
 npx wrangler deploy
 ```
 
-The Worker routes `POST /api/identro-nin` to the server-side Identro handler before static asset fallback. Other API paths return JSON 404 responses; non-API paths continue through the Vite build assets and SPA fallback.
+## Supabase
 
-### Required production secret
+Project: `ljttcncfcetgdqfmtdhm` (Bidx ProLink).
 
-Set this in Cloudflare Dashboard → Workers & Pages → `bidx-prolink` → Settings → Variables and Secrets → Production:
+The private verification-document bucket and row-level security policies are provisioned by the migration `prolink_verification_document_storage`. The Admin review foundation is provisioned by `prolink_admin_foundation`.
 
-- Name: `BIDX_IDENTRO_PROLIINK_KEY`
-- Type: Secret
-- Value: the live Identro merchant API key
+Do not place service-role keys, payment secrets or other private credentials in frontend code or source control.
 
-Do not put the secret value in `wrangler.jsonc`, source control, frontend variables, or browser code. The Worker reads it only from `env.BIDX_IDENTRO_PROLIINK_KEY`.
+## Product rules retained
 
-The secret must be added separately in Cloudflare; this PR does not change production secrets or deploy the Worker.
-
-## Product rules captured in the interface
-
-- Nigeria-focused professional directory with location-aware discovery and manual city search.
-- Two-column professional cards with portrait, trade, rating and location.
-- Professional profiles with qualifications, skills, certificates, NIN verification status, CAC/business documents where applicable, and a work gallery.
-- Email or Google sign-in entry points.
-- Customer-to-professional contact and service request flow; agreement/invoice is for recording terms, while payment is handled outside the app.
-- Internal administration is restricted to the designated administrator account and a separate passcode; never expose admin credentials in frontend code.
+- Existing account authentication and persistent sessions are preserved.
+- Professional profiles retain skills, experience, and portfolio/work-gallery areas.
+- Existing customer contact and service-request flows remain in place.
+- Prolink remains separate from the BIDX Marketplace database.
 
 Company: BIDX PRIME TRADE ZONE LTD
 Support: Support@bidxpro.online
