@@ -128,6 +128,78 @@ async function geography(request, ctx) {
   }
 }
 
+
+function passwordChangeConfig(env) {
+  return {url:env.VITE_SUPABASE_URL||env.SUPABASE_URL||"",anonKey:env.VITE_SUPABASE_ANON_KEY||env.SUPABASE_ANON_KEY||env.SUPABASE_PUBLISHABLE_KEY||"",serviceKey:env.SUPABASE_SERVICE_ROLE_KEY||"",resendKey:env.RESEND_API_KEY||""};
+}
+async function digestHex(value) {
+  const bytes=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(value));
+  return [...new Uint8Array(bytes)].map(b=>b.toString(16).padStart(2,"0")).join("");
+}
+async function passwordEncryptionKey(secret) {
+  const raw=await crypto.subtle.digest("SHA-256",new TextEncoder().encode("bidx-prolink-password-change:"+secret));
+  return crypto.subtle.importKey("raw",raw,{name:"AES-GCM"},false,["encrypt","decrypt"]);
+}
+async function encryptPendingPassword(password,secret) {
+  const iv=crypto.getRandomValues(new Uint8Array(12)),key=await passwordEncryptionKey(secret);
+  const encrypted=await crypto.subtle.encrypt({name:"AES-GCM",iv},key,new TextEncoder().encode(password));
+  return {iv:[...iv].map(b=>b.toString(16).padStart(2,"0")).join(""),cipher:[...new Uint8Array(encrypted)].map(b=>b.toString(16).padStart(2,"0")).join("")};
+}
+async function decryptPendingPassword(row,secret) {
+  const fromHex=s=>new Uint8Array((s.match(/.{2}/g)||[]).map(x=>parseInt(x,16)));
+  const key=await passwordEncryptionKey(secret);
+  const plain=await crypto.subtle.decrypt({name:"AES-GCM",iv:fromHex(row.encryption_iv)},key,fromHex(row.encrypted_password));
+  return new TextDecoder().decode(plain);
+}
+async function passwordChangeStart(request,env) {
+  const cfg=passwordChangeConfig(env);
+  if(!cfg.url||!cfg.anonKey||!cfg.serviceKey||!cfg.resendKey)return json({error:"Password-change service is not fully configured. Please contact support."},503);
+  const auth=request.headers.get("authorization")||"";
+  if(!auth.startsWith("Bearer "))return json({error:"Please sign in again before changing your password."},401);
+  let body;try{body=await request.json();}catch{return json({error:"Invalid request."},400);}
+  const current=String(body.currentPassword||""),next=String(body.newPassword||""),confirm=String(body.confirmPassword||"");
+  if(!current||!next||next.length<8||next!==confirm)return json({error:"Enter your current password and matching new passwords of at least 8 characters."},400);
+  if(current===next)return json({error:"Your new password must be different from your current password."},400);
+  const userResponse=await fetch(cfg.url+"/auth/v1/user",{headers:{apikey:cfg.anonKey,authorization:auth}});
+  if(!userResponse.ok)return json({error:"Your sign-in session has expired. Sign in again."},401);
+  const user=await userResponse.json();
+  if(!user.email||!user.id)return json({error:"Your account email could not be verified."},400);
+  const check=await fetch(cfg.url+"/auth/v1/token?grant_type=password",{method:"POST",headers:{apikey:cfg.anonKey,"content-type":"application/json"},body:JSON.stringify({email:user.email,password:current})});
+  if(!check.ok)return json({error:"Your current password is incorrect."},400);
+  const verified=await check.json();
+  if(verified.user?.id!==user.id)return json({error:"The current password could not be verified for this account."},400);
+  const tokenBytes=crypto.getRandomValues(new Uint8Array(32));
+  const token=[...tokenBytes].map(b=>b.toString(16).padStart(2,"0")).join("");
+  const tokenHash=await digestHex(token);
+  const encrypted=await encryptPendingPassword(next,cfg.serviceKey);
+  const expiresAt=new Date(Date.now()+20*60*1000).toISOString();
+  try {
+    await supabaseRest({url:cfg.url,serviceKey:cfg.serviceKey},"/rest/v1/prolink_pending_password_changes?user_id=eq."+encodeURIComponent(user.id),{method:"DELETE"});
+    await supabaseRest({url:cfg.url,serviceKey:cfg.serviceKey},"/rest/v1/prolink_pending_password_changes",{method:"POST",headers:{prefer:"return=minimal"},body:JSON.stringify({user_id:user.id,email:user.email,token_hash:tokenHash,encrypted_password:encrypted.cipher,encryption_iv:encrypted.iv,expires_at:expiresAt})});
+    const confirmUrl=new URL("/api/auth/password-change/confirm",request.url);confirmUrl.searchParams.set("token",token);
+    const emailResponse=await fetch("https://api.resend.com/emails",{method:"POST",headers:{authorization:"Bearer "+cfg.resendKey,"content-type":"application/json"},body:JSON.stringify({from:env.PROlink_EMAIL_FROM||"Bidx ProLink <no-reply@bidxpro.online>",to:[user.email],subject:"Confirm your Bidx ProLink password change",html:`<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#24372d"><h2>Confirm your password change</h2><p>We received a request to change the password for your Bidx ProLink account.</p><p>Your current password will remain active until you confirm this request.</p><p style="margin:28px 0"><a href="${confirmUrl}" style="background:#146b50;color:#fff;padding:14px 22px;border-radius:8px;text-decoration:none;font-weight:bold">Confirm password change</a></p><p>This one-time link expires in 20 minutes. If you did not request this change, ignore this email. Your password will not be changed.</p><p>Bidx ProLink Support</p></div>`})});
+    if(!emailResponse.ok){await supabaseRest({url:cfg.url,serviceKey:cfg.serviceKey},"/rest/v1/prolink_pending_password_changes?user_id=eq."+encodeURIComponent(user.id),{method:"DELETE"});return json({error:"We could not send the confirmation email. Please try again later."},502);}
+    return json({success:true,message:"A confirmation link has been sent to your registered email. Your current password remains active until you confirm it."});
+  }catch(error){console.error("[prolink-password-change] request_failed",{name:error?.name||"Error"});return json({error:"We could not prepare your password change. Please try again later."},502);}
+}
+async function passwordChangeConfirm(request,env) {
+  const cfg=passwordChangeConfig(env),url=new URL(request.url),token=url.searchParams.get("token")||"";
+  const appUrl=new URL("/",request.url);
+  if(!cfg.url||!cfg.serviceKey||token.length!==64){appUrl.searchParams.set("password_change","invalid");return Response.redirect(appUrl.toString(),302);}
+  try{
+    const tokenHash=await digestHex(token);
+    const rows=await supabaseRest({url:cfg.url,serviceKey:cfg.serviceKey},"/rest/v1/prolink_pending_password_changes?select=*&token_hash=eq."+tokenHash+"&limit=1");
+    const row=rows?.[0];
+    if(!row||row.used_at||new Date(row.expires_at).getTime()<Date.now()){appUrl.searchParams.set("password_change","expired");return Response.redirect(appUrl.toString(),302);}
+    const password=await decryptPendingPassword(row,cfg.serviceKey);
+    const update=await fetch(cfg.url+"/auth/v1/admin/users/"+encodeURIComponent(row.user_id),{method:"PUT",headers:{apikey:cfg.serviceKey,authorization:"Bearer "+cfg.serviceKey,"content-type":"application/json"},body:JSON.stringify({password})});
+    if(!update.ok)throw new Error("Password update failed");
+    await supabaseRest({url:cfg.url,serviceKey:cfg.serviceKey},"/rest/v1/prolink_pending_password_changes?user_id=eq."+encodeURIComponent(row.user_id),{method:"DELETE"});
+    appUrl.searchParams.set("password_change","success");
+    return Response.redirect(appUrl.toString(),302);
+  }catch(error){console.error("[prolink-password-change] confirmation_failed",{name:error?.name||"Error"});appUrl.searchParams.set("password_change","error");return Response.redirect(appUrl.toString(),302);}
+}
+
 const PROLINK_ADMIN_EMAIL = "ojepaamedu@gmail.com";
 
 function adminConfig(env) {
@@ -227,6 +299,8 @@ async function adminDocument(request,env) {
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    if (url.pathname === "/api/auth/password-change" && request.method === "POST") return passwordChangeStart(request, env);
+    if (url.pathname === "/api/auth/password-change/confirm" && request.method === "GET") return passwordChangeConfirm(request, env);
     if (url.pathname === "/api/geography" && request.method === "GET") return geography(request, ctx);
     if (url.pathname === "/api/admin/dashboard" && request.method === "GET") return adminDashboard(request, env);
     if (url.pathname === "/api/admin/review" && request.method === "POST") return adminReview(request, env);
