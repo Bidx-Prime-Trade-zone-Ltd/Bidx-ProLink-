@@ -5,55 +5,126 @@ function json(body, status = 200, cacheControl = "no-store") {
   });
 }
 
-async function geography(request, ctx) {
-  const url = new URL(request.url);
-  const iso3 = (url.searchParams.get("country") || "").toUpperCase();
-  const level = Number(url.searchParams.get("level"));
-  if (!/^[A-Z]{3}$/.test(iso3) || !Number.isInteger(level) || level < 1 || level > 5) {
-    return json({ error: "A valid ISO-3 country code and administrative level (1–5) are required." }, 400);
+function normalizeAreaName(value) {
+  return String(value || "").normalize("NFKD").replace(/[\\u0300-\\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function featureName(feature) {
+  const p = feature?.properties || {};
+  return p.shapeName || p.NAME_1 || p.NAME_2 || p.NAME_3 || p.name || p.NAME || p.admin || p.NAME_EN || "";
+}
+
+function pointOnSegment(point, a, b) {
+  const cross = (point[1]-a[1])*(b[0]-a[0])-(point[0]-a[0])*(b[1]-a[1]);
+  if (Math.abs(cross) > 1e-8) return false;
+  return point[0] >= Math.min(a[0],b[0])-1e-8 && point[0] <= Math.max(a[0],b[0])+1e-8 &&
+    point[1] >= Math.min(a[1],b[1])-1e-8 && point[1] <= Math.max(a[1],b[1])+1e-8;
+}
+
+function pointInRing(point, ring) {
+  let inside = false;
+  for (let i=0,j=ring.length-1;i<ring.length;j=i++) {
+    const a=ring[j], b=ring[i];
+    if (pointOnSegment(point,a,b)) return true;
+    const intersects=((b[1]>point[1]) !== (a[1]>point[1])) &&
+      (point[0] < (a[0]-b[0])*(point[1]-b[1])/(a[1]-b[1])+b[0]);
+    if(intersects)inside=!inside;
   }
+  return inside;
+}
 
-  const cache = caches.default;
-  const cacheKey = new Request(`https://prolink-geo-cache.invalid/${iso3}/ADM${level}`);
-  const cached = await cache.match(cacheKey);
-  if (cached) return cached;
+function pointInPolygon(point, polygon) {
+  if (!polygon?.length || !pointInRing(point,polygon[0])) return false;
+  for(let i=1;i<polygon.length;i++) if(pointInRing(point,polygon[i])) return false;
+  return true;
+}
 
-  try {
-    const metadataResponse = await fetch(`https://www.geoboundaries.org/api/current/gbOpen/${iso3}/ADM${level}/`, {
-      headers: { accept: "application/json" }
-    });
-    if (metadataResponse.status === 404) return json({ country: iso3, level, areas: [], available: false }, 200, "public, max-age=21600");
-    if (!metadataResponse.ok) return json({ error: "Geographical data provider is temporarily unavailable." }, 502);
-    const metadata = await metadataResponse.json();
-    const dataUrl = metadata.simplifiedGeometryGeoJSON || metadata.gjDownloadURL;
-    if (!dataUrl) return json({ country: iso3, level, areas: [], available: false }, 200, "public, max-age=21600");
+function pointInGeometry(point, geometry) {
+  if(!geometry)return false;
+  if(geometry.type==="Polygon")return pointInPolygon(point,geometry.coordinates);
+  if(geometry.type==="MultiPolygon")return geometry.coordinates.some(polygon=>pointInPolygon(point,polygon));
+  return false;
+}
 
-    const boundaryResponse = await fetch(dataUrl, { headers: { accept: "application/geo+json, application/json" } });
-    if (!boundaryResponse.ok) return json({ error: "Administrative boundary data could not be loaded." }, 502);
-    const geo = await boundaryResponse.json();
-    const areas = (geo.features || []).map(feature => {
-      const p = feature.properties || {};
-      const name = p.shapeName || p.NAME_1 || p.NAME_2 || p.name || p.NAME || p.admin || p.NAME_EN;
-      const id = p.shapeID || p.shapeISO || p.GID_1 || p.GID_2 || p.id || name;
-      return name ? { id: String(id || name), name: String(name) } : null;
-    }).filter(Boolean).sort((a, b) => a.name.localeCompare(b.name));
+function representativePoint(feature) {
+  const geometry=feature?.geometry;
+  const polygons=geometry?.type==="Polygon"?[geometry.coordinates]:geometry?.type==="MultiPolygon"?geometry.coordinates:[];
+  for(const polygon of polygons){
+    const ring=polygon?.[0]||[];
+    if(ring.length<3)continue;
+    let x=0,y=0;
+    for(const point of ring){x+=point[0];y+=point[1];}
+    const average=[x/ring.length,y/ring.length];
+    if(pointInPolygon(average,polygon))return average;
+    for(let i=0;i<ring.length;i++){
+      const a=ring[i],b=ring[(i+1)%ring.length];
+      const candidate=[(a[0]+b[0]+average[0])/3,(a[1]+b[1]+average[1])/3];
+      if(pointInPolygon(candidate,polygon))return candidate;
+    }
+    for(const point of ring)if(pointInPolygon(point,polygon))return point;
+  }
+  return null;
+}
 
-    const response = json({
-      country: iso3,
-      countryName: metadata.boundaryName || iso3,
-      level,
-      levelName: metadata.boundaryCanonical || `Administrative level ${level}`,
-      source: "geoBoundaries",
-      license: metadata.boundaryLicense || "See source metadata",
-      attribution: "Administrative boundary data from geoBoundaries. Check each layer's licence before redistribution.",
-      available: areas.length > 0,
-      areas
-    }, 200, "public, max-age=21600");
-    ctx.waitUntil(cache.put(cacheKey, response.clone()));
+async function loadBoundaryLayer(iso3, level) {
+  const metadataResponse=await fetch(`https://www.geoboundaries.org/api/current/gbOpen/${iso3}/ADM${level}/`,{headers:{accept:"application/json"}});
+  if(metadataResponse.status===404)return null;
+  if(!metadataResponse.ok)throw new Error("Boundary metadata unavailable");
+  const metadata=await metadataResponse.json();
+  const dataUrl=metadata.simplifiedGeometryGeoJSON||metadata.gjDownloadURL;
+  if(!dataUrl)return null;
+  const boundaryResponse=await fetch(dataUrl,{headers:{accept:"application/geo+json, application/json"}});
+  if(!boundaryResponse.ok)throw new Error("Boundary geometry unavailable");
+  return {metadata,geo:await boundaryResponse.json()};
+}
+
+async function geography(request, ctx) {
+  const url=new URL(request.url);
+  const iso3=(url.searchParams.get("country")||"").toUpperCase();
+  const level=Number(url.searchParams.get("level"));
+  const parent=String(url.searchParams.get("parent")||"").trim();
+  if(!/^[A-Z]{3}$/.test(iso3)||!Number.isInteger(level)||level<1||level>5)
+    return json({error:"A valid ISO-3 country code and administrative level (1–5) are required."},400);
+  if(level>1&&!parent)return json({error:"Select the parent administrative area first."},400);
+
+  const cache=caches.default;
+  const parentKey=normalizeAreaName(parent).replace(/ /g,"-");
+  const cacheKey=new Request(`https://prolink-geo-cache.invalid/${iso3}/ADM${level}/${parentKey||"all"}`);
+  const cached=await cache.match(cacheKey);
+  if(cached)return cached;
+
+  try{
+    const childLayer=await loadBoundaryLayer(iso3,level);
+    if(!childLayer)return json({country:iso3,level,areas:[],available:false},200,"public, max-age=21600");
+    let parentFeature=null;
+    if(level>1){
+      const parentLayer=await loadBoundaryLayer(iso3,level-1);
+      const wanted=normalizeAreaName(parent);
+      parentFeature=(parentLayer?.geo?.features||[]).find(feature=>normalizeAreaName(featureName(feature))===wanted);
+      if(!parentFeature)return json({country:iso3,level,parent,areas:[],available:false,parentNotFound:true},200,"public, max-age=1800");
+    }
+    const areas=(childLayer.geo.features||[]).filter(feature=>{
+      if(!parentFeature)return true;
+      const point=representativePoint(feature);
+      return Boolean(point&&pointInGeometry(point,parentFeature.geometry));
+    }).map(feature=>{
+      const p=feature.properties||{};
+      const name=featureName(feature);
+      const id=p.shapeID||p.shapeISO||p.GID_1||p.GID_2||p.id||name;
+      return name?{id:String(id||name),name:String(name)}:null;
+    }).filter(Boolean).sort((a,b)=>a.name.localeCompare(b.name));
+    const response=json({
+      country:iso3,countryName:childLayer.metadata.boundaryName||iso3,level,
+      levelName:childLayer.metadata.boundaryCanonical||`Administrative level ${level}`,
+      parent:parent||null,source:"geoBoundaries",license:childLayer.metadata.boundaryLicense||"See source metadata",
+      attribution:"Administrative boundary data from geoBoundaries. Check each layer's licence before redistribution.",
+      available:areas.length>0,areas
+    },200,"public, max-age=21600");
+    ctx.waitUntil(cache.put(cacheKey,response.clone()));
     return response;
-  } catch (error) {
-    console.error("[prolink-geography] lookup_failed", { country: iso3, level, name: error?.name || "Error" });
-    return json({ error: "Geographical data is temporarily unavailable. Enter the area manually." }, 502);
+  }catch(error){
+    console.error("[prolink-geography] lookup_failed",{country:iso3,level,name:error?.name||"Error"});
+    return json({error:"Geographical data is temporarily unavailable. Enter the area manually."},502);
   }
 }
 
