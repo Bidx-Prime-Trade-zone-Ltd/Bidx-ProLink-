@@ -198,7 +198,12 @@ async function adminReview(request,env) {
     const reason=String(body.reason||"").trim();
     if(!recordId||!["approve","reject"].includes(action))return json({error:"Choose a valid document review action."},400);
     if(action==="reject"&&!reason)return json({error:"A reason is required when rejecting a document."},400);
-    const result=await supabaseRest(auth.config,"/rest/v1/rpc/prolink_admin_review",{method:"POST",body:JSON.stringify({p_record_id:recordId,p_action:action,p_reason:reason||null})});
+    const response=await fetch(auth.config.url+"/rest/v1/rpc/prolink_admin_review",{
+      method:"POST",headers:{apikey:auth.config.anonKey,authorization:request.headers.get("authorization"),"content-type":"application/json"},
+      body:JSON.stringify({p_record_id:recordId,p_action:action,p_reason:reason||null})
+    });
+    const raw=await response.text();let result=null;try{result=raw?JSON.parse(raw):null;}catch{result=raw;}
+    if(!response.ok)return json({error:result?.message||result?.error||"The document review action was not authorised or could not be saved."},response.status);
     return json({success:true,result});
   }catch(error){console.error("[prolink-admin] review_failed",{name:error?.name||"Error"});return json({error:error?.message||"Document review could not be saved."},502);}
 }
