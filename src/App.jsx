@@ -58,8 +58,8 @@ function App() {
   const [showJoin, setShowJoin] = useState(false);
   const [joinStep, setJoinStep] = useState(1);
   const [joinData, setJoinData] = useState(() => { const empty={full_name:'',email:'',phone:'',whatsapp:'',dob_day:'',dob_month:'',dob_year:'',country_code:'',country_iso3:'',country_name:'',region:'',district:'',city:'',local_area:'',postal_code:'',address:'',category:'',subcategory:'',experience:'',skills:'',business_name:'',about:''}; try{return {...empty,...JSON.parse(localStorage.getItem('prolink-onboarding-draft')||'{}')};}catch{return empty;} });
-  const [adminAreas,setAdminAreas] = useState([]);
-  const [adminAreaLabel,setAdminAreaLabel] = useState('State / province / region');
+  const [adminAreas,setAdminAreas] = useState({level1:[],level2:[],level3:[],level4:[]});
+  const [adminAreaLabels,setAdminAreaLabels] = useState({level1:'State / province / region',level2:'County / district',level3:'City / municipality',level4:'Local area'});
   const [adminAreasLoading,setAdminAreasLoading] = useState(false);
   const [workingIdFile,setWorkingIdFile] = useState(null);
   const [competencyFile,setCompetencyFile] = useState(null);
@@ -74,14 +74,17 @@ function App() {
   },[session]);
   useEffect(() => {
     let active=true;
-    setAdminAreas([]);setAdminAreaLabel('State / province / region');
+    setAdminAreas({level1:[],level2:[],level3:[],level4:[]});
+    setAdminAreaLabels({level1:'State / province / region',level2:'County / district',level3:'City / municipality',level4:'Local area'});
     if(!joinData.country_iso3)return;
     setAdminAreasLoading(true);
-    getAdministrativeAreas(joinData.country_iso3,1).then(data=>{
+    Promise.all([1,2,3,4].map(level=>getAdministrativeAreas(joinData.country_iso3,level).catch(()=>null))).then(results=>{
       if(!active)return;
-      setAdminAreas(data.areas||[]);
-      setAdminAreaLabel(data.levelName||'State / province / region');
-    }).catch(()=>{if(active)setAdminAreas([]);}).finally(()=>{if(active)setAdminAreasLoading(false);});
+      const keys=['level1','level2','level3','level4'];
+      const nextAreas={},nextLabels={};
+      results.forEach((data,index)=>{nextAreas[keys[index]]=data?.areas||[];nextLabels[keys[index]]=data?.levelName||['State / province / region','County / district','City / municipality','Local area'][index];});
+      setAdminAreas(nextAreas);setAdminAreaLabels(nextLabels);
+    }).finally(()=>{if(active)setAdminAreasLoading(false);});
     return()=>{active=false;};
   },[joinData.country_iso3]);
   const [showCategories, setShowCategories] = useState(false);
@@ -205,13 +208,13 @@ function App() {
         <label className="form-label">WhatsApp number<input type="tel" inputMode="numeric" value={joinData.whatsapp} onChange={e=>setJoinData(p=>({...p,whatsapp:e.target.value.replace(/\D/g,'').slice(0,15)}))} placeholder="WhatsApp number"/></label>
         <div className="form-label dob-field"><span>Date of birth</span><div className="dob-controls"><input aria-label="Day" inputMode="numeric" pattern="[0-9]*" maxLength={2} value={joinData.dob_day} onChange={e=>setJoinData(p=>({...p,dob_day:e.target.value.replace(/\D/g,'').slice(0,2)}))} placeholder="DD"/><select aria-label="Month" value={joinData.dob_month} onChange={e=>setJoinData(p=>({...p,dob_month:e.target.value}))}><option value="">Month</option>{['January','February','March','April','May','June','July','August','September','October','November','December'].map((m,i)=><option key={m} value={String(i+1).padStart(2,'0')}>{m}</option>)}</select><input aria-label="Year" inputMode="numeric" pattern="[0-9]*" maxLength={4} value={joinData.dob_year} onChange={e=>setJoinData(p=>({...p,dob_year:e.target.value.replace(/\D/g,'').slice(0,4)}))} placeholder="YYYY"/></div><small>Date of birth is collected for your profile only and is not used for automated identity checks.</small></div>
         {!joinData.country_code && <label className="form-label">Country of residence *<select value={joinData.country_code} onChange={e=>{const c=COUNTRY_BY_CODE[e.target.value];setJoinData(p=>({...p,country_code:c?.code||'',country_iso3:c?.iso3||'',country_name:c?.name||'',region:''}));}}><option value="">Select your country</option>{INITIAL_COUNTRIES.map(c=><option key={c.code} value={c.code}>{c.name}</option>)}</select><small>Your country is a permanent part of your registration profile.</small></label>}
-        <label className="form-label">{adminAreaLabel} *<input list="prolink-region-options" value={joinData.region} onChange={e=>setJoinData(p=>({...p,region:e.target.value}))} placeholder={adminAreasLoading?'Loading regions…':'Select or type your region'}/><datalist id="prolink-region-options">{adminAreas.map(a=><option key={a.id} value={a.name}/>)}</datalist><small>{adminAreasLoading?'Loading official administrative areas…':adminAreas.length?'Select a suggested administrative area or type it manually.':'Enter your state, province or region manually if the directory is unavailable.'}</small></label>
-        <label className="form-label">County / district / department<input value={joinData.district} onChange={e=>setJoinData(p=>({...p,district:e.target.value}))} placeholder="Enter county, district or equivalent"/></label>
-        <label className="form-label">City / town / municipality *<input value={joinData.city} onChange={e=>setJoinData(p=>({...p,city:e.target.value}))} placeholder="Enter your city or town"/></label>
-        <label className="form-label">Local area / suburb *<input value={joinData.local_area} onChange={e=>setJoinData(p=>({...p,local_area:e.target.value}))} placeholder="Enter your local area or neighbourhood"/></label>
+        <label className="form-label">{adminAreaLabels.level1} *<input list="prolink-region-options" value={joinData.region} onChange={e=>setJoinData(p=>({...p,region:e.target.value}))} placeholder={adminAreasLoading?'Loading regions…':'Select or type your region'}/><datalist id="prolink-region-options">{adminAreas.level1.map(a=><option key={a.id} value={a.name}/>)}</datalist><small>{adminAreasLoading?'Loading country administrative areas…':'Choose a suggested region or enter it manually.'}</small></label>
+        <label className="form-label">{adminAreaLabels.level2}<input list="prolink-district-options" value={joinData.district} onChange={e=>setJoinData(p=>({...p,district:e.target.value}))} placeholder="Enter county, district or equivalent"/><datalist id="prolink-district-options">{adminAreas.level2.map(a=><option key={a.id} value={a.name}/>)}</datalist></label>
+        <label className="form-label">{adminAreaLabels.level3} *<input list="prolink-city-options" value={joinData.city} onChange={e=>setJoinData(p=>({...p,city:e.target.value}))} placeholder="Enter your city or town"/><datalist id="prolink-city-options">{adminAreas.level3.map(a=><option key={a.id} value={a.name}/>)}</datalist></label>
+        <label className="form-label">{adminAreaLabels.level4} *<input list="prolink-local-options" value={joinData.local_area} onChange={e=>setJoinData(p=>({...p,local_area:e.target.value}))} placeholder="Enter your local area or neighbourhood"/><datalist id="prolink-local-options">{adminAreas.level4.map(a=><option key={a.id} value={a.name}/>)}</datalist></label>
         <label className="form-label">Postal / ZIP code<input value={joinData.postal_code} onChange={e=>setJoinData(p=>({...p,postal_code:e.target.value}))} placeholder="Postal or ZIP code (if applicable)"/></label>
         <label className="form-label wide-field">Residential street address *<input value={joinData.address} onChange={e=>setJoinData(p=>({...p,address:e.target.value}))} placeholder="House number, street and additional address details"/></label>
-        <div className="document-required wide-field"><b>Working ID / professional ID card *</b><small>Upload a clear photo or scan of your current work ID, staff ID, professional ID or trade identification card. National identity numbers and government database lookups are not required.</small><input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={e=>setWorkingIdFile(e.target.files?.[0]||null)}/>{workingIdFile&&<small>Selected: {workingIdFile.name}</small>}</div>
+        <div className="document-required wide-field"><b>Working ID / professional ID card *</b><small>Upload a clear photo or scan of your current work ID, staff ID, professional ID or trade identification card. National identity numbers and government database lookups are not required.</small><input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" capture="environment" onChange={e=>setWorkingIdFile(e.target.files?.[0]||null)}/>{workingIdFile&&<small>Selected: {workingIdFile.name}</small>}</div>
       </div>:<div className="onboard-fields">
         <label className="form-label">Professional / business name *<input value={joinData.business_name} onChange={e=>setJoinData(p=>({...p,business_name:e.target.value}))} placeholder="Name customers will see"/></label>
         <label className="form-label">Professional category *<select value={joinData.category} onChange={e=>setJoinData(p=>({...p,category:e.target.value,subcategory:''}))}><option value="">Select category</option>{categories.slice(0,7).map(c=><option key={c.name}>{c.name}</option>)}{PROFESSION_GROUPS.slice(7).map(g=><option key={g.name}>{g.name}</option>)}<option>Other</option></select></label>
@@ -219,8 +222,8 @@ function App() {
         <label className="form-label">Years of experience *<select value={joinData.experience} onChange={e=>setJoinData(p=>({...p,experience:e.target.value}))}><option value="">Select experience</option><option>Less than 1 year</option><option>1–2 years</option><option>3–5 years</option><option>6–10 years</option><option>More than 10 years</option></select></label>
         <label className="form-label wide-field">Skills and services offered *<textarea rows="3" value={joinData.skills} onChange={e=>setJoinData(p=>({...p,skills:e.target.value}))} placeholder="List the services and skills you provide"/></label>
         <label className="form-label wide-field">About your professional work<textarea rows="3" value={joinData.about} onChange={e=>setJoinData(p=>({...p,about:e.target.value}))} placeholder="Describe your experience and work"/></label>
-        <div className="document-required wide-field"><b>Competency / trade-test / skills certificate *</b><small>Upload a certificate of competency, trade-test certificate, apprenticeship completion certificate, professional qualification or another relevant document proving your skills. This is reviewed manually by Prolink Admin.</small><input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={e=>setCompetencyFile(e.target.files?.[0]||null)}/>{competencyFile&&<small>Selected: {competencyFile.name}</small>}</div>
-        <div className="document-required wide-field"><b>Additional skills document (optional)</b><small>Upload another certificate, licence or supporting document if applicable.</small><input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={e=>setExtraSkillFile(e.target.files?.[0]||null)}/>{extraSkillFile&&<small>Selected: {extraSkillFile.name}</small>}</div>
+        <div className="document-required wide-field"><b>Competency / trade-test / skills certificate *</b><small>Upload a certificate of competency, trade-test certificate, apprenticeship completion certificate, professional qualification or another relevant document proving your skills. This is reviewed manually by Prolink Admin.</small><input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" capture="environment" onChange={e=>setCompetencyFile(e.target.files?.[0]||null)}/>{competencyFile&&<small>Selected: {competencyFile.name}</small>}</div>
+        <div className="document-required wide-field"><b>Additional skills document (optional)</b><small>Upload another certificate, licence or supporting document if applicable.</small><input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" capture="environment" onChange={e=>setExtraSkillFile(e.target.files?.[0]||null)}/>{extraSkillFile&&<small>Selected: {extraSkillFile.name}</small>}</div>
         <label className="form-label">Business phone<input type="tel" inputMode="numeric" value={joinData.business_phone||''} onChange={e=>setJoinData(p=>({...p,business_phone:e.target.value.replace(/\D/g,'').slice(0,15)}))} placeholder="Business contact number"/></label>
         <label className="form-label">Business email<input type="email" value={joinData.business_email||''} onChange={e=>setJoinData(p=>({...p,business_email:e.target.value}))} placeholder="Separate business email (optional)"/></label>
         <label className="form-label">Website (optional)<input type="url" value={joinData.website||''} onChange={e=>setJoinData(p=>({...p,website:e.target.value}))} placeholder="https://"/></label>
@@ -229,7 +232,7 @@ function App() {
       </div>}
       <div className="modal-actions">{joinStep>1&&<button className="outline-button" onClick={()=>setJoinStep(1)}>Back</button>}<button className="primary-button" disabled={joinSaving} onClick={async()=>{
         if(joinStep===1){
-          if(!joinData.full_name.trim()||!joinData.phone.trim()||!joinData.country_code||!joinData.region||!joinData.city.trim()||!joinData.local_area.trim()||!joinData.address.trim()||!workingIdFile){notify('Complete your personal and address details and upload your working or professional ID card.');return;}
+          if(!joinData.full_name.trim()||!joinData.phone.trim()||!joinData.country_code||!joinData.region||!joinData.city.trim()||!joinData.local_area.trim()||!joinData.address.trim()||!workingIdFile||workingIdFile.size>10485760||!['image/jpeg','image/png','image/webp','application/pdf'].includes(workingIdFile.type)){notify('Complete your personal and address details and upload your working or professional ID card.');return;}
           setJoinSaving(true);
           const legalPayload={full_name:joinData.full_name.trim(),phone:joinData.phone,whatsapp:joinData.whatsapp,country_code:joinData.country_code,country_iso3:joinData.country_iso3,country_name:joinData.country_name,region:joinData.region,district:joinData.district,city:joinData.city,local_area:joinData.local_area,postal_code:joinData.postal_code,address:joinData.address,date_of_birth:joinData.dob_year&&joinData.dob_month&&joinData.dob_day?joinData.dob_year+'-'+joinData.dob_month+'-'+joinData.dob_day:null,personal_details_review_status:'pending',working_id_review_status:'pending',manual_review_required:true};
           const {error:profileError}=await supabase.auth.updateUser({data:{...profile,...legalPayload}});
@@ -246,7 +249,7 @@ function App() {
           notify('Personal details and working ID submitted for manual review.');
           setJoinStep(2);return;
         }
-        if(!joinData.business_name.trim()||!joinData.category||!joinData.subcategory||!joinData.experience||!joinData.skills.trim()||!competencyFile){notify('Complete your professional details and upload a competency or trade-test certificate.');return;}
+        if(!joinData.business_name.trim()||!joinData.category||!joinData.subcategory||!joinData.experience||!joinData.skills.trim()||!competencyFile||competencyFile.size>10485760||!['image/jpeg','image/png','image/webp','application/pdf'].includes(competencyFile.type)||(extraSkillFile&&(extraSkillFile.size>10485760||!['image/jpeg','image/png','image/webp','application/pdf'].includes(extraSkillFile.type)))){notify('Complete your professional details and upload a competency or trade-test certificate.');return;}
         setJoinSaving(true);
         const businessPayload={professional_name:joinData.business_name.trim(),category:joinData.category,subcategory:joinData.subcategory,experience:joinData.experience,skills:joinData.skills,about:joinData.about,business_phone:joinData.business_phone||'',business_email:joinData.business_email||'',website:joinData.website||'',business_address:joinData.business_address||'',professional_onboarding_status:'submitted_for_review',business_review_status:'pending',manual_document_review_required:true,professional_documents_pending_review:true};
         const {error}=await supabase.auth.updateUser({data:{...profile,...businessPayload}});
