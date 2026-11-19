@@ -51,8 +51,6 @@ function App() {
   const [portraitUrls,setPortraitUrls] = useState({});
   useEffect(()=>{if(!portraitFile){setPortraitPreview('');return;}const url=URL.createObjectURL(portraitFile);setPortraitPreview(url);return()=>URL.revokeObjectURL(url);},[portraitFile]);
   const [menuOpen, setMenuOpen] = useState(false);
-  const activeTabRef=useRef(tab);
-  activeTabRef.current=tab;
   useEffect(()=>{
     if(!menuOpen)return;
     const scrollY=window.scrollY;
@@ -127,6 +125,8 @@ function App() {
   useEffect(()=>{let active=true;const ids=professionals.map(p=>p.id).filter(Boolean);if(!ids.length){setPortraitUrls({});return()=>{active=false;};}supabase.from('prolink_profile_media').select('user_id,portrait_path').in('user_id',ids).then(async({data,error})=>{if(!active||error)return;const pairs=await Promise.all((data||[]).map(async row=>{const {data:signed}=await supabase.storage.from('prolink-profile-portraits').createSignedUrl(row.portrait_path,3600);return [row.user_id,signed?.signedUrl||''];}));if(active)setPortraitUrls(Object.fromEntries(pairs.filter(x=>x[1])));});return()=>{active=false;};},[professionals]);
   useEffect(()=>{let active=true;if(!session?.user?.id){setPortraitUrl('');return()=>{active=false;};}supabase.from('prolink_profile_media').select('portrait_path').eq('user_id',session.user.id).maybeSingle().then(async({data})=>{if(!active||!data?.portrait_path)return;const {data:signed}=await supabase.storage.from('prolink-profile-portraits').createSignedUrl(data.portrait_path,3600);if(active)setPortraitUrl(signed?.signedUrl||'');});return()=>{active=false;};},[session?.user?.id]);
   const [tab, setTab] = useState('Explore');
+  const activeTabRef=useRef(tab);
+  activeTabRef.current=tab;
   const [query, setQuery] = useState('');
   const [location, setLocation] = useState('');
   const [locationBusy, setLocationBusy] = useState(false);
