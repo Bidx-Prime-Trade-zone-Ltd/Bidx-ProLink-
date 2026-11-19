@@ -38,17 +38,20 @@ export default function AdminPortal(){
  useEffect(()=>{
   let active=true;setDocumentUrl('');
   if(!selected?.document_path)return()=>{active=false;};
+  let objectUrl='';
   (async()=>{
    setDocumentLoading(true);
    try{
     const {data:{session}}=await supabase.auth.getSession();
     const response=await fetch('/api/admin/document?path='+encodeURIComponent(selected.document_path),{headers:{authorization:'Bearer '+session.access_token}});
-    const payload=await response.json();if(!response.ok)throw new Error(payload.error||'Document preview unavailable.');
-    if(active)setDocumentUrl(payload.url);
+    if(!response.ok){const payload=await response.json().catch(()=>({}));throw new Error(payload.error||'Document preview unavailable.');}
+    const blob=await response.blob();
+    objectUrl=URL.createObjectURL(blob);
+    if(active)setDocumentUrl(objectUrl);else URL.revokeObjectURL(objectUrl);
    }catch(error){if(active)setNotice(error.message);}
    finally{if(active)setDocumentLoading(false);}
   })();
-  return()=>{active=false;};
+  return()=>{active=false;if(objectUrl)URL.revokeObjectURL(objectUrl);};
  },[selected?.document_path]);
 
  const counts=dashboard.counts||{};
