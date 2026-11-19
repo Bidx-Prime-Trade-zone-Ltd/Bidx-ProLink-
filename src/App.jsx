@@ -19,7 +19,7 @@ import {
 const categories = PROFESSION_GROUPS.slice(0,7).map(g=>({name:g.name,sub:g.services})).concat([{name:'More categories',sub:[]}]);
 
 function Brand() {
-  return <div className="brand-mark"><span className="brand-symbol">B</span><span>Bidx <b>ProLink</b><small>SKILLED PEOPLE. QUALITY WORK.</small></span></div>;
+  return <div className="brand-mark"><img className="brand-symbol brand-logo-image" src="/icon.svg" alt="BK Bidx ProLink"/><span>Bidx <b>ProLink</b><small>SKILLED PEOPLE. QUALITY WORK.</small></span></div>;
 }
 
 function Avatar({ person, large = false }) {
