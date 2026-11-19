@@ -525,14 +525,13 @@ function App() {
           const legalPayload={title:joinData.title,full_name:joinData.full_name.trim(),phone:joinData.phone,whatsapp:joinData.whatsapp,country_code:joinData.country_code,country_iso3:joinData.country_iso3,country_name:joinData.country_name,region:joinData.region,district:joinData.district,city:joinData.city,local_area:joinData.local_area,postal_code:joinData.postal_code,address:joinData.address,date_of_birth:joinData.dob_year&&joinData.dob_month&&joinData.dob_day?joinData.dob_year+'-'+joinData.dob_month+'-'+joinData.dob_day:null,personal_details_review_status:'pending',working_id_review_status:'pending',manual_review_required:true};
           const {error:profileError}=await supabase.auth.updateUser({data:{...profile,...legalPayload}});
           if(profileError){setJoinSaving(false);notify('Personal details could not be saved: '+profileError.message);return;}
-          const idPath=`${session.user.id}/working-id-${crypto.randomUUID()}-${workingIdFile.name.replace(/[^a-zA-Z0-9._-]/g,'_')}`;
-          const {error:uploadError}=await supabase.storage.from('prolink-verification-documents').upload(idPath,workingIdFile,{upsert:false,contentType:workingIdFile.type});
-          if(uploadError){setJoinSaving(false);notify('Working ID upload failed: '+uploadError.message);return;}
+          const idForm=new FormData();idForm.append('file',workingIdFile);idForm.append('document_type','working_id');idForm.append('country_code',joinData.country_code);
+          let idUpload;
+          try{const response=await fetch('/api/verification/document',{method:'POST',headers:{authorization:'Bearer '+session.access_token},body:idForm});idUpload=await response.json();if(!response.ok)throw new Error(idUpload.error||'Working ID upload failed.');}
+          catch(uploadError){setJoinSaving(false);notify('Working ID upload failed: '+uploadError.message);return;}
           const {error:reviewError}=await supabase.from('prolink_review_records').insert({user_id:session.user.id,section:'legal_identity',status:'pending',submitted_data:legalPayload});
-          if(reviewError){setJoinSaving(false);notify('Your personal details were saved, but the review record could not be created.');return;}
-          const {error:idReviewError}=await supabase.from('prolink_review_records').insert({user_id:session.user.id,section:'supporting_document',status:'pending',document_path:idPath,submitted_data:{document_type:'working_id',document_name:workingIdFile.name,mime_type:workingIdFile.type}});
           setJoinSaving(false);
-          if(idReviewError){notify('Your working ID was uploaded, but its review record could not be created. Contact support before resubmitting.');return;}
+          if(reviewError){notify('Your professional ID was securely uploaded, but the personal-details review record could not be created. Contact support before resubmitting.');return;}
           setProfile(p=>({...p,...legalPayload}));
           notify('Personal details and working ID submitted for manual review.');
           setJoinStep(2);return;
@@ -546,12 +545,11 @@ function App() {
         if(businessReviewError){setJoinSaving(false);notify('Your profile details were saved, but the review record could not be created. Please retry.');return;}
         const uploadDocument=async(file,type)=>{
           if(!file)return null;
-          const path=`${session.user.id}/${type}-${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9._-]/g,'_')}`;
-          const {error:uploadError}=await supabase.storage.from('prolink-verification-documents').upload(path,file,{upsert:false,contentType:file.type});
-          if(uploadError)throw uploadError;
-          const {error:recordError}=await supabase.from('prolink_review_records').insert({user_id:session.user.id,section:'supporting_document',status:'pending',document_path:path,submitted_data:{document_type:type,document_name:file.name,mime_type:file.type}});
-          if(recordError)throw recordError;
-          return path;
+          const form=new FormData();form.append('file',file);form.append('document_type',type);form.append('country_code',joinData.country_code);
+          const response=await fetch('/api/verification/document',{method:'POST',headers:{authorization:'Bearer '+session.access_token},body:form});
+          const result=await response.json().catch(()=>({}));
+          if(!response.ok)throw new Error(result.error||'Professional document upload failed.');
+          return result.path;
         };
         try{await uploadDocument(competencyFile,'competency_certificate');if(extraSkillFile)await uploadDocument(extraSkillFile,'additional_skill_document');if(portraitFile){if(!['image/jpeg','image/png','image/webp'].includes(portraitFile.type)||portraitFile.size>5242880)throw new Error('Portrait must be JPEG, PNG or WebP and no larger than 5 MB.');const pp=session.user.id+'/portrait-'+crypto.randomUUID()+'.'+(portraitFile.type==='image/png'?'png':portraitFile.type==='image/webp'?'webp':'jpg');const {error:pe}=await supabase.storage.from('prolink-profile-portraits').upload(pp,portraitFile,{upsert:false,contentType:portraitFile.type});if(pe)throw pe;const {error:pr}=await supabase.from('prolink_profile_media').upsert({user_id:session.user.id,portrait_path:pp,updated_at:new Date().toISOString()},{onConflict:'user_id'});if(pr)throw pr;}
         }catch(uploadError){setJoinSaving(false);notify('Your profile was saved, but a certificate could not be submitted: '+uploadError.message);return;}
