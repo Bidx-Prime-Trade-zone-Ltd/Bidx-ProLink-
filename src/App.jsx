@@ -49,6 +49,7 @@ import { INITIAL_COUNTRIES, COUNTRY_BY_CODE } from './globalCountries.js';
 import { getAdministrativeAreas } from './lib/geography.js';
 import { supabase } from './lib/supabase.js';
 import AdminPortal from './AdminPortal.jsx';
+import SupportChat from './SupportChat.jsx';
 import './admin.css';
 import {
   Search, MapPin, SlidersHorizontal, ChevronDown, ChevronRight, ArrowLeft, Image as ImageIcon,
@@ -656,6 +657,8 @@ function App() {
       </div>
       <div className="gallery-viewer-footer" onClick={event=>event.stopPropagation()}>{selectedGallery[activeGalleryIndex].caption&&<p>{selectedGallery[activeGalleryIndex].caption}</p>}<span>Swipe left or right to explore</span></div>
     </div>}
+
+    <SupportChat session={session} profile={profile}/>
 
     {toast&&<div className="toast"><Check size={16}/>{toast}</div>}
   </div>;
