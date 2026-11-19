@@ -204,7 +204,7 @@ async function passwordChangeConfirm(request,env) {
 async function galleryUpload(request,env){
   const auth=await signedInProfileUser(request,env);
   if(auth.error)return auth.error;
-  if(!env.MY_R2)return json({error:"Cloudflare MY_R2 is not connected. Check the Worker binding named MY_R2."},503);
+  if(!env.R2)return json({error:"Cloudflare R2 is not connected. Check the Worker binding named R2."},503);
   let form;
   try{form=await request.formData();}catch{return json({error:"The photo upload request could not be read. Please select the photos again."},400);}
   const files=form.getAll("files").filter(file=>file&&typeof file.arrayBuffer==="function"&&typeof file.size==="number");
@@ -220,7 +220,7 @@ async function galleryUpload(request,env){
   const uploadedKeys=[],savedIds=[],savedItems=[];
   async function rollback(){
     if(savedIds.length){try{await supabaseRest(config,"/rest/v1/prolink_work_gallery?id=in.("+savedIds.join(",")+")&user_id=eq."+encodeURIComponent(userId),{method:"DELETE"});}catch(error){console.error("[prolink-gallery] rollback_records_failed",{name:error?.name||"Error"});}}
-    if(uploadedKeys.length){try{await env.MY_R2.delete(uploadedKeys);}catch(error){console.error("[prolink-gallery] rollback_r2_failed",{name:error?.name||"Error"});}}
+    if(uploadedKeys.length){try{await env.R2.delete(uploadedKeys);}catch(error){console.error("[prolink-gallery] rollback_r2_failed",{name:error?.name||"Error"});}}
   }
   try{
     const existing=await supabaseRest(config,"/rest/v1/prolink_work_gallery?select=id&user_id=eq."+encodeURIComponent(userId)+"&limit=15");
@@ -228,7 +228,7 @@ async function galleryUpload(request,env){
     for(const file of files){
       const safeName=String(file.name||"work-photo").replace(/[^a-zA-Z0-9._-]/g,"_").slice(-100)||"work-photo";
       const key="portfolio/"+userId+"/"+crypto.randomUUID()+"-"+safeName;
-      await env.MY_R2.put(key,await file.arrayBuffer(),{httpMetadata:{contentType:file.type,cacheControl:"public, max-age=31536000, immutable"}});
+      await env.R2.put(key,await file.arrayBuffer(),{httpMetadata:{contentType:file.type,cacheControl:"public, max-age=31536000, immutable"}});
       uploadedKeys.push(key);
       const inserted=await supabaseRest(config,"/rest/v1/prolink_work_gallery",{method:"POST",headers:{prefer:"return=representation"},body:JSON.stringify({user_id:userId,object_path:key,caption})});
       const item=Array.isArray(inserted)?inserted[0]:null;
@@ -245,7 +245,7 @@ async function galleryUpload(request,env){
 }
 
 async function galleryPhoto(request,env){
-  if(!env.MY_R2)return json({error:"Portfolio image storage is not configured."},503);
+  if(!env.R2)return json({error:"Portfolio image storage is not configured."},503);
   const id=String(new URL(request.url).searchParams.get("id")||"").trim();
   if(!id)return json({error:"A portfolio photo ID is required."},400);
   const config=adminConfig(env);
@@ -265,7 +265,7 @@ async function galleryPhoto(request,env){
   }
   try{
     if(String(item.object_path||"").startsWith("portfolio/")){
-      const object=await env.MY_R2.get(item.object_path);
+      const object=await env.R2.get(item.object_path);
       if(!object)return json({error:"Portfolio image is not available in R2."},404);
       const headers=new Headers();
       object.writeHttpMetadata(headers);
@@ -299,8 +299,8 @@ async function galleryDelete(request,env){
     const item=Array.isArray(rows)?rows[0]:null;
     if(!item)return json({error:"Photo not found or you do not own it."},404);
     if(String(item.object_path||"").startsWith("portfolio/")){
-      if(!env.MY_R2)return json({error:"MY R2 storage is not connected. The photo record was not deleted."},503);
-      await env.MY_R2.delete(item.object_path);
+      if(!env.R2)return json({error:"MY R2 storage is not connected. The photo record was not deleted."},503);
+      await env.R2.delete(item.object_path);
     }else{
       const remove=await fetch(config.url+"/storage/v1/object/prolink-work-gallery",{method:"DELETE",headers:{apikey:config.serviceKey,authorization:"Bearer "+config.serviceKey,"content-type":"application/json"},body:JSON.stringify({prefixes:[item.object_path]})});
       if(!remove.ok)throw new Error("The stored photo could not be removed.");
@@ -316,7 +316,7 @@ async function galleryDelete(request,env){
 async function migratePortfolioBatch(request,env){
   const auth=await requireProlinkAdmin(request,env);
   if(auth.error)return auth.error;
-  if(!env.MY_R2)return json({error:"Cloudflare R2 binding MY_R2 is not connected."},503);
+  if(!env.R2)return json({error:"Cloudflare R2 binding R2 is not connected."},503);
   const url=new URL(request.url);
   const offset=Math.max(0,Number.parseInt(url.searchParams.get("offset")||"0",10)||0);
   const limit=Math.min(10,Math.max(1,Number.parseInt(url.searchParams.get("limit")||"10",10)||10));
@@ -333,9 +333,9 @@ async function migratePortfolioBatch(request,env){
         const contentType=source.headers.get("content-type")||"application/octet-stream";
         const extension=contentType==="image/png"?"png":contentType==="image/webp"?"webp":"jpg";
         const key="portfolio/"+item.user_id+"/"+crypto.randomUUID()+"."+extension;
-        await env.MY_R2.put(key,await source.arrayBuffer(),{httpMetadata:{contentType,cacheControl:"public, max-age=31536000, immutable"}});
+        await env.R2.put(key,await source.arrayBuffer(),{httpMetadata:{contentType,cacheControl:"public, max-age=31536000, immutable"}});
         try{await supabaseRest(config,"/rest/v1/prolink_work_gallery?id=eq."+encodeURIComponent(item.id),{method:"PATCH",body:JSON.stringify({object_path:key})});}
-        catch(updateError){await env.MY_R2.delete(key);throw updateError;}
+        catch(updateError){await env.R2.delete(key);throw updateError;}
         const removed=await fetch(config.url+"/storage/v1/object/prolink-work-gallery",{method:"DELETE",headers:{apikey:config.serviceKey,authorization:"Bearer "+config.serviceKey,"content-type":"application/json"},body:JSON.stringify({prefixes:[item.object_path]})});
         if(!removed.ok)console.error("[prolink-gallery] legacy_cleanup_pending",{id:item.id,status:removed.status});
         migrated++;
