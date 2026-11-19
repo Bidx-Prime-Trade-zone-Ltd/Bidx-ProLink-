@@ -257,6 +257,9 @@ function App() {
     const current=window.history.state?.prolink
       ? window.history.state
       : {tab,menu:menuOpen,overlay:null,selected:null,index:0};
+    // Save the current screen's scroll position before moving forward.
+    const currentWithScroll={...current,scrollY:window.scrollY};
+    window.history.replaceState(currentWithScroll,'',window.location.href);
     const next={
       prolink:true,
       index:(Number.isInteger(current.index)?current.index:0)+1,
@@ -264,6 +267,7 @@ function App() {
       menu:Boolean(current.menu),
       overlay:current.overlay||null,
       selected:current.selected||null,
+      scrollY:0,
       ...view
     };
     window.history.pushState(next,'',view.overlay?'#'+view.overlay:view.menu?'#menu':'#'+encodeURIComponent((view.tab||tab).toLowerCase().replaceAll(' ','-')));
@@ -312,6 +316,7 @@ function App() {
       setShowRequest(state.overlay==='request');
       setSelected(state.selected||null);
       setNavStack(prev=>prev.filter(item=>(item.index??0)<=(state.index??0)));
+      window.requestAnimationFrame(()=>window.scrollTo(0,Number(state.scrollY)||0));
     };
     window.addEventListener('popstate',onPop);
     return ()=>window.removeEventListener('popstate',onPop);
