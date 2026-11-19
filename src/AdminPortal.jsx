@@ -1,9 +1,10 @@
 import React,{useEffect,useMemo,useState} from 'react';
 import {supabase} from './lib/supabase.js';
 import {ShieldCheck,Users,Clock3,CheckCircle2,FileCheck,Search,LogOut,RefreshCw,Check,X,Eye,Globe2,UserRound,CalendarDays,LockKeyhole} from 'lucide-react';
+import SupportInbox from './SupportInbox.jsx';
 
 const ADMIN_EMAIL='ojepaamedu@gmail.com';
-const tabs=['Overview','Users','Professional profiles','Document review','Profile Change Requests','Review history'];
+const tabs=['Overview','Users','Professional profiles','Document review','Profile Change Requests','Review history','Support Inbox'];
 const fmt=value=>value?new Date(value).toLocaleString():'—';
 const label=value=>String(value||'').replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase());
 
@@ -128,6 +129,7 @@ export default function AdminPortal(){
   {tab==='Review history'&&<section className="admin-panel"><div className="admin-panel-heading"><div><h2>Document review history</h2><p>Audit view of completed approval decisions.</p></div><label className="admin-search"><Search size={15}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search history"/></label></div>
    <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Document</th><th>Applicant ID</th><th>Decision</th><th>Submitted</th><th>Reviewed</th><th>Reason</th></tr></thead><tbody>{reviews.filter(r=>r.status!=='pending').map(r=><tr key={r.id}><td>{label(r.submitted_data?.document_type||r.section)}</td><td className="admin-id">{r.user_id}</td><td><span className={'admin-status '+r.status}>{label(r.status)}</span></td><td>{fmt(r.submitted_at)}</td><td>{fmt(r.reviewed_at)}</td><td>{r.review_reason||'—'}</td></tr>)}</tbody></table></div>
   </section>}
+  {tab==='Support Inbox'&&<SupportInbox/>}
   <footer className="admin-footer"><ShieldCheck size={15}/> Bidx ProLink · Internal document moderation · Read-only user records</footer>
  </div>;
 }
