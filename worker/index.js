@@ -428,13 +428,15 @@ async function reverseGeocode(request, env) {
     const data = await response.json();
     const place = data?.results?.[0] || data?.features?.[0]?.properties || null;
     if (!place) return json({ error: "No readable location was found. Please enter your city manually." }, 404);
-    const city = place.city || place.town || place.village || place.municipality || place.suburb || place.district || "";
-    const region = place.state || place.region || place.county || "";
+    const localArea = place.suburb || place.neighbourhood || place.neighborhood || place.quarter || place.residential || "";
+    const district = place.district || place.county || place.municipality || "";
+    const city = place.city || place.town || place.village || place.municipality || "";
+    const region = place.state || place.region || place.state_district || "";
     const country = place.country || "";
     const countryCode = String(place.country_code || "").toUpperCase();
-    const displayName = [city || region, country].filter(Boolean).join(", ") || place.formatted || "";
+    const displayName = [localArea || city || district || region, country].filter(Boolean).join(", ") || place.formatted || "";
     if (!displayName) return json({ error: "No readable location was found. Please enter your city manually." }, 404);
-    return json({ displayName, city, region, country, countryCode, postcode: place.postcode || "" }, 200, "private, max-age=300");
+    return json({ displayName, localArea, district, city, region, country, countryCode, postcode: place.postcode || "" }, 200, "private, max-age=300");
   } catch (error) {
     console.error("[prolink-location] reverse_geocode_failed", { name: error?.name || "Error" });
     return json({ error: "Location lookup is temporarily unavailable. Please enter your city manually." }, 502);
