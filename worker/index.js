@@ -233,6 +233,64 @@ async function supabaseRest(config,path,options={}) {
   return data;
 }
 
+const PROFILE_CHANGE_FIELDS = new Set(["title","full_name","date_of_birth","phone","whatsapp","country_code","country_iso3","country_name","region","district","city","local_area","professional_name","category","subcategory","experience","skills","about","business_phone","business_email","website","business_address"]);
+async function signedInProfileUser(request,env){
+  const config=adminConfig(env),authorization=request.headers.get("authorization")||"";
+  if(!config.url||!config.serviceKey||!config.anonKey)return {error:json({error:"Profile change service is not configured."},503)};
+  if(!authorization.startsWith("Bearer "))return {error:json({error:"Sign in is required."},401)};
+  const response=await fetch(config.url+"/auth/v1/user",{headers:{apikey:config.anonKey,authorization}});
+  if(!response.ok)return {error:json({error:"Your session is invalid or expired."},401)};
+  return {config,user:await response.json(),authorization};
+}
+async function profileChangeStatus(request,env){
+  const auth=await signedInProfileUser(request,env);if(auth.error)return auth.error;
+  try{
+    const rows=await supabaseRest(auth.config,"/rest/v1/prolink_professional_profiles?select=approved_at&user_id=eq."+encodeURIComponent(auth.user.id)+"&limit=1");
+    const approvedAt=rows?.[0]?.approved_at||null,unlockAt=approvedAt?new Date(new Date(approvedAt).getTime()+90*86400000).toISOString():null;
+    const requests=await supabaseRest(auth.config,"/rest/v1/prolink_profile_change_requests?select=id,status,requested_at,reviewed_at,review_reason&user_id=eq."+encodeURIComponent(auth.user.id)+"&order=requested_at.desc&limit=5");
+    return json({approvedAt,unlockAt,locked:!unlockAt||Date.now()<new Date(unlockAt).getTime(),requests});
+  }catch(error){return json({error:"Profile change status is temporarily unavailable."},502);}
+}
+async function profileChangeRequest(request,env){
+  const auth=await signedInProfileUser(request,env);if(auth.error)return auth.error;
+  try{
+    const body=await request.json(),changes=body.changes||{},keys=Object.keys(changes);
+    if(!keys.length||keys.some(key=>!PROFILE_CHANGE_FIELDS.has(key)))return json({error:"The request contains no valid profile changes."},400);
+    const rows=await supabaseRest(auth.config,"/rest/v1/prolink_professional_profiles?select=approved_at&user_id=eq."+encodeURIComponent(auth.user.id)+"&limit=1");
+    const approvedAt=rows?.[0]?.approved_at;
+    if(!approvedAt)return json({error:"Your professional profile must be approved before requesting changes."},409);
+    const unlockAt=new Date(new Date(approvedAt).getTime()+90*86400000);
+    if(Date.now()<unlockAt.getTime())return json({error:"Your approved information is locked for 90 days. You can request changes after "+unlockAt.toLocaleDateString("en-GB")+"."},409);
+    const pending=await supabaseRest(auth.config,"/rest/v1/prolink_profile_change_requests?select=id&user_id=eq."+encodeURIComponent(auth.user.id)+"&status=eq.pending&limit=1");
+    if(pending?.length)return json({error:"You already have a change request awaiting Admin review."},409);
+    await supabaseRest(auth.config,"/rest/v1/prolink_profile_change_requests",{method:"POST",headers:{prefer:"return=minimal"},body:JSON.stringify({user_id:auth.user.id,requested_changes:changes,status:"pending"})});
+    return json({success:true,message:"Your request has been sent to Admin. Your approved profile remains unchanged until approval."});
+  }catch(error){return json({error:"Your profile change request could not be submitted."},502);}
+}
+async function adminProfileChange(request,env){
+  const auth=await requireProlinkAdmin(request,env);if(auth.error)return auth.error;
+  try{
+    const body=await request.json(),id=String(body.requestId||""),action=String(body.action||""),reason=String(body.reason||"").trim();
+    if(!id||!["approve","reject"].includes(action))return json({error:"Choose a valid review decision."},400);
+    if(action==="reject"&&!reason)return json({error:"Enter a reason before rejecting this request."},400);
+    const rows=await supabaseRest(auth.config,"/rest/v1/prolink_profile_change_requests?select=*&id=eq."+encodeURIComponent(id)+"&status=eq.pending&limit=1");
+    const item=rows?.[0];if(!item)return json({error:"This request is no longer pending."},404);
+    if(action==="approve"){
+      const allowed=Object.fromEntries(Object.entries(item.requested_changes||{}).filter(([key])=>PROFILE_CHANGE_FIELDS.has(key)));
+      const userResponse=await fetch(auth.config.url+"/auth/v1/admin/users/"+encodeURIComponent(item.user_id),{headers:{apikey:auth.config.serviceKey,authorization:"Bearer "+auth.config.serviceKey}});
+      if(!userResponse.ok)throw new Error("Could not load the professional account.");
+      const account=await userResponse.json();
+      const metadata={...(account.user_metadata||{}),...allowed};
+      const update=await fetch(auth.config.url+"/auth/v1/admin/users/"+encodeURIComponent(item.user_id),{method:"PUT",headers:{apikey:auth.config.serviceKey,authorization:"Bearer "+auth.config.serviceKey,"content-type":"application/json"},body:JSON.stringify({user_metadata:metadata})});
+      if(!update.ok)throw new Error("Could not apply the approved account information.");
+      const profileUpdate=await fetch(auth.config.url+"/rest/v1/prolink_professional_profiles?user_id=eq."+encodeURIComponent(item.user_id),{method:"PATCH",headers:{apikey:auth.config.serviceKey,authorization:"Bearer "+auth.config.serviceKey,"content-type":"application/json",prefer:"return=minimal"},body:JSON.stringify({...allowed,approved_at:new Date().toISOString()})});
+      if(!profileUpdate.ok)throw new Error("Account details were updated, but the public professional record could not be updated. Contact support.");
+    }
+    await supabaseRest(auth.config,"/rest/v1/prolink_profile_change_requests?id=eq."+encodeURIComponent(id),{method:"PATCH",headers:{prefer:"return=minimal"},body:JSON.stringify({status:action==="approve"?"approved":"rejected",reviewed_at:new Date().toISOString(),reviewed_by:auth.user.id,review_reason:reason||null,approved_at:action==="approve"?new Date().toISOString():null})});
+    return json({success:true,message:action==="approve"?"Profile changes approved. The 90-day lock has restarted.":"Profile change request rejected."});
+  }catch(error){console.error("[prolink-admin] profile_change_review_failed",{name:error?.name||"Error"});return json({error:error?.message||"Profile change review failed."},502);}
+}
+
 async function adminDashboard(request,env) {
   const auth=await requireProlinkAdmin(request,env);if(auth.error)return auth.error;
   try{
@@ -302,6 +360,9 @@ export default {
     if (url.pathname === "/api/auth/password-change" && request.method === "POST") return passwordChangeStart(request, env);
     if (url.pathname === "/api/auth/password-change/confirm" && request.method === "GET") return passwordChangeConfirm(request, env);
     if (url.pathname === "/api/geography" && request.method === "GET") return geography(request, ctx);
+    if (url.pathname === "/api/profile/change-status" && request.method === "GET") return profileChangeStatus(request, env);
+    if (url.pathname === "/api/profile/change-request" && request.method === "POST") return profileChangeRequest(request, env);
+    if (url.pathname === "/api/admin/profile-change" && request.method === "POST") return adminProfileChange(request, env);
     if (url.pathname === "/api/admin/dashboard" && request.method === "GET") return adminDashboard(request, env);
     if (url.pathname === "/api/admin/review" && request.method === "POST") return adminReview(request, env);
     if (url.pathname === "/api/admin/document" && request.method === "GET") return adminDocument(request, env);
