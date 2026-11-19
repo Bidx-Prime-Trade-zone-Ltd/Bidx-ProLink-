@@ -295,9 +295,10 @@ async function adminDashboard(request,env) {
   const auth=await requireProlinkAdmin(request,env);if(auth.error)return auth.error;
   try{
     const {config}=auth;
-    const [profiles,reviews]=await Promise.all([
+    const [profiles,reviews,profileChangeRequests]=await Promise.all([
       supabaseRest(config,"/rest/v1/prolink_professional_profiles?select=*&order=approved_at.desc&limit=5000"),
-      supabaseRest(config,"/rest/v1/prolink_review_records?select=*&order=submitted_at.desc&limit=5000")
+      supabaseRest(config,"/rest/v1/prolink_review_records?select=*&order=submitted_at.desc&limit=5000"),
+      supabaseRest(config,"/rest/v1/prolink_profile_change_requests?select=*&order=requested_at.desc&limit=1000")
     ]);
     let users=[],page=1;
     for(;page<=100;page++){
@@ -315,7 +316,7 @@ async function adminDashboard(request,env) {
       approvedDocuments:reviews.filter(r=>r.status==="approved").length,
       rejectedDocuments:reviews.filter(r=>r.status==="rejected").length
     };
-    return json({counts,users,profiles,reviews,adminEmail:auth.user.email});
+    return json({counts,users,profiles,reviews,profileChangeRequests,adminEmail:auth.user.email});
   }catch(error){console.error("[prolink-admin] dashboard_failed",{name:error?.name||"Error"});return json({error:"Could not load the internal admin dashboard. Check the ProLink tables and service configuration."},502);}
 }
 
