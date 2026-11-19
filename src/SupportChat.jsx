@@ -23,7 +23,7 @@ export default function SupportChat({session,profile}){
   if(!token)return;
   if(!silent)setLoading(true);
   try{
-   const response=await fetch('/api/support/messages',{headers:{authorization:'Bearer '+token}});
+   const response=await fetch('/api/support/messages?timeZone='+encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone||'Africa/Lagos'),{headers:{authorization:'Bearer '+token}});
    const payload=await response.json();
    if(!response.ok)throw new Error(payload.error||'Support chat could not be loaded.');
    setConversation(payload.conversation||null);
