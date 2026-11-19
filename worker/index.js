@@ -819,7 +819,8 @@ async function supportMessages(request,env){
     const conversation=await supportConversation(auth.config,auth.user.id);
     let messages=await supabaseRest(auth.config,"/rest/v1/prolink_support_messages?select=id,sender_role,content,attachments,pinned_for_admin,created_at&conversation_id=eq."+encodeURIComponent(conversation.id)+"&order=created_at.asc&limit=150");
     if(!messages?.length){
-      await supportInsertMessage(auth.config,conversation.id,"ai",supportTimeGreeting("Africa/Lagos")+", "+supportName(auth.user)+". Welcome to Bidx ProLink Support. I’m your AI assistant. I can help you navigate the app, understand professional registration and membership, check your account information, and connect you with a human Admin when needed.");
+      const timeZone=String(new URL(request.url).searchParams.get("timeZone")||"Africa/Lagos").slice(0,80);
+      await supportInsertMessage(auth.config,conversation.id,"ai",supportTimeGreeting(timeZone)+", "+supportName(auth.user)+". Welcome to Bidx ProLink Support. I’m your AI assistant. I can help you navigate the app, understand professional registration and membership, check your account information, and connect you with a human Admin when needed.");
       messages=await supabaseRest(auth.config,"/rest/v1/prolink_support_messages?select=id,sender_role,content,attachments,pinned_for_admin,created_at&conversation_id=eq."+encodeURIComponent(conversation.id)+"&order=created_at.asc&limit=150");
     }
     return json({conversation,messages:messages||[]});
