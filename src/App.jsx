@@ -56,11 +56,13 @@ function App() {
     const scrollY=window.scrollY;
     const body=document.body;
     const previous={position:body.style.position,top:body.style.top,width:body.style.width,overflow:body.style.overflow};
+    body.classList.add('prolink-menu-locked');
     body.style.position='fixed';
     body.style.top=`-${scrollY}px`;
     body.style.width='100%';
     body.style.overflow='hidden';
     return()=>{
+      body.classList.remove('prolink-menu-locked');
       body.style.position=previous.position;
       body.style.top=previous.top;
       body.style.width=previous.width;
