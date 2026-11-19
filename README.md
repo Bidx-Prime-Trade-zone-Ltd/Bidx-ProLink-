@@ -64,3 +64,17 @@ Information: Info@bidxpro.online
 ## Latest deployment trigger — 18 November 2026
 
 The production branch includes the changes merged through pull requests #25 and #26: global professional registration and manual verification, the Supabase-backed approved-professional directory, and the private work-portfolio image gallery. This entry records the release contents; deployment status must be confirmed in the hosting dashboard.
+
+
+## ProLink unified AI and Admin support
+
+The dedicated floating **Chat Admin** surface is separate from customer-to-professional Messages. It uses the private `prolink_support_conversations` and `prolink_support_messages` tables and stores support attachments in the existing Worker R2 binding.
+
+Before enabling the feature in production:
+
+1. Apply `supabase/migrations/202611200001_prolink_unified_support_chat.sql` to the ProLink Supabase project.
+2. Ensure the ProLink Cloudflare Worker has a Workers AI binding named `AI` (the Wrangler config declares this binding). The support assistant uses Workers AI text generation and image understanding.
+3. Deploy the updated ProLink Worker and frontend assets.
+4. Sign in to the app and test AI greeting, account/membership lookup, image/PDF upload, Admin handoff, Admin attendance, human reply, and resolution.
+
+Human Admin handoff stays in the same support conversation. AI continues while an Admin request is pending and pauses only when Admin marks the conversation as attending. Customer-to-professional messages are not read by or exposed in this support inbox.
