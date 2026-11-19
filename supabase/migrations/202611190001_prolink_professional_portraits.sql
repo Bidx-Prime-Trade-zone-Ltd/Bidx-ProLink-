@@ -1,0 +1,13 @@
+insert into storage.buckets (id,name,public,file_size_limit,allowed_mime_types) values ('prolink-profile-portraits','prolink-profile-portraits',false,5242880,array['image/jpeg','image/png','image/webp']) on conflict (id) do update set public=false,file_size_limit=5242880,allowed_mime_types=excluded.allowed_mime_types;
+create table if not exists public.prolink_profile_media (user_id uuid primary key references auth.users(id) on delete cascade,portrait_path text not null,updated_at timestamptz not null default now());
+alter table public.prolink_profile_media enable row level security;
+drop policy if exists "Users can view professional portraits" on public.prolink_profile_media;
+create policy "Users can view professional portraits" on public.prolink_profile_media for select to anon,authenticated using (true);
+drop policy if exists "Users can manage own professional portrait" on public.prolink_profile_media;
+create policy "Users can manage own professional portrait" on public.prolink_profile_media for all to authenticated using (auth.uid()=user_id) with check (auth.uid()=user_id);
+drop policy if exists "Professional portrait image access" on storage.objects;
+create policy "Professional portrait image access" on storage.objects for select to anon,authenticated using (bucket_id='prolink-profile-portraits');
+drop policy if exists "Users upload own professional portrait" on storage.objects;
+create policy "Users upload own professional portrait" on storage.objects for insert to authenticated with check (bucket_id='prolink-profile-portraits' and (storage.foldername(name))[1]=auth.uid()::text);
+drop policy if exists "Users delete own professional portrait" on storage.objects;
+create policy "Users delete own professional portrait" on storage.objects for delete to authenticated using (bucket_id='prolink-profile-portraits' and (storage.foldername(name))[1]=auth.uid()::text);
