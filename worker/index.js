@@ -869,7 +869,9 @@ async function supportAiReply(env,context,history,message){
     ...history.filter(item=>["user","ai","admin"].includes(item.sender_role)).slice(-12).map(item=>({role:item.sender_role==="ai"?"assistant":item.sender_role==="admin"?"assistant":"user",content:String(item.content||"").slice(0,2500)}))
   ];
   const result=await env.AI.run(PROLINK_SUPPORT_TEXT_MODEL,{messages,max_tokens:650,temperature:0.35});
-  return String(result?.response||result?.result||result?.output_text||"I’m here to help. Could you tell me a little more?").trim().slice(0,7000);
+  const generated=result?.response||result?.result||result?.output_text||result?.choices?.[0]?.message?.content||result?.message?.content||"";
+  const text=Array.isArray(generated)?generated.map(part=>typeof part==="string"?part:part?.text||"").join("\n"):String(generated||"");
+  return text.trim().slice(0,7000)||"I’m here to help. Could you tell me a little more?";
 }
 async function supportMessages(request,env){
   const auth=await signedInProfileUser(request,env);if(auth.error)return auth.error;
@@ -937,7 +939,7 @@ async function supportAttachment(request,env){
     if(file.type.startsWith("image/")&&env.AI){
       try{
         const encoded=supportBytesToBase64(bytes);
-        const vision=await env.AI.run(PROLINK_SUPPORT_VISION_MODEL,{prompt:"Describe the visible contents of this image accurately for a professional support assistant. Mention visible text only if legible. Do not identify people, infer sensitive personal traits, claim authenticity, or speculate beyond what is visible. Return a concise description.",image:encoded});
+        const vision=await env.AI.run(PROLINK_SUPPORT_VISION_MODEL,{prompt:"Describe the visible contents of this image accurately for a professional support assistant. Mention visible text only if legible. Do not identify people, infer sensitive personal traits, claim authenticity, or speculate beyond what is visible. Return a concise description.",image:"data:"+file.type+";base64,"+encoded});
         summary=String(vision?.description||vision?.response||vision?.result||"").trim().slice(0,1800);
       }catch(error){console.error("[prolink-support] vision_failed",{name:error?.name||"Error"});}
     }
