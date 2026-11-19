@@ -51,6 +51,23 @@ function App() {
   const [portraitUrls,setPortraitUrls] = useState({});
   useEffect(()=>{if(!portraitFile){setPortraitPreview('');return;}const url=URL.createObjectURL(portraitFile);setPortraitPreview(url);return()=>URL.revokeObjectURL(url);},[portraitFile]);
   const [menuOpen, setMenuOpen] = useState(false);
+  useEffect(()=>{
+    if(!menuOpen)return;
+    const scrollY=window.scrollY;
+    const body=document.body;
+    const previous={position:body.style.position,top:body.style.top,width:body.style.width,overflow:body.style.overflow};
+    body.style.position='fixed';
+    body.style.top=`-${scrollY}px`;
+    body.style.width='100%';
+    body.style.overflow='hidden';
+    return()=>{
+      body.style.position=previous.position;
+      body.style.top=previous.top;
+      body.style.width=previous.width;
+      body.style.overflow=previous.overflow;
+      window.scrollTo(0,scrollY);
+    };
+  },[menuOpen]);
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileLock,setProfileLock] = useState({approvedAt:null,unlockAt:null,locked:false,requests:[]});
   useEffect(() => {
