@@ -873,8 +873,8 @@ async function supportAttachment(request,env){
   let form;try{form=await request.formData();}catch{return json({error:"The selected file could not be read."},400);}
   const file=form.get("file");
   if(!file||typeof file.arrayBuffer!=="function")return json({error:"Choose an image or document first."},400);
-  const allowed=new Set(["image/jpeg","image/png","image/webp","application/pdf","text/plain"]);
-  if(!allowed.has(file.type))return json({error:"Supported files are JPEG, PNG, WebP, PDF and TXT."},415);
+  const allowed=new Set(["image/jpeg","image/png","image/webp","application/pdf","text/plain","text/csv","application/msword","application/vnd.openxmlformats-officedocument.wordprocessingml.document","application/vnd.ms-excel","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"]);
+  if(!allowed.has(file.type))return json({error:"Supported files are JPEG, PNG, WebP, PDF, TXT, CSV, Word and Excel documents."},415);
   if(file.size>10*1024*1024)return json({error:"Files must be no larger than 10 MB."},413);
   try{
     const conversation=await supportConversation(auth.config,auth.user.id);
