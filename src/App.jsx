@@ -205,24 +205,39 @@ function App() {
   const [deleteRequestEmail, setDeleteRequestEmail] = useState('');
   const [deleteReason, setDeleteReason] = useState('');
   const [deleteConfirmed, setDeleteConfirmed] = useState(false);
-  const [navStack, setNavStack] = useState([{tab:'Explore',menu:false}]);
-  useEffect(()=>{if(!window.history.state?.prolink)window.history.replaceState({prolink:true,tab:'Explore',menu:false},'',window.location.pathname+window.location.search+window.location.hash);},[]);
+  const [navStack, setNavStack] = useState([{tab:'Explore',menu:false,overlay:null,selected:null}]);
+  const pushView = (view={}) => {
+    const current=window.history.state?.prolink?window.history.state:{tab,menu:menuOpen,overlay:null,selected:null};
+    const next={prolink:true,tab:current.tab||tab,menu:Boolean(current.menu),overlay:current.overlay||null,selected:current.selected||null,...view};
+    window.history.pushState(next,'',view.overlay?'#'+view.overlay:view.menu?'#menu':'#'+encodeURIComponent((view.tab||tab).toLowerCase().replaceAll(' ','-')));
+    setNavStack(prev=>[...prev,next]);
+  };
+  useEffect(()=>{if(!window.history.state?.prolink)window.history.replaceState({prolink:true,tab:'Explore',menu:false,overlay:null,selected:null},'',window.location.pathname+window.location.search+window.location.hash);},[]);
   const navigateTab = (next) => {
     if(next===tab&&!menuOpen)return;
-    setNavStack(prev=>[...prev,{tab:next,menu:false}]);
-    window.history.pushState({prolink:true,tab:next,menu:false}, '', '#' + encodeURIComponent(next.toLowerCase().replaceAll(' ','-')));
-    setTab(next); setSelected(null); setMenuOpen(false);
+    pushView({tab:next,menu:false,overlay:null,selected:null});
+    setTab(next);setSelected(null);setMenuOpen(false);setShowCategories(false);setShowJoin(false);
   };
-  const openDrawer = () => { if(menuOpen)return;setMenuOpen(true);setNavStack(prev=>[...prev,{tab,menu:true}]);window.history.pushState({prolink:true,tab,menu:true},'','#menu'); };
-  const back = () => { if (window.history.state?.prolink && window.history.state.tab!=='Explore' || window.history.state?.menu) window.history.back(); else {setMenuOpen(false);setTab('Explore');setSelected(null);} };
+  const openDrawer = () => { if(menuOpen)return;pushView({tab,menu:true,overlay:null,selected:null});setMenuOpen(true); };
+  const back = () => {
+    if(window.history.state?.prolink && window.history.length>1){window.history.back();return;}
+    setShowJoin(false);setShowCategories(false);setShowAuth(false);setShowRequest(false);setSelected(null);setMenuOpen(false);setTab('Explore');
+  };
   useEffect(() => {
     // Do not remove OAuth callback parameters here. Supabase's PKCE client must
     // read the ?code= parameter and exchange it for a session before URL cleanup.
     const onPop=event=>{
       const state=event.state;
-      if(state?.prolink){setTab(state.tab||'Explore');setMenuOpen(Boolean(state.menu));setNavStack(prev=>prev.slice(0,-1));}
-      else {setTab('Explore');setMenuOpen(false);setNavStack([{tab:'Explore',menu:false}]);}
-      setSelected(null);
+      if(state?.prolink){
+        setTab(state.tab||'Explore');setMenuOpen(Boolean(state.menu));
+        setShowCategories(state.overlay==='categories');setShowJoin(state.overlay==='join');
+        setShowAuth(state.overlay==='auth');setShowRequest(state.overlay==='request');
+        setSelected(state.selected||null);
+        setNavStack(prev=>prev.slice(0,-1));
+      }else{
+        setTab('Explore');setMenuOpen(false);setShowCategories(false);setShowJoin(false);setShowAuth(false);setShowRequest(false);setSelected(null);
+        setNavStack([{tab:'Explore',menu:false,overlay:null,selected:null}]);
+      }
     };
     window.addEventListener('popstate',onPop);
     return ()=>window.removeEventListener('popstate',onPop);
@@ -280,9 +295,9 @@ function App() {
     finally{setSavingProfile(false);}
   };
   const signOut = async () => { const {error}=await supabase.auth.signOut(); if(error) notify(error.message); };
-  const startRequest = (person) => { setSelected(person); setRequestSent(false); setShowRequest(true); };
-  const startJoin = (category = '', service = '') => { setJoinData(p=>({...p,category:category||p.category,subcategory:service||p.subcategory})); setJoinStep(1); setShowCategories(false); setShowJoin(true); };
-  const openCategoryBrowser = (group = '') => { setCategoryGroup(group); setCategorySearch(''); setShowCategories(true); };
+  const startRequest = (person) => { pushView({overlay:'request',selected:person});setSelected(person);setRequestSent(false);setShowRequest(true); };
+  const startJoin = (category = '', service = '') => { pushView({overlay:'join',menu:false,selected:null});setJoinData(p=>({...p,category:category||p.category,subcategory:service||p.subcategory}));setJoinStep(1);setShowCategories(false);setShowJoin(true); };
+  const openCategoryBrowser = (group = '') => { pushView({overlay:'categories',menu:false,selected:null});setCategoryGroup(group);setCategorySearch('');setMenuOpen(false);setShowCategories(true); };
 
   if (window.location.pathname.replace(/\/$/, '') === '/admin') return <AdminPortal />;
   if (!authReady) return <div className="app-loading">Loading Bidx ProLink…</div>;
@@ -290,7 +305,7 @@ function App() {
   return <div className="app-shell">
     <header className="topbar prolink-mobile-topbar">
       <div className="topbar-inner">
-        {(tab!=='Explore'||selected) && <button className="icon-button" onClick={back} aria-label="Go back"><ArrowLeft size={22}/></button>}
+        {(tab!=='Explore'||selected||showCategories||showJoin||showAuth||showRequest||menuOpen) && <button className="icon-button app-back-button" onClick={back} aria-label="Go back one step"><ArrowLeft size={18}/></button>}
         <button className="brand-button" onClick={() => {navigateTab('Explore');setSelected(null);}}><Brand /></button>
         <span className="topbar-spacer"/>
         <button className="icon-button" onClick={() => menuOpen ? back() : openDrawer()} aria-label="Open menu"><Menu size={24}/></button>
@@ -346,7 +361,7 @@ function App() {
 
     {showAuth&&<AuthModal onClose={()=>setShowAuth(false)} />}
 
-    {showCategories&&<div className="modal-backdrop" onClick={()=>setShowCategories(false)}><section className="modal profession-browser" onClick={e=>e.stopPropagation()}><button className="modal-close" onClick={()=>setShowCategories(false)} aria-label="Close"><X/></button><h2>Select your profession</h2><p>Search and choose your service before registration.</p><label className="profession-browser-search"><Search size={17}/><input autoFocus value={categorySearch} onChange={e=>setCategorySearch(e.target.value)} placeholder="Search profession or trade"/></label><select className="profession-group-select" value={categoryGroup} onChange={e=>setCategoryGroup(e.target.value)}><option value="">All professional categories</option>{PROFESSION_GROUPS.map(g=><option key={g.name}>{g.name}</option>)}</select><div className="profession-browser-list">{PROFESSION_GROUPS.filter(g=>!categoryGroup||g.name===categoryGroup).map(group=>{const matches=group.services.filter(service=>!categorySearch||service.toLowerCase().includes(categorySearch.toLowerCase())||group.name.toLowerCase().includes(categorySearch.toLowerCase()));return matches.length?<div className="profession-browser-group" key={group.name}><h3>{group.name}</h3>{matches.map(service=><button key={service} onClick={()=>startJoin(group.name,service)}>{service}<ChevronRight size={14}/></button>)}</div>:null;})}</div><small className="profession-browser-count">{ALL_PROFESSIONS.length} listed professions and specialisations</small></section></div>}
+    {showCategories&&<div className="modal-backdrop" onClick={back}><section className="modal profession-browser" onClick={e=>e.stopPropagation()}><button className="modal-close" onClick={back} aria-label="Close"><X/></button><h2>Select your profession</h2><p>Search and choose your service before registration.</p><label className="profession-browser-search"><Search size={17}/><input autoFocus value={categorySearch} onChange={e=>setCategorySearch(e.target.value)} placeholder="Search profession or trade"/></label><select className="profession-group-select" value={categoryGroup} onChange={e=>setCategoryGroup(e.target.value)}><option value="">All professional categories</option>{PROFESSION_GROUPS.map(g=><option key={g.name}>{g.name}</option>)}</select><div className="profession-browser-list">{PROFESSION_GROUPS.filter(g=>!categoryGroup||g.name===categoryGroup).map(group=>{const matches=group.services.filter(service=>!categorySearch||service.toLowerCase().includes(categorySearch.toLowerCase())||group.name.toLowerCase().includes(categorySearch.toLowerCase()));return matches.length?<div className="profession-browser-group" key={group.name}><h3>{group.name}</h3>{matches.map(service=><button key={service} onClick={()=>startJoin(group.name,service)}>{service}<ChevronRight size={14}/></button>)}</div>:null;})}</div><small className="profession-browser-count">{ALL_PROFESSIONS.length} listed professions and specialisations</small></section></div>}
     {showJoin&&<div className="modal-backdrop" onClick={()=>setShowJoin(false)}><div className="modal join-modal prolink-onboard-modal" onClick={e=>e.stopPropagation()}><button className="modal-close" onClick={()=>setShowJoin(false)}><X/></button><div className="modal-step">PROFESSIONAL REGISTRATION · STEP {joinStep} OF 2</div><div className="progress-track"><span style={{width:`${joinStep/2*100}%`}}/></div><h2>Build your professional profile</h2><p>Complete your details so customers can understand your services and experience.</p>
       {joinStep===1?<div className="onboard-fields">
         <label className="form-label">Full legal name *<input value={joinData.full_name} onChange={e=>setJoinData(p=>({...p,full_name:e.target.value}))} placeholder="Enter your full legal name"/></label>
