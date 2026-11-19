@@ -369,14 +369,22 @@ async function subscriptionStart(request,env) {
   const user=await userResponse.json();
   if(!user.id||!user.email)return json({error:"A verified account email is required to subscribe."},400);
   const txRef="PROLINK-"+user.id+"-"+crypto.randomUUID(),origin=new URL(request.url).origin;
+  let stage="record_payment";
   try {
     await supabaseRest({url:cfg.url,serviceKey:cfg.serviceKey},"/rest/v1/prolink_subscription_payments",{method:"POST",headers:{prefer:"return=minimal"},body:JSON.stringify({user_id:user.id,tx_ref:txRef,amount:5,currency:"USD",status:"pending"})});
+    stage="flutterwave_checkout";
     const response=await fetch("https://api.flutterwave.com/v3/payments",{method:"POST",headers:{authorization:"Bearer "+cfg.flutterwaveKey,"content-type":"application/json",accept:"application/json"},body:JSON.stringify({tx_ref:txRef,amount:5,currency:"USD",redirect_url:origin+"/api/subscription/callback",customer:{email:user.email,name:user.user_metadata?.full_name||user.user_metadata?.name||user.email},customizations:{title:"Bidx ProLink Professional Annual Plan",description:"12 months professional membership"},payment_options:"card",meta:{user_id:user.id,plan:"professional_annual"}})});
-    const result=await response.json(),checkoutUrl=result?.data?.link;
-    if(!response.ok||result?.status!=="success"||!checkoutUrl)throw new Error("Flutterwave checkout session could not be created.");
+    let result;try{result=await response.json();}catch{result={};}
+    const checkoutUrl=result?.data?.link;
+    if(!response.ok||result?.status!=="success"||!checkoutUrl){
+      const providerMessage=String(result?.message||result?.error||"Flutterwave did not return a checkout link.").slice(0,220);
+      console.error("[prolink-subscription] flutterwave_rejected",{httpStatus:response.status,providerMessage});
+      return json({error:"Flutterwave could not create checkout ("+response.status+"): "+providerMessage},502);
+    }
+    stage="save_checkout_link";
     await supabaseRest({url:cfg.url,serviceKey:cfg.serviceKey},"/rest/v1/prolink_subscription_payments?tx_ref=eq."+encodeURIComponent(txRef),{method:"PATCH",headers:{prefer:"return=minimal"},body:JSON.stringify({checkout_url:checkoutUrl})});
     return json({checkoutUrl});
-  }catch(error){console.error("[prolink-subscription] checkout_failed",{name:error?.name||"Error"});return json({error:"We could not start your payment. Please try again."},502);}
+  }catch(error){console.error("[prolink-subscription] checkout_failed",{stage,name:error?.name||"Error",message:String(error?.message||"").slice(0,220)});return json({error:"Payment setup failed at "+stage+". "+String(error?.message||"Please try again.").slice(0,180)},502);}
 }
 async function subscriptionCallback(request,env) {
   const cfg=subscriptionConfig(env),url=new URL(request.url),txRef=url.searchParams.get("tx_ref")||"",transactionId=url.searchParams.get("transaction_id")||"",status=url.searchParams.get("status")||"",appUrl=new URL("/",url.origin);
