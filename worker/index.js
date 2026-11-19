@@ -554,6 +554,8 @@ async function migrateVerificationDocumentsBatch(request,env){
           const meta={...(item.submitted_data||{}),storage_provider:"cloudflare_r2",migrated_from:"supabase_storage"};
           await supabaseRest(config,"/rest/v1/prolink_review_records?id=eq."+encodeURIComponent(item.id),{method:"PATCH",body:JSON.stringify({document_path:key,submitted_data:meta})});
         }catch(updateError){await env.R2.delete(key);throw updateError;}
+        const legacyRemoved=await fetch(config.url+"/storage/v1/object/prolink-verification-documents",{method:"DELETE",headers:{apikey:config.serviceKey,authorization:"Bearer "+config.serviceKey,"content-type":"application/json"},body:JSON.stringify({prefixes:[item.document_path]})});
+        if(!legacyRemoved.ok)console.error("[prolink-documents] legacy_cleanup_pending",{id:item.id,status:legacyRemoved.status});
         migrated++;
       }catch(error){
         failed++;
