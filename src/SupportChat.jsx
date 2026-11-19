@@ -106,7 +106,7 @@ export default function SupportChat({session,profile}){
     {(status==='ai_active'||status==='resolved')&&<button type="button" onClick={requestAdmin} disabled={sending||loading}>Connect me to human Admin</button>}
    </div>
    <form className="prolink-support-composer" onSubmit={event=>{event.preventDefault();send();}}>
-    <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp,application/pdf,text/plain" hidden onChange={event=>upload(event.target.files?.[0])}/>
+    <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp,application/pdf,text/plain,text/csv,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden onChange={event=>upload(event.target.files?.[0])}/>
     <button type="button" className="prolink-support-attach" onClick={()=>fileRef.current?.click()} disabled={uploading||sending} aria-label="Attach image or document">{uploading?<LoaderCircle className="spin" size={19}/>:<Paperclip size={19}/>}</button>
     <textarea value={draft} onChange={event=>setDraft(event.target.value)} placeholder={status==='admin_attending'?'Reply to ProLink Admin…':'Ask ProLink anything…'} rows={1} onKeyDown={event=>{if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();send();}}}/>
     <button type="submit" className="prolink-support-send" disabled={!draft.trim()||sending||uploading} aria-label="Send message"><Send size={18}/></button>
