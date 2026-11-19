@@ -8,7 +8,7 @@ import { supabase } from './lib/supabase.js';
 import AdminPortal from './AdminPortal.jsx';
 import './admin.css';
 import {
-  Search, MapPin, SlidersHorizontal, ChevronDown, ChevronRight, ArrowLeft,
+  Search, MapPin, SlidersHorizontal, ChevronDown, ChevronRight, ArrowLeft, Image as ImageIcon,
   Menu, Bell, UserRound, BriefcaseBusiness, ShieldCheck, Star, Phone,
   MessageCircle, CalendarDays, FileText, Plus, Check, X, Camera, Upload,
   Wrench, Zap, Paintbrush, Hammer, Droplets, Snowflake, Car, Scissors,
