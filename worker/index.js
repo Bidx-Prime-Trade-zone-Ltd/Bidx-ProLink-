@@ -752,6 +752,13 @@ async function supportAccountContext(config,user){
     wallet_balance:null
   };
 }
+function supportBytesToBase64(buffer){
+  const bytes=new Uint8Array(buffer);let binary="";
+  for(let offset=0;offset<bytes.length;offset+=0x8000){
+    binary+=String.fromCharCode(...bytes.subarray(offset,Math.min(offset+0x8000,bytes.length)));
+  }
+  return btoa(binary);
+}
 function prolinkSupportSystemPrompt(context){
   return `You are the Bidx ProLink AI Admin Assistant, the helpful in-app support guide for Bidx ProLink, a global directory and professional showcase connecting customers with skilled people and quality work. Speak warmly, clearly, patiently and professionally. Address the user by their first name when natural.
 
@@ -878,7 +885,7 @@ async function supportAttachment(request,env){
     let summary="";
     if(file.type.startsWith("image/")&&env.AI){
       try{
-        const encoded= btoa(String.fromCharCode(...new Uint8Array(bytes)));
+        const encoded=supportBytesToBase64(bytes);
         const vision=await env.AI.run(PROLINK_SUPPORT_VISION_MODEL,{prompt:"Describe the visible contents of this image accurately for a professional support assistant. Mention visible text only if legible. Do not identify people, infer sensitive personal traits, claim authenticity, or speculate beyond what is visible. Return a concise description.",image:encoded});
         summary=String(vision?.description||vision?.response||vision?.result||"").trim().slice(0,1800);
       }catch(error){console.error("[prolink-support] vision_failed",{name:error?.name||"Error"});}
