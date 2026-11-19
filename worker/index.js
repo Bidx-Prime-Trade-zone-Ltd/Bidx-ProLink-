@@ -355,10 +355,49 @@ async function adminDocument(request,env) {
   }catch(error){return json({error:error?.message||"Document preview unavailable."},502);}
 }
 
+
+function subscriptionConfig(env) {
+  return {url:env.VITE_SUPABASE_URL||env.SUPABASE_URL||"",anonKey:env.VITE_SUPABASE_ANON_KEY||env.SUPABASE_ANON_KEY||env.SUPABASE_PUBLISHABLE_KEY||"",serviceKey:env.SUPABASE_SERVICE_ROLE_KEY||"",flutterwaveKey:env.FLUTTERWAVE_SECRET_KEY||""};
+}
+async function subscriptionStart(request,env) {
+  const cfg=subscriptionConfig(env);
+  if(!cfg.url||!cfg.anonKey||!cfg.serviceKey||!cfg.flutterwaveKey)return json({error:"Secure card payments are not fully configured on the server yet."},503);
+  const authorization=request.headers.get("authorization")||"";
+  if(!authorization.startsWith("Bearer "))return json({error:"Sign in to subscribe."},401);
+  const userResponse=await fetch(cfg.url+"/auth/v1/user",{headers:{apikey:cfg.anonKey,authorization}});
+  if(!userResponse.ok)return json({error:"Your sign-in session has expired. Sign in again."},401);
+  const user=await userResponse.json();
+  if(!user.id||!user.email)return json({error:"A verified account email is required to subscribe."},400);
+  const txRef="PROLINK-"+user.id+"-"+crypto.randomUUID(),origin=new URL(request.url).origin;
+  try {
+    await supabaseRest({url:cfg.url,serviceKey:cfg.serviceKey},"/rest/v1/prolink_subscription_payments",{method:"POST",headers:{prefer:"return=minimal"},body:JSON.stringify({user_id:user.id,tx_ref:txRef,amount:5,currency:"USD",status:"pending"})});
+    const response=await fetch("https://api.flutterwave.com/v3/payments",{method:"POST",headers:{authorization:"Bearer "+cfg.flutterwaveKey,"content-type":"application/json",accept:"application/json"},body:JSON.stringify({tx_ref:txRef,amount:5,currency:"USD",redirect_url:origin+"/api/subscription/callback",customer:{email:user.email,name:user.user_metadata?.full_name||user.user_metadata?.name||user.email},customizations:{title:"Bidx ProLink Professional Annual Plan",description:"12 months professional membership"},payment_options:"card",meta:{user_id:user.id,plan:"professional_annual"}})});
+    const result=await response.json(),checkoutUrl=result?.data?.link;
+    if(!response.ok||result?.status!=="success"||!checkoutUrl)throw new Error("Flutterwave checkout session could not be created.");
+    await supabaseRest({url:cfg.url,serviceKey:cfg.serviceKey},"/rest/v1/prolink_subscription_payments?tx_ref=eq."+encodeURIComponent(txRef),{method:"PATCH",headers:{prefer:"return=minimal"},body:JSON.stringify({checkout_url:checkoutUrl})});
+    return json({checkoutUrl});
+  }catch(error){console.error("[prolink-subscription] checkout_failed",{name:error?.name||"Error"});return json({error:"We could not start your payment. Please try again."},502);}
+}
+async function subscriptionCallback(request,env) {
+  const cfg=subscriptionConfig(env),url=new URL(request.url),txRef=url.searchParams.get("tx_ref")||"",transactionId=url.searchParams.get("transaction_id")||"",status=url.searchParams.get("status")||"",appUrl=new URL("/",url.origin);
+  if(status!=="successful"||!txRef||!transactionId){appUrl.searchParams.set("subscription","not-completed");return Response.redirect(appUrl.toString(),303);}
+  try{
+    const rows=await supabaseRest({url:cfg.url,serviceKey:cfg.serviceKey},"/rest/v1/prolink_subscription_payments?select=id,user_id,tx_ref,amount,currency,status&tx_ref=eq."+encodeURIComponent(txRef)+"&limit=1"),payment=rows?.[0];
+    if(!payment)throw new Error("Payment reference not found");
+    if(payment.status==="successful"){appUrl.searchParams.set("subscription","success");return Response.redirect(appUrl.toString(),303);}
+    const verifyResponse=await fetch("https://api.flutterwave.com/v3/transactions/"+encodeURIComponent(transactionId)+"/verify",{headers:{authorization:"Bearer "+cfg.flutterwaveKey,accept:"application/json"}});
+    const verified=await verifyResponse.json(),data=verified?.data;
+    if(!verifyResponse.ok||verified?.status!=="success"||data?.status!=="successful"||String(data?.tx_ref)!==txRef||String(data?.currency)!=="USD"||Number(data?.amount)<5||Number(data?.charged_amount||data?.amount)<5)throw new Error("Flutterwave verification did not match expected payment.");
+    await supabaseRest({url:cfg.url,serviceKey:cfg.serviceKey},"/rest/v1/rpc/prolink_activate_membership",{method:"POST",body:JSON.stringify({p_tx_ref:txRef,p_transaction_id:String(data.id)})});
+    appUrl.searchParams.set("subscription","success");
+  }catch(error){console.error("[prolink-subscription] verification_failed",{name:error?.name||"Error"});appUrl.searchParams.set("subscription","verification-pending");}
+  return Response.redirect(appUrl.toString(),303);
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
-    if (url.pathname === "/api/auth/password-change" && request.method === "POST") return passwordChangeStart(request, env);
+    if (url.pathname === "/api/subscription/checkout" && request.method === "POST") return subscriptionStart(request, env);\n    if (url.pathname === "/api/subscription/callback" && request.method === "GET") return subscriptionCallback(request, env);\n    if (url.pathname === "/api/auth/password-change" && request.method === "POST") return passwordChangeStart(request, env);
     if (url.pathname === "/api/auth/password-change/confirm" && request.method === "GET") return passwordChangeConfirm(request, env);
     if (url.pathname === "/api/geography" && request.method === "GET") return geography(request, ctx);
     if (url.pathname === "/api/profile/change-status" && request.method === "GET") return profileChangeStatus(request, env);
