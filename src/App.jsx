@@ -648,13 +648,13 @@ function App() {
 
 
     {galleryViewerOpen&&selectedGallery.length>0&&<div className="prolink-gallery-viewer" role="dialog" aria-modal="true" aria-label="Professional work photo gallery" onClick={closeGalleryViewer}>
-      <div className="gallery-viewer-topbar"><button type="button" className="gallery-viewer-control gallery-viewer-close" onClick={closeGalleryViewer} aria-label="Close gallery"><X size={25}/></button><span className="gallery-viewer-count">{activeGalleryIndex+1} <i>/</i> {selectedGallery.length}</span><span className="gallery-viewer-top-spacer"/></div>
+      <div className="gallery-viewer-topbar" onClick={event=>event.stopPropagation()}><button type="button" className="gallery-viewer-control gallery-viewer-close" onClick={closeGalleryViewer} aria-label="Close gallery"><X size={25}/></button><span className="gallery-viewer-count">{activeGalleryIndex+1} <i>/</i> {selectedGallery.length}</span><span className="gallery-viewer-top-spacer"/></div>
       <div className="gallery-viewer-stage" onClick={event=>event.stopPropagation()} onTouchStart={event=>{galleryTouchStartX.current=event.touches[0]?.clientX??null;}} onTouchEnd={event=>{if(galleryTouchStartX.current===null)return;const delta=event.changedTouches[0].clientX-galleryTouchStartX.current;galleryTouchStartX.current=null;if(Math.abs(delta)>45)showGalleryPhoto(delta<0?1:-1);}}>
         {selectedGallery.length>1&&<button type="button" className="gallery-viewer-control gallery-viewer-arrow gallery-viewer-prev" onClick={()=>showGalleryPhoto(-1)} aria-label="Previous photo"><ChevronRight size={28}/></button>}
         <img key={selectedGallery[activeGalleryIndex].id} className="gallery-viewer-image" src={selectedGallery[activeGalleryIndex].url} alt={selectedGallery[activeGalleryIndex].caption||`Professional work photo ${activeGalleryIndex+1}`} draggable="false"/>
         {selectedGallery.length>1&&<button type="button" className="gallery-viewer-control gallery-viewer-arrow gallery-viewer-next" onClick={()=>showGalleryPhoto(1)} aria-label="Next photo"><ChevronRight size={28}/></button>}
       </div>
-      <div className="gallery-viewer-footer">{selectedGallery[activeGalleryIndex].caption&&<p>{selectedGallery[activeGalleryIndex].caption}</p>}<span>Swipe left or right to explore</span></div>
+      <div className="gallery-viewer-footer" onClick={event=>event.stopPropagation()}>{selectedGallery[activeGalleryIndex].caption&&<p>{selectedGallery[activeGalleryIndex].caption}</p>}<span>Swipe left or right to explore</span></div>
     </div>}
 
     {toast&&<div className="toast"><Check size={16}/>{toast}</div>}
