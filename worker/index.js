@@ -402,6 +402,45 @@ async function subscriptionCallback(request,env) {
   return Response.redirect(appUrl.toString(),303);
 }
 
+
+async function reverseGeocode(request, env) {
+  const url = new URL(request.url);
+  const lat = Number(url.searchParams.get("lat"));
+  const lon = Number(url.searchParams.get("lon"));
+  if (!Number.isFinite(lat) || !Number.isFinite(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+    return json({ error: "Valid latitude and longitude are required." }, 400);
+  }
+  const apiKey = env.GEOAPIFY_API_KEY;
+  if (!apiKey) return json({ error: "Location service is not configured." }, 503);
+  try {
+    const endpoint = new URL("https://api.geoapify.com/v1/geocode/reverse");
+    endpoint.searchParams.set("lat", String(lat));
+    endpoint.searchParams.set("lon", String(lon));
+    endpoint.searchParams.set("format", "json");
+    endpoint.searchParams.set("lang", "en");
+    endpoint.searchParams.set("limit", "1");
+    endpoint.searchParams.set("apiKey", apiKey);
+    const response = await fetch(endpoint.toString(), { headers: { accept: "application/json" } });
+    if (!response.ok) {
+      console.error("[prolink-location] geocoder_rejected", { status: response.status });
+      return json({ error: "We could not identify this location. Please enter your city manually." }, 502);
+    }
+    const data = await response.json();
+    const place = data?.results?.[0] || data?.features?.[0]?.properties || null;
+    if (!place) return json({ error: "No readable location was found. Please enter your city manually." }, 404);
+    const city = place.city || place.town || place.village || place.municipality || place.suburb || place.district || "";
+    const region = place.state || place.region || place.county || "";
+    const country = place.country || "";
+    const countryCode = String(place.country_code || "").toUpperCase();
+    const displayName = [city || region, country].filter(Boolean).join(", ") || place.formatted || "";
+    if (!displayName) return json({ error: "No readable location was found. Please enter your city manually." }, 404);
+    return json({ displayName, city, region, country, countryCode, postcode: place.postcode || "" }, 200, "private, max-age=300");
+  } catch (error) {
+    console.error("[prolink-location] reverse_geocode_failed", { name: error?.name || "Error" });
+    return json({ error: "Location lookup is temporarily unavailable. Please enter your city manually." }, 502);
+  }
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -410,6 +449,7 @@ export default {
     if (url.pathname === "/api/auth/password-change" && request.method === "POST") return passwordChangeStart(request, env);
     if (url.pathname === "/api/auth/password-change/confirm" && request.method === "GET") return passwordChangeConfirm(request, env);
     if (url.pathname === "/api/geography" && request.method === "GET") return geography(request, ctx);
+    if (url.pathname === "/api/location/reverse" && request.method === "GET") return reverseGeocode(request, env);
     if (url.pathname === "/api/profile/change-status" && request.method === "GET") return profileChangeStatus(request, env);
     if (url.pathname === "/api/profile/change-request" && request.method === "POST") return profileChangeRequest(request, env);
     if (url.pathname === "/api/admin/profile-change" && request.method === "POST") return adminProfileChange(request, env);
