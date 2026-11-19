@@ -377,7 +377,7 @@ function App() {
           return path;
         };
         try{await uploadDocument(competencyFile,'competency_certificate');if(extraSkillFile)await uploadDocument(extraSkillFile,'additional_skill_document');if(portraitFile){if(!['image/jpeg','image/png','image/webp'].includes(portraitFile.type)||portraitFile.size>5242880)throw new Error('Portrait must be JPEG, PNG or WebP and no larger than 5 MB.');const pp=session.user.id+'/portrait-'+crypto.randomUUID()+'.'+(portraitFile.type==='image/png'?'png':portraitFile.type==='image/webp'?'webp':'jpg');const {error:pe}=await supabase.storage.from('prolink-profile-portraits').upload(pp,portraitFile,{upsert:false,contentType:portraitFile.type});if(pe)throw pe;const {error:pr}=await supabase.from('prolink_profile_media').upsert({user_id:session.user.id,portrait_path:pp,updated_at:new Date().toISOString()},{onConflict:'user_id'});if(pr)throw pr;}
-        }}catch(uploadError){setJoinSaving(false);notify('Your profile was saved, but a certificate could not be submitted: '+uploadError.message);return;}
+        }catch(uploadError){setJoinSaving(false);notify('Your profile was saved, but a certificate could not be submitted: '+uploadError.message);return;}
         setJoinSaving(false);
         setProfile(p=>({...p,...businessPayload}));
         setShowJoin(false);setJoinStep(1);setWorkingIdFile(null);setCompetencyFile(null);setExtraSkillFile(null);
