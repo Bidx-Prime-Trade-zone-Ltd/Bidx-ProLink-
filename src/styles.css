@@ -350,3 +350,11 @@
 .password-change-panel{max-width:560px}.password-change-panel form{display:grid;gap:14px}.password-change-panel .form-label{margin:0}.password-change-panel .auth-feedback{margin:0}.password-change-panel .muted-small{display:block;line-height:1.6;margin-top:16px}
 
 .professional-portrait{width:48px;height:48px;flex:0 0 48px;object-fit:cover;border-radius:14px;background:#e1f0e6}.professional-portrait.large{width:78px;height:78px;flex-basis:78px;border-radius:21px}.portrait-editor{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.portrait-editor>img,.portrait-placeholder{width:104px;height:104px;border-radius:18px;object-fit:cover;background:#edf5ef;color:#47745d}.portrait-placeholder{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;font-size:11px}.portrait-management .body-copy{margin-bottom:14px}
+/* Compact profile portrait capture and gallery actions */
+.portrait-editor-compact{margin:14px 0 8px;display:flex;justify-content:flex-start}
+.portrait-editor-compact .portrait-placeholder,.portrait-editor-compact img{width:104px;height:104px;border-radius:18px;object-fit:cover}
+.portrait-picker-actions{display:flex;gap:10px;align-items:center;margin:8px 0 12px}
+.portrait-action-icon{display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border:1px solid #dce5df;border-radius:9px;background:#f8fbf9;color:#245b48;font-size:12px;font-weight:650;cursor:pointer}
+.portrait-action-icon svg{width:16px;height:16px}
+.portrait-save-button,.portrait-remove-button{width:auto!important;min-width:0;padding:9px 14px!important;font-size:13px!important;margin:4px 8px 4px 0}
+.portrait-selected-name{display:flex;align-items:center;gap:8px;font-size:12px;color:#64746b;margin:5px 0}
