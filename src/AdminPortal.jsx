@@ -3,13 +3,13 @@ import {supabase} from './lib/supabase.js';
 import {ShieldCheck,Users,Clock3,CheckCircle2,FileCheck,Search,LogOut,RefreshCw,Check,X,Eye,Globe2,UserRound,CalendarDays,LockKeyhole} from 'lucide-react';
 
 const ADMIN_EMAIL='ojepaamedu@gmail.com';
-const tabs=['Overview','Users','Professional profiles','Document review','Review history'];
+const tabs=['Overview','Users','Professional profiles','Document review','Profile Change Requests','Review history'];
 const fmt=value=>value?new Date(value).toLocaleString():'—';
 const label=value=>String(value||'').replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase());
 
 export default function AdminPortal(){
  const [user,setUser]=useState(null),[ready,setReady]=useState(false),[tab,setTab]=useState('Overview');
- const [dashboard,setDashboard]=useState({counts:{},users:[],profiles:[],reviews:[]});
+ const [dashboard,setDashboard]=useState({counts:{},users:[],profiles:[],reviews:[],profileChangeRequests:[]});
  const [query,setQuery]=useState(''),[selected,setSelected]=useState(null),[reason,setReason]=useState('');
  const [notice,setNotice]=useState(''),[busy,setBusy]=useState(false),[documentUrl,setDocumentUrl]=useState('');
  const [documentLoading,setDocumentLoading]=useState(false);
@@ -24,7 +24,7 @@ export default function AdminPortal(){
    const response=await fetch('/api/admin/dashboard',{headers:{authorization:'Bearer '+session.access_token}});
    const payload=await response.json();
    if(!response.ok)throw new Error(payload.error||'Dashboard could not be loaded.');
-   setDashboard({counts:payload.counts||{},users:payload.users||[],profiles:payload.profiles||[],reviews:payload.reviews||[]});
+   setDashboard({counts:payload.counts||{},users:payload.users||[],profiles:payload.profiles||[],reviews:payload.reviews||[],profileChangeRequests:payload.profileChangeRequests||[]});
   }catch(error){setNotice(error.message||'Dashboard could not be loaded.');}
   finally{setBusy(false);}
  };
@@ -56,6 +56,14 @@ export default function AdminPortal(){
  const profiles=useMemo(()=>dashboard.profiles.filter(p=>(p.full_name+' '+p.professional_name+' '+p.country_name+' '+p.region+' '+p.city+' '+p.user_id).toLowerCase().includes(query.toLowerCase())),[dashboard.profiles,query]);
  const reviews=useMemo(()=>dashboard.reviews.filter(r=>(r.section+' '+r.status+' '+r.user_id+' '+(r.submitted_data?.document_name||'')).toLowerCase().includes(query.toLowerCase())),[dashboard.reviews,query]);
  const pending=reviews.filter(r=>r.status==='pending');
+
+ const reviewProfileChange=async(row,action)=>{
+  if(action==='reject'&&!reason.trim()){setNotice('Enter a reason before rejecting this request.');return;}
+  setBusy(true);setNotice('');
+  try{const {data:{session}}=await supabase.auth.getSession();const response=await fetch('/api/admin/profile-change',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+session.access_token},body:JSON.stringify({requestId:row.id,action,reason})});const payload=await response.json();if(!response.ok)throw new Error(payload.error||'Profile change review failed.');setNotice(payload.message||'Decision saved.');setReason('');await load();}
+  catch(error){setNotice(error.message||'Profile change review failed.');}finally{setBusy(false);}
+ };
+
  const act=async action=>{
   if(!selected)return;
   if(action==='reject'&&!reason.trim()){setNotice('Enter a reason before rejecting this document.');return;}
@@ -108,6 +116,11 @@ export default function AdminPortal(){
      {selected.status==='pending'?<><label className="admin-reason">Rejection reason (required only when rejecting)<textarea value={reason} onChange={e=>setReason(e.target.value)} placeholder="Explain what is missing or unclear"/></label><div className="admin-actions"><button onClick={()=>act('approve')} disabled={busy}><Check size={15}/> Approve document</button><button className="admin-reject" onClick={()=>act('reject')} disabled={busy}><X size={15}/> Reject document</button></div></>:<p className="admin-readonly-status">This item has already been reviewed. No further changes are available here.</p>}
     </article>:<div className="admin-detail admin-detail-empty"><Eye size={22}/><p>Select a document to inspect it.</p></div>}
    </div>
+  </section>}
+
+  {tab==='Profile Change Requests'&&<section className="admin-panel"><div className="admin-panel-heading"><div><h2>Profile Change Requests</h2><p>Review proposed changes. Approved information remains unchanged until you approve a request.</p></div><label className="admin-search"><Search size={15}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search applicant or field"/></label></div>
+   {(dashboard.profileChangeRequests||[]).filter(r=>(r.status+' '+r.user_id+' '+JSON.stringify(r.requested_changes||{})).toLowerCase().includes(query.toLowerCase())).map(r=><article className="admin-detail" key={r.id} style={{marginBottom:16}}><div className="admin-panel-heading"><div><h3>Applicant</h3><p className="admin-id">{r.user_id}</p></div><span className={'admin-status '+r.status}>{label(r.status)}</span></div><p><b>Requested:</b> {fmt(r.requested_at)}</p><div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Information</th><th>Proposed value</th></tr></thead><tbody>{Object.entries(r.requested_changes||{}).map(([key,value])=><tr key={key}><td>{label(key)}</td><td style={{whiteSpace:'pre-wrap'}}>{typeof value==='object'?JSON.stringify(value):String(value??'—')}</td></tr>)}</tbody></table></div>{r.status==='pending'?<><label className="admin-reason">Reason (required when rejecting)<textarea value={reason} onChange={e=>setReason(e.target.value)} placeholder="Explain the decision"/></label><div className="admin-actions"><button disabled={busy} onClick={()=>reviewProfileChange(r,'approve')}><Check size={15}/> Approve changes</button><button className="admin-reject" disabled={busy} onClick={()=>reviewProfileChange(r,'reject')}><X size={15}/> Reject request</button></div></>:<p className="admin-readonly-status">Reviewed {fmt(r.reviewed_at)} · {r.review_reason||'No reason supplied'}</p>}</article>)}
+   {!(dashboard.profileChangeRequests||[]).length&&<p className="admin-empty">No profile change requests have been submitted.</p>}
   </section>}
   {tab==='Review history'&&<section className="admin-panel"><div className="admin-panel-heading"><div><h2>Document review history</h2><p>Audit view of completed approval decisions.</p></div><label className="admin-search"><Search size={15}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search history"/></label></div>
    <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Document</th><th>Applicant ID</th><th>Decision</th><th>Submitted</th><th>Reviewed</th><th>Reason</th></tr></thead><tbody>{reviews.filter(r=>r.status!=='pending').map(r=><tr key={r.id}><td>{label(r.submitted_data?.document_type||r.section)}</td><td className="admin-id">{r.user_id}</td><td><span className={'admin-status '+r.status}>{label(r.status)}</span></td><td>{fmt(r.submitted_at)}</td><td>{fmt(r.reviewed_at)}</td><td>{r.review_reason||'—'}</td></tr>)}</tbody></table></div>
