@@ -204,6 +204,7 @@ async function passwordChangeConfirm(request,env) {
 async function galleryUpload(request,env){
   const auth=await signedInProfileUser(request,env);
   if(auth.error)return auth.error;
+  if(!env.R2)return json({error:"Cloudflare R2 is not connected. Check the Worker binding named R2."},503);
   let form;
   try{form=await request.formData();}catch{return json({error:"The photo upload request could not be read. Please select the photos again."},400);}
   const files=form.getAll("files").filter(file=>file&&typeof file.arrayBuffer==="function"&&typeof file.size==="number");
@@ -216,55 +217,138 @@ async function galleryUpload(request,env){
     if(file.size>8388608)return json({error:"Each photo must be no larger than 8 MB."},400);
   }
   const config=auth.config,userId=auth.user.id;
-  const uploadedPaths=[],savedIds=[],savedItems=[];
-  const storageBase=config.url+"/storage/v1";
+  const uploadedKeys=[],savedIds=[],savedItems=[];
   async function rollback(){
-    if(savedIds.length){
-      try{await supabaseRest(config,"/rest/v1/prolink_work_gallery?id=in.("+savedIds.join(",")+")&user_id=eq."+encodeURIComponent(userId),{method:"DELETE"});}catch(error){console.error("[prolink-gallery] rollback_records_failed",{name:error?.name||"Error"});}
-    }
-    if(uploadedPaths.length){
-      try{
-        const response=await fetch(storageBase+"/object/prolink-work-gallery",{method:"DELETE",headers:{apikey:config.serviceKey,authorization:"Bearer "+config.serviceKey,"content-type":"application/json"},body:JSON.stringify({prefixes:uploadedPaths})});
-        if(!response.ok)console.error("[prolink-gallery] rollback_files_failed",{status:response.status});
-      }catch(error){console.error("[prolink-gallery] rollback_files_failed",{name:error?.name||"Error"});}
-    }
+    if(savedIds.length){try{await supabaseRest(config,"/rest/v1/prolink_work_gallery?id=in.("+savedIds.join(",")+")&user_id=eq."+encodeURIComponent(userId),{method:"DELETE"});}catch(error){console.error("[prolink-gallery] rollback_records_failed",{name:error?.name||"Error"});}}
+    if(uploadedKeys.length){try{await env.R2.delete(uploadedKeys);}catch(error){console.error("[prolink-gallery] rollback_r2_failed",{name:error?.name||"Error"});}}
   }
   try{
     const existing=await supabaseRest(config,"/rest/v1/prolink_work_gallery?select=id&user_id=eq."+encodeURIComponent(userId)+"&limit=15");
     if((existing?.length||0)+files.length>15)return json({error:"Your portfolio can contain up to 15 photos. Remove a photo before adding more."},400);
     for(const file of files){
       const safeName=String(file.name||"work-photo").replace(/[^a-zA-Z0-9._-]/g,"_").slice(-100)||"work-photo";
-      const path=userId+"/"+crypto.randomUUID()+"-"+safeName;
-      const encodedPath=path.split("/").map(encodeURIComponent).join("/");
-      const uploadResponse=await fetch(storageBase+"/object/prolink-work-gallery/"+encodedPath,{
-        method:"POST",
-        headers:{apikey:config.serviceKey,authorization:"Bearer "+config.serviceKey,"content-type":file.type,"x-upsert":"false"},
-        body:file
-      });
-      const uploadText=await uploadResponse.text();
-      let uploadData=null;try{uploadData=uploadText?JSON.parse(uploadText):null;}catch{}
-      if(!uploadResponse.ok)throw new Error(uploadData?.message||uploadData?.error||"Storage rejected the photo upload ("+uploadResponse.status+").");
-      uploadedPaths.push(path);
-      const inserted=await supabaseRest(config,"/rest/v1/prolink_work_gallery",{method:"POST",headers:{prefer:"return=representation"},body:JSON.stringify({user_id:userId,object_path:path,caption})});
+      const key="portfolio/"+userId+"/"+crypto.randomUUID()+"-"+safeName;
+      await env.R2.put(key,await file.arrayBuffer(),{httpMetadata:{contentType:file.type,cacheControl:"public, max-age=31536000, immutable"}});
+      uploadedKeys.push(key);
+      const inserted=await supabaseRest(config,"/rest/v1/prolink_work_gallery",{method:"POST",headers:{prefer:"return=representation"},body:JSON.stringify({user_id:userId,object_path:key,caption})});
       const item=Array.isArray(inserted)?inserted[0]:null;
       if(!item?.id)throw new Error("The photo was uploaded but its portfolio record could not be saved.");
       savedIds.push(item.id);
-      const signedResponse=await fetch(storageBase+"/object/sign/prolink-work-gallery/"+encodedPath,{
-        method:"POST",
-        headers:{apikey:config.serviceKey,authorization:"Bearer "+config.serviceKey,"content-type":"application/json"},
-        body:JSON.stringify({expiresIn:3600})
-      });
-      const signedData=await signedResponse.json().catch(()=>({}));
-      if(!signedResponse.ok)throw new Error(signedData?.message||"The uploaded photo could not be prepared for display.");
-      const signed=signedData.signedURL||signedData.signedUrl||"";
-      if(!signed)throw new Error("The uploaded photo could not be prepared for display.");
-      savedItems.push({...item,url:signed.startsWith("http")?signed:config.url+"/storage/v1"+signed});
+      savedItems.push({...item,url:"/api/gallery/photo?id="+encodeURIComponent(item.id)});
     }
     return json({items:savedItems,message:files.length+" work photo(s) uploaded successfully."});
   }catch(error){
     await rollback();
     console.error("[prolink-gallery] upload_failed",{name:error?.name||"Error",message:String(error?.message||"").slice(0,180)});
     return json({error:error?.message||"Photo upload failed. Please try again."},502);
+  }
+}
+
+async function galleryPhoto(request,env){
+  if(!env.R2)return json({error:"Portfolio image storage is not configured."},503);
+  const id=String(new URL(request.url).searchParams.get("id")||"").trim();
+  if(!id)return json({error:"A portfolio photo ID is required."},400);
+  const config=adminConfig(env);
+  if(!config.url||!config.serviceKey||!config.anonKey)return json({error:"Portfolio image service is not configured."},503);
+  let rows;
+  try{rows=await supabaseRest(config,"/rest/v1/prolink_work_gallery?select=id,user_id,object_path,is_public&id=eq."+encodeURIComponent(id)+"&limit=1");}
+  catch{return json({error:"Could not find this portfolio photo."},404);}
+  const item=Array.isArray(rows)?rows[0]:null;
+  if(!item)return json({error:"Portfolio photo not found."},404);
+  if(!item.is_public){
+    const authorization=request.headers.get("authorization")||"";
+    if(!authorization.startsWith("Bearer "))return json({error:"Sign in to view this portfolio photo."},401);
+    const verify=await fetch(config.url+"/auth/v1/user",{headers:{apikey:config.anonKey,authorization}});
+    if(!verify.ok)return json({error:"Your session is invalid or expired."},401);
+    const user=await verify.json();
+    if(user.id!==item.user_id)return json({error:"You are not authorised to view this photo."},403);
+  }
+  try{
+    if(String(item.object_path||"").startsWith("portfolio/")){
+      const object=await env.R2.get(item.object_path);
+      if(!object)return json({error:"Portfolio image is not available in R2."},404);
+      const headers=new Headers();
+      object.writeHttpMetadata(headers);
+      headers.set("content-type",object.httpMetadata?.contentType||"application/octet-stream");
+      headers.set("x-content-type-options","nosniff");
+      headers.set("cache-control",item.is_public?"public, max-age=3600":"private, no-store");
+      return new Response(object.body,{headers});
+    }
+    const encoded=item.object_path.split("/").map(encodeURIComponent).join("/");
+    const legacy=await fetch(config.url+"/storage/v1/object/prolink-work-gallery/"+encoded,{headers:{apikey:config.serviceKey,authorization:"Bearer "+config.serviceKey}});
+    if(!legacy.ok)return json({error:"Legacy portfolio photo could not be retrieved."},502);
+    const headers=new Headers();
+    headers.set("content-type",legacy.headers.get("content-type")||"application/octet-stream");
+    headers.set("x-content-type-options","nosniff");
+    headers.set("cache-control",item.is_public?"public, max-age=300":"private, no-store");
+    return new Response(legacy.body,{headers});
+  }catch(error){
+    console.error("[prolink-gallery] photo_read_failed",{name:error?.name||"Error"});
+    return json({error:"Could not retrieve this portfolio photo."},502);
+  }
+}
+
+async function galleryDelete(request,env){
+  const auth=await signedInProfileUser(request,env);
+  if(auth.error)return auth.error;
+  const id=String(new URL(request.url).searchParams.get("id")||"").trim();
+  if(!id)return json({error:"A portfolio photo ID is required."},400);
+  const config=auth.config,userId=auth.user.id;
+  try{
+    const rows=await supabaseRest(config,"/rest/v1/prolink_work_gallery?select=id,user_id,object_path&id=eq."+encodeURIComponent(id)+"&user_id=eq."+encodeURIComponent(userId)+"&limit=1");
+    const item=Array.isArray(rows)?rows[0]:null;
+    if(!item)return json({error:"Photo not found or you do not own it."},404);
+    if(String(item.object_path||"").startsWith("portfolio/")){
+      if(!env.R2)return json({error:"R2 storage is not connected. The photo record was not deleted."},503);
+      await env.R2.delete(item.object_path);
+    }else{
+      const remove=await fetch(config.url+"/storage/v1/object/prolink-work-gallery",{method:"DELETE",headers:{apikey:config.serviceKey,authorization:"Bearer "+config.serviceKey,"content-type":"application/json"},body:JSON.stringify({prefixes:[item.object_path]})});
+      if(!remove.ok)throw new Error("The stored photo could not be removed.");
+    }
+    await supabaseRest(config,"/rest/v1/prolink_work_gallery?id=eq."+encodeURIComponent(id)+"&user_id=eq."+encodeURIComponent(userId),{method:"DELETE"});
+    return json({success:true,message:"Photo removed."});
+  }catch(error){
+    console.error("[prolink-gallery] delete_failed",{name:error?.name||"Error",message:String(error?.message||"").slice(0,140)});
+    return json({error:error?.message||"Could not remove this photo."},502);
+  }
+}
+
+async function migratePortfolioBatch(request,env){
+  const auth=await requireProlinkAdmin(request,env);
+  if(auth.error)return auth.error;
+  if(!env.R2)return json({error:"Cloudflare R2 binding R2 is not connected."},503);
+  const url=new URL(request.url);
+  const offset=Math.max(0,Number.parseInt(url.searchParams.get("offset")||"0",10)||0);
+  const limit=Math.min(10,Math.max(1,Number.parseInt(url.searchParams.get("limit")||"10",10)||10));
+  const config=auth.config;
+  try{
+    const rows=await supabaseRest(config,"/rest/v1/prolink_work_gallery?select=id,user_id,object_path&order=created_at.asc&limit="+limit+"&offset="+offset);
+    let migrated=0,skipped=0,failed=0;
+    for(const item of rows||[]){
+      if(String(item.object_path||"").startsWith("portfolio/")){skipped++;continue;}
+      try{
+        const encoded=item.object_path.split("/").map(encodeURIComponent).join("/");
+        const source=await fetch(config.url+"/storage/v1/object/prolink-work-gallery/"+encoded,{headers:{apikey:config.serviceKey,authorization:"Bearer "+config.serviceKey}});
+        if(!source.ok)throw new Error("Legacy Supabase image download failed ("+source.status+").");
+        const contentType=source.headers.get("content-type")||"application/octet-stream";
+        const extension=contentType==="image/png"?"png":contentType==="image/webp"?"webp":"jpg";
+        const key="portfolio/"+item.user_id+"/"+crypto.randomUUID()+"."+extension;
+        await env.R2.put(key,await source.arrayBuffer(),{httpMetadata:{contentType,cacheControl:"public, max-age=31536000, immutable"}});
+        try{await supabaseRest(config,"/rest/v1/prolink_work_gallery?id=eq."+encodeURIComponent(item.id),{method:"PATCH",body:JSON.stringify({object_path:key})});}
+        catch(updateError){await env.R2.delete(key);throw updateError;}
+        const removed=await fetch(config.url+"/storage/v1/object/prolink-work-gallery",{method:"DELETE",headers:{apikey:config.serviceKey,authorization:"Bearer "+config.serviceKey,"content-type":"application/json"},body:JSON.stringify({prefixes:[item.object_path]})});
+        if(!removed.ok)console.error("[prolink-gallery] legacy_cleanup_pending",{id:item.id,status:removed.status});
+        migrated++;
+      }catch(error){
+        failed++;
+        console.error("[prolink-gallery] migration_item_failed",{id:item.id,message:String(error?.message||"").slice(0,160)});
+      }
+    }
+    const nextOffset=offset+((rows||[]).length);
+    return json({success:failed===0,migrated,skipped,failed,processed:(rows||[]).length,nextOffset,hasMore:(rows||[]).length===limit,message:failed?"Some photos need retry.":"Migration batch completed."});
+  }catch(error){
+    console.error("[prolink-gallery] migration_batch_failed",{message:String(error?.message||"").slice(0,180)});
+    return json({error:"Could not process this portfolio migration batch."},502);
   }
 }
 
@@ -528,6 +612,9 @@ export default {
     if (url.pathname === "/api/admin/review" && request.method === "POST") return adminReview(request, env);
     if (url.pathname === "/api/admin/document" && request.method === "GET") return adminDocument(request, env);
     if (url.pathname === "/api/gallery/upload" && request.method === "POST") return galleryUpload(request, env);
+    if (url.pathname === "/api/gallery/photo" && request.method === "GET") return galleryPhoto(request, env);
+    if (url.pathname === "/api/gallery/delete" && request.method === "DELETE") return galleryDelete(request, env);
+    if (url.pathname === "/api/admin/gallery/migrate-r2" && request.method === "POST") return migratePortfolioBatch(request, env);
 
     // National identity lookups are retired. Prolink now uses manual document review.
     if (url.pathname === "/api/identro-nin") {
