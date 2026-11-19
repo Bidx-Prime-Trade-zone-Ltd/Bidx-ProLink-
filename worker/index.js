@@ -694,6 +694,262 @@ async function reverseGeocode(request, env) {
   }
 }
 
+
+const PROLINK_SUPPORT_TEXT_MODEL="@cf/zai-org/glm-4.7-flash";
+const PROLINK_SUPPORT_VISION_MODEL="@cf/meta/llama-3.2-11b-vision-instruct";
+function supportName(user){
+  const meta=user?.user_metadata||{};
+  const full=String(meta.full_name||meta.name||meta.professional_name||user?.email?.split("@")[0]||"there").trim();
+  return full.split(/\\s+/)[0]||"there";
+}
+function supportTimeGreeting(timeZone){
+  let hour=new Date().getUTCHours();
+  try{
+    const parts=new Intl.DateTimeFormat("en-GB",{timeZone:timeZone||"Africa/Lagos",hour:"2-digit",hourCycle:"h23"}).formatToParts(new Date());
+    hour=Number(parts.find(p=>p.type==="hour")?.value??hour);
+  }catch{}
+  return hour<12?"Good morning":hour<17?"Good afternoon":"Good evening";
+}
+function supportGreetingReply(message,name,timeZone){
+  const text=String(message||"").trim().toLowerCase().replace(/[!.?,]+$/,"");
+  const timeGreeting=supportTimeGreeting(timeZone);
+  if(/^(good\\s+morning|good\\s+afternoon|good\\s+evening)(\\s+there)?$/.test(text))
+    return timeGreeting+", "+name+". How may I help you today?";
+  if(/^(hi|hii|hey|hello|hiya)(\\s+there)?$/.test(text))
+    return (text.startsWith("hello")?"Hello":text.startsWith("hey")?"Hey":"Hi")+", "+name+". How may I help you?";
+  return "";
+}
+async function supportConversation(config,userId){
+  const found=await supabaseRest(config,"/rest/v1/prolink_support_conversations?select=*&user_id=eq."+encodeURIComponent(userId)+"&limit=1");
+  if(found?.[0])return found[0];
+  const created=await supabaseRest(config,"/rest/v1/prolink_support_conversations",{method:"POST",headers:{prefer:"return=representation"},body:JSON.stringify({user_id:userId,status:"ai_active"})});
+  if(created?.[0])return created[0];
+  const retry=await supabaseRest(config,"/rest/v1/prolink_support_conversations?select=*&user_id=eq."+encodeURIComponent(userId)+"&limit=1");
+  if(retry?.[0])return retry[0];
+  throw new Error("Could not open your support conversation.");
+}
+async function supportInsertMessage(config,conversationId,role,content,options={}){
+  const rows=await supabaseRest(config,"/rest/v1/prolink_support_messages",{method:"POST",headers:{prefer:"return=representation"},body:JSON.stringify({
+    conversation_id:conversationId,sender_user_id:options.senderUserId||null,sender_role:role,
+    content:String(content||"").slice(0,8000),attachments:options.attachments||[],pinned_for_admin:!!options.pinned
+  })});
+  await supabaseRest(config,"/rest/v1/prolink_support_conversations?id=eq."+encodeURIComponent(conversationId),{
+    method:"PATCH",headers:{prefer:"return=minimal"},body:JSON.stringify({last_message_at:new Date().toISOString(),updated_at:new Date().toISOString()})
+  });
+  return rows?.[0]||null;
+}
+async function supportAccountContext(config,user){
+  const id=encodeURIComponent(user.id);
+  const [profiles,memberships]=await Promise.all([
+    supabaseRest(config,"/rest/v1/prolink_professional_profiles?select=professional_name,full_name,category,subcategory,country_name,region,district,city,local_area,is_published,approved_at&user_id=eq."+id+"&limit=1").catch(()=>[]),
+    supabaseRest(config,"/rest/v1/prolink_memberships?select=starts_at,expires_at&user_id=eq."+id+"&limit=1").catch(()=>[])
+  ]);
+  const p=profiles?.[0]||null,m=memberships?.[0]||null;
+  return {
+    account_name:supportName(user),email:user.email||"",
+    professional_profile:p?{name:p.professional_name||p.full_name,profession:p.subcategory||p.category,location:[p.local_area,p.city,p.district,p.region,p.country_name].filter(Boolean).join(", "),published:!!p.is_published,approved_at:p.approved_at}:null,
+    membership:m?{status:new Date(m.expires_at)>new Date()?"active":"expired",starts_at:m.starts_at,expires_at:m.expires_at}:null,
+    wallet_balance:null
+  };
+}
+function prolinkSupportSystemPrompt(context){
+  return `You are the Bidx ProLink AI Admin Assistant, the helpful in-app support guide for Bidx ProLink, a global directory and professional showcase connecting customers with skilled people and quality work. Speak warmly, clearly, patiently and professionally. Address the user by their first name when natural.
+
+GREETING RULES:
+- A greeting-only message is handled by the application with a deterministic greeting in the user's local time. Do not repeat a greeting unnecessarily in other answers.
+- For "hi", "hello" or "hey", the application uses the user's first name and asks "How may I help you?"
+- For time-of-day greetings, use the correct current local greeting; never copy an incorrect time greeting from the user.
+
+WHAT PROLINK DOES:
+- ProLink helps skilled professionals create a professional presence, showcase verified professional information and work, and become discoverable by people seeking their services.
+- Visitors can explore professionals, browse categories, search services, use location as a relevance signal, open public professional profiles and browse work-gallery photos.
+- Customers can contact professionals using the contact options shown on each profile and discuss scope, price, timing and arrangements directly.
+- ProLink does not collect customer job payments in the app. Do not claim an in-app wallet, escrow, guaranteed jobs, guaranteed income, or guaranteed customer contact.
+- The platform is a product of BIDX PRIME TRADE ZONE LTD.
+
+NAVIGATION:
+- Home/Explore: discover professionals, search by service, browse categories and use the location field. Nearby matches are prioritised when available; other matching professionals can still be shown.
+- Messages: customer-to-professional conversations and service enquiries. These are separate from this AI/Admin Support Chat. Never imply Admin can read private customer-to-professional messages through this support inbox.
+- Profile: manage the user's personal account details and account settings.
+- Professional Profile: manage professional information displayed to visitors, subject to the platform's review and profile-change rules.
+- My Work Portfolio / work gallery: upload and manage up to 15 work photos. Portfolio photos are stored in Cloudflare R2.
+- Professional Membership / Plan: annual professional membership is US$5 for 12 months, one-time manual payment, no automatic recurring deductions. The membership becomes active or extends only after payment verification.
+- Help Centre and Contact & Support: access help and support channels.
+- Main app navigation remains available at the bottom on mobile; the menu drawer contains further destinations. Use the app's visible labels and do not invent buttons that are not present.
+
+PROFESSIONAL REGISTRATION AND REVIEW:
+- Registration requests a professional identity/ID card as the primary professional document, plus relevant supporting evidence depending on country and trade (for example trade-test, vocational/competence, academic, apprenticeship, CAC/business or professional certificates where applicable).
+- ProLink does not perform NIN or national identity lookup. Do not request NIN or claim national ID verification.
+- Documents are reviewed manually by ProLink Admin. Never claim approval until the account's actual status confirms it.
+- Approved public professional profiles appear in Explore after publication/approval.
+
+ACCOUNT AND MEMBERSHIP LOOKUPS:
+- Use only the verified account context below. Tell the user their membership is active or expired and give the exact expiry date when available.
+- If no membership record exists, say no active membership record is currently available; do not guess.
+- ProLink does not currently provide an in-app cash wallet or wallet balance. If asked for balance, explain that there is no wallet balance to display; do not invent an amount.
+- Do not expose internal IDs, credentials, secret keys, private account data, or another user's information.
+
+SUPPORT AND HUMAN ADMIN:
+- This is a dedicated support conversation shared by the user, AI Assistant and human ProLink Admin. It is not the customer-to-professional Messages inbox.
+- If the user asks for a human Admin, explain that you can send a handover request. The AI remains available while Admin is pending.
+- The system pauses AI replies only after Admin explicitly marks the conversation as attending. Never say Admin has read or reviewed a message until the system records that.
+- Attachments sent here are private support attachments stored in R2. For an image, describe only what is visibly identifiable and distinguish observation from uncertainty. Do not infer identity, sensitive traits or authenticity.
+- Confirm that an attachment is securely received and pinned for Admin review when the application says it was saved. Do not claim the Admin has opened or reviewed it until they have.
+- Never ask for passwords, one-time codes, card numbers or secret credentials.
+
+RESPONSE STYLE:
+- Be useful and concise. Give numbered steps for navigation when needed. If a question needs account-specific facts, rely on the account context. If information is unavailable, say so plainly and offer to pass the question to Admin.
+- Do not invent features, charges, balances, policy terms, approval outcomes or support response times.
+
+VERIFIED ACCOUNT CONTEXT (JSON):
+${JSON.stringify(context)}`;
+}
+async function supportAiReply(env,context,history,message){
+  if(!env.AI||typeof env.AI.run!=="function")return "I’m sorry, my AI service is not connected at the moment. Your message is saved in this support conversation. You can request a human Admin, and I’ll be available again when the AI service is restored.";
+  const messages=[
+    {role:"system",content:prolinkSupportSystemPrompt(context)},
+    ...history.filter(item=>["user","ai","admin"].includes(item.sender_role)).slice(-12).map(item=>({role:item.sender_role==="ai"?"assistant":item.sender_role==="admin"?"assistant":"user",content:String(item.content||"").slice(0,2500)})),
+    {role:"user",content:String(message||"").slice(0,4000)}
+  ];
+  const result=await env.AI.run(PROLINK_SUPPORT_TEXT_MODEL,{messages,max_tokens:650,temperature:0.35});
+  return String(result?.response||result?.result||result?.output_text||"I’m here to help. Could you tell me a little more?").trim().slice(0,7000);
+}
+async function supportMessages(request,env){
+  const auth=await signedInProfileUser(request,env);if(auth.error)return auth.error;
+  try{
+    const conversation=await supportConversation(auth.config,auth.user.id);
+    const messages=await supabaseRest(auth.config,"/rest/v1/prolink_support_messages?select=id,sender_role,content,attachments,pinned_for_admin,created_at&conversation_id=eq."+encodeURIComponent(conversation.id)+"&order=created_at.asc&limit=150");
+    return json({conversation,messages:messages||[]});
+  }catch(error){console.error("[prolink-support] load_failed",{name:error?.name||"Error"});return json({error:"Your support conversation could not be loaded. Please try again."},502);}
+}
+async function supportSend(request,env){
+  const auth=await signedInProfileUser(request,env);if(auth.error)return auth.error;
+  try{
+    const body=await request.json(),message=String(body.message||"").trim(),timeZone=String(body.timeZone||"Africa/Lagos").slice(0,80);
+    if(!message)return json({error:"Write a message before sending."},400);
+    if(message.length>4000)return json({error:"Your message is too long. Please keep it under 4,000 characters."},413);
+    const conversation=await supportConversation(auth.config,auth.user.id);
+    if(conversation.status==="resolved"){
+      await supabaseRest(auth.config,"/rest/v1/prolink_support_conversations?id=eq."+encodeURIComponent(conversation.id),{method:"PATCH",headers:{prefer:"return=minimal"},body:JSON.stringify({status:"ai_active",resolved_at:null,updated_at:new Date().toISOString()})});
+    }
+    await supportInsertMessage(auth.config,conversation.id,"user",message,{senderUserId:auth.user.id});
+    if(conversation.status==="admin_attending")return json({conversation:{...conversation,last_message_at:new Date().toISOString()},messages:[],awaitingAdmin:true});
+    const greeting=supportGreetingReply(message,supportName(auth.user),timeZone);
+    const context=await supportAccountContext(auth.config,auth.user);
+    let reply=greeting;
+    if(!reply){
+      const history=await supabaseRest(auth.config,"/rest/v1/prolink_support_messages?select=sender_role,content&conversation_id=eq."+encodeURIComponent(conversation.id)+"&order=created_at.desc&limit=12");
+      reply=await supportAiReply(env,context,(history||[]).reverse(),message);
+    }
+    const saved=await supportInsertMessage(auth.config,conversation.id,"ai",reply);
+    return json({conversation,messages:saved?[saved]:[],awaitingAdmin:conversation.status==="admin_requested"});
+  }catch(error){console.error("[prolink-support] send_failed",{name:error?.name||"Error",message:String(error?.message||"").slice(0,150)});return json({error:"Your message could not be sent. Please try again."},502);}
+}
+async function supportRequestAdmin(request,env){
+  const auth=await signedInProfileUser(request,env);if(auth.error)return auth.error;
+  try{
+    const conversation=await supportConversation(auth.config,auth.user.id);
+    if(conversation.status!=="admin_attending"&&conversation.status!=="admin_requested"){
+      await supabaseRest(auth.config,"/rest/v1/prolink_support_conversations?id=eq."+encodeURIComponent(conversation.id),{method:"PATCH",headers:{prefer:"return=minimal"},body:JSON.stringify({status:"admin_requested",admin_requested_at:new Date().toISOString(),updated_at:new Date().toISOString()})});
+      await supportInsertMessage(auth.config,conversation.id,"ai","I’ve sent your request for human Admin assistance. Your conversation is now in the Admin support queue. I’ll remain available while you wait; Admin has not yet marked this conversation as attending.");
+    }
+    return json({success:true,message:"Your request is in the Admin support queue. The AI assistant remains available while you wait."});
+  }catch(error){return json({error:"Your Admin request could not be submitted. Please try again."},502);}
+}
+async function supportAttachment(request,env){
+  const auth=await signedInProfileUser(request,env);if(auth.error)return auth.error;
+  if(!env.R2)return json({error:"Support file storage is not connected. Please contact Admin."},503);
+  let form;try{form=await request.formData();}catch{return json({error:"The selected file could not be read."},400);}
+  const file=form.get("file");
+  if(!file||typeof file.arrayBuffer!=="function")return json({error:"Choose an image or document first."},400);
+  const allowed=new Set(["image/jpeg","image/png","image/webp","application/pdf","text/plain"]);
+  if(!allowed.has(file.type))return json({error:"Supported files are JPEG, PNG, WebP, PDF and TXT."},415);
+  if(file.size>10*1024*1024)return json({error:"Files must be no larger than 10 MB."},413);
+  try{
+    const conversation=await supportConversation(auth.config,auth.user.id);
+    const safe=String(file.name||"attachment").replace(/[^a-zA-Z0-9._-]/g,"_").slice(-90)||"attachment";
+    const key="support/"+auth.user.id+"/"+conversation.id+"/"+crypto.randomUUID()+"-"+safe;
+    const bytes=await file.arrayBuffer();
+    await env.R2.put(key,bytes,{httpMetadata:{contentType:file.type,contentDisposition:"inline; filename*=UTF-8''"+encodeURIComponent(safe)}});
+    let summary="";
+    if(file.type.startsWith("image/")&&env.AI){
+      try{
+        const encoded= btoa(String.fromCharCode(...new Uint8Array(bytes)));
+        const vision=await env.AI.run(PROLINK_SUPPORT_VISION_MODEL,{prompt:"Describe the visible contents of this image accurately for a professional support assistant. Mention visible text only if legible. Do not identify people, infer sensitive personal traits, claim authenticity, or speculate beyond what is visible. Return a concise description.",image:encoded});
+        summary=String(vision?.description||vision?.response||vision?.result||"").trim().slice(0,1800);
+      }catch(error){console.error("[prolink-support] vision_failed",{name:error?.name||"Error"});}
+    }
+    const attachment={name:safe,mime_type:file.type,size:file.size,path:key,kind:file.type.startsWith("image/")?"image":"document",ai_summary:summary||null};
+    const messageText=summary?"Image received. AI visual summary: "+summary:"Attachment received: "+safe+". The file is securely stored and pinned for Admin review.";
+    const saved=await supportInsertMessage(auth.config,conversation.id,"user",messageText,{senderUserId:auth.user.id,attachments:[attachment],pinned:true});
+    const confirmation=summary?"I’ve received your image and reviewed its visible contents. It is securely attached and pinned for Admin review in this conversation. Admin can inspect the original image and respond here. This confirmation does not mean Admin has opened it yet.": "I’ve securely received your file and attached it to this support conversation. It is pinned for Admin review, and Admin can inspect it and respond here. I’ll let you know when a response arrives; this does not mean Admin has opened it yet.";
+    const ai=await supportInsertMessage(auth.config,conversation.id,"ai",confirmation);
+    return json({success:true,messages:[saved,ai].filter(Boolean)});
+  }catch(error){console.error("[prolink-support] attachment_failed",{name:error?.name||"Error",message:String(error?.message||"").slice(0,160)});return json({error:"Your attachment could not be saved. Please try again."},502);}
+}
+async function adminSupportInbox(request,env){
+  const auth=await requireProlinkAdmin(request,env);if(auth.error)return auth.error;
+  try{
+    const conversations=await supabaseRest(auth.config,"/rest/v1/prolink_support_conversations?select=*&order=last_message_at.desc&limit=200");
+    const ids=(conversations||[]).map(c=>c.user_id).filter(Boolean);
+    const profiles=ids.length?await supabaseRest(auth.config,"/rest/v1/prolink_professional_profiles?select=user_id,full_name,professional_name,category,city,country_name&user_id=in.("+ids.map(encodeURIComponent).join(",")+")"): [];
+    const profileMap=Object.fromEntries((profiles||[]).map(p=>[p.user_id,p]));
+    const rows=await Promise.all((conversations||[]).map(async c=>{
+      const messages=await supabaseRest(auth.config,"/rest/v1/prolink_support_messages?select=id,sender_role,content,attachments,pinned_for_admin,created_at&conversation_id=eq."+encodeURIComponent(c.id)+"&order=created_at.desc&limit=1");
+      const p=profileMap[c.user_id]||{};
+      return {...c,display_name:p.professional_name||p.full_name||"ProLink user",profession:p.category||"",location:[p.city,p.country_name].filter(Boolean).join(", "),last_message:messages?.[0]||null};
+    }));
+    return json({conversations:rows});
+  }catch(error){console.error("[prolink-support-admin] inbox_failed",{name:error?.name||"Error"});return json({error:"The support inbox could not be loaded."},502);}
+}
+async function adminSupportMessages(request,env){
+  const auth=await requireProlinkAdmin(request,env);if(auth.error)return auth.error;
+  const id=String(new URL(request.url).searchParams.get("conversationId")||"");
+  if(!id)return json({error:"Select a support conversation."},400);
+  try{
+    const rows=await supabaseRest(auth.config,"/rest/v1/prolink_support_conversations?select=id,user_id,status& id=eq."+encodeURIComponent(id)+"&limit=1".replace("?select=id,user_id,status& id","?select=id,user_id,status&id"));
+    if(!rows?.[0])return json({error:"Support conversation not found."},404);
+    const messages=await supabaseRest(auth.config,"/rest/v1/prolink_support_messages?select=*&conversation_id=eq."+encodeURIComponent(id)+"&order=created_at.asc&limit=300");
+    return json({conversation:rows[0],messages:messages||[]});
+  }catch(error){return json({error:"Could not load this support conversation."},502);}
+}
+async function adminSupportAction(request,env){
+  const auth=await requireProlinkAdmin(request,env);if(auth.error)return auth.error;
+  try{
+    const body=await request.json(),id=String(body.conversationId||""),action=String(body.action||"");
+    if(!id||!["attend","resolve","reply"].includes(action))return json({error:"Choose a valid support action."},400);
+    const rows=await supabaseRest(auth.config,"/rest/v1/prolink_support_conversations?select=id,user_id,status&id=eq."+encodeURIComponent(id)+"&limit=1");
+    const conversation=rows?.[0];if(!conversation)return json({error:"Support conversation not found."},404);
+    if(action==="attend"){
+      await supabaseRest(auth.config,"/rest/v1/prolink_support_conversations?id=eq."+encodeURIComponent(id),{method:"PATCH",headers:{prefer:"return=minimal"},body:JSON.stringify({status:"admin_attending",admin_attended_at:new Date().toISOString(),updated_at:new Date().toISOString()})});
+      await supportInsertMessage(auth.config,id,"admin","A ProLink Admin representative has joined this conversation. I’ll assist you from here.",{senderUserId:auth.user.id});
+      return json({success:true,message:"You are now attending this support conversation. AI replies are paused until the case is resolved."});
+    }
+    if(action==="resolve"){
+      await supabaseRest(auth.config,"/rest/v1/prolink_support_conversations?id=eq."+encodeURIComponent(id),{method:"PATCH",headers:{prefer:"return=minimal"},body:JSON.stringify({status:"resolved",resolved_at:new Date().toISOString(),updated_at:new Date().toISOString()})});
+      await supportInsertMessage(auth.config,id,"admin","This support request has been marked as resolved. If you need further help, send a new message and the AI assistant will be available again.",{senderUserId:auth.user.id});
+      return json({success:true,message:"Support conversation resolved."});
+    }
+    const message=String(body.message||"").trim();if(!message||message.length>6000)return json({error:"Enter a reply of up to 6,000 characters."},400);
+    await supabaseRest(auth.config,"/rest/v1/prolink_support_conversations?id=eq."+encodeURIComponent(id),{method:"PATCH",headers:{prefer:"return=minimal"},body:JSON.stringify({status:"admin_attending",admin_attended_at:conversation.admin_attended_at||new Date().toISOString(),updated_at:new Date().toISOString()})});
+    const saved=await supportInsertMessage(auth.config,id,"admin",message,{senderUserId:auth.user.id});
+    return json({success:true,message:saved});
+  }catch(error){console.error("[prolink-support-admin] action_failed",{name:error?.name||"Error"});return json({error:"The support action could not be completed."},502);}
+}
+async function adminSupportAttachment(request,env){
+  const auth=await requireProlinkAdmin(request,env);if(auth.error)return auth.error;
+  if(!env.R2)return json({error:"R2 file storage is unavailable."},503);
+  const path=String(new URL(request.url).searchParams.get("path")||"");
+  if(!path.startsWith("support/"))return json({error:"Invalid support attachment."},400);
+  try{
+    const messages=await supabaseRest(auth.config,"/rest/v1/prolink_support_messages?select=attachments&attachments=not.is.null&limit=5000");
+    const allowed=(messages||[]).some(m=>(m.attachments||[]).some(a=>a.path===path));
+    if(!allowed)return json({error:"Attachment not found in a support conversation."},404);
+    const object=await env.R2.get(path);if(!object)return json({error:"The attachment is no longer available."},404);
+    return new Response(object.body,{headers:{"content-type":object.httpMetadata?.contentType||"application/octet-stream","content-disposition":"inline","cache-control":"private, no-store","x-content-type-options":"nosniff"}});
+  }catch(error){return json({error:"Could not open the support attachment."},502);}
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -707,6 +963,14 @@ export default {
     if (url.pathname === "/api/profile/change-request" && request.method === "POST") return profileChangeRequest(request, env);
     if (url.pathname === "/api/admin/profile-change" && request.method === "POST") return adminProfileChange(request, env);
     if (url.pathname === "/api/admin/dashboard" && request.method === "GET") return adminDashboard(request, env);
+    if (url.pathname === "/api/support/messages" && request.method === "GET") return supportMessages(request, env);
+    if (url.pathname === "/api/support/message" && request.method === "POST") return supportSend(request, env);
+    if (url.pathname === "/api/support/request-admin" && request.method === "POST") return supportRequestAdmin(request, env);
+    if (url.pathname === "/api/support/attachment" && request.method === "POST") return supportAttachment(request, env);
+    if (url.pathname === "/api/admin/support/inbox" && request.method === "GET") return adminSupportInbox(request, env);
+    if (url.pathname === "/api/admin/support/messages" && request.method === "GET") return adminSupportMessages(request, env);
+    if (url.pathname === "/api/admin/support/action" && request.method === "POST") return adminSupportAction(request, env);
+    if (url.pathname === "/api/admin/support/attachment" && request.method === "GET") return adminSupportAttachment(request, env);
     if (url.pathname === "/api/admin/review" && request.method === "POST") return adminReview(request, env);
     if (url.pathname === "/api/admin/document" && request.method === "GET") return adminDocument(request, env);
     if (url.pathname === "/api/verification/document" && request.method === "POST") return verificationDocumentUpload(request, env);
