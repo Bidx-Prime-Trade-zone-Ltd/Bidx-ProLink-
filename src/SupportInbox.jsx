@@ -24,7 +24,7 @@ export default function SupportInbox(){
   (async()=>{const access=await token();const all=messages.flatMap(m=>(m.attachments||[]).map(a=>a.path).filter(Boolean));for(const path of all){try{const response=await fetch('/api/admin/support/attachment?path='+encodeURIComponent(path),{headers:{authorization:'Bearer '+access}});if(response.ok)urls[path]=URL.createObjectURL(await response.blob());}catch{}}
    if(active)setFiles(urls);else Object.values(urls).forEach(URL.revokeObjectURL);
   })();
-  return()=>{active=false;Object.values(files).forEach(URL.revokeObjectURL);};
+  return()=>{active=false;Object.values(urls).forEach(URL.revokeObjectURL);};
  },[messages]);
  const act=async(action)=>{
   if(!selected)return;setBusy(true);setNotice('');
