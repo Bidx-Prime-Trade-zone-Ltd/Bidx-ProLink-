@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import AuthModal from './AuthModal.jsx';
 import { TermsContent, PrivacyContent, ProfessionalPolicyContent } from './LegalPages.jsx';
 import { PROFESSION_GROUPS, ALL_PROFESSIONS } from './professions.js';
@@ -51,6 +51,8 @@ function App() {
   const [portraitUrls,setPortraitUrls] = useState({});
   useEffect(()=>{if(!portraitFile){setPortraitPreview('');return;}const url=URL.createObjectURL(portraitFile);setPortraitPreview(url);return()=>URL.revokeObjectURL(url);},[portraitFile]);
   const [menuOpen, setMenuOpen] = useState(false);
+  const activeTabRef=useRef(tab);
+  activeTabRef.current=tab;
   useEffect(()=>{
     if(!menuOpen)return;
     const scrollY=window.scrollY;
@@ -67,7 +69,9 @@ function App() {
       body.style.top=previous.top;
       body.style.width=previous.width;
       body.style.overflow=previous.overflow;
-      window.scrollTo(0,scrollY);
+      // Choosing a different destination starts that page at its own top;
+      // simply dismissing the drawer restores the exact previous scroll spot.
+      window.scrollTo(0,activeTabRef.current!==tab?0:scrollY);
     };
   },[menuOpen]);
   const [savingProfile, setSavingProfile] = useState(false);
