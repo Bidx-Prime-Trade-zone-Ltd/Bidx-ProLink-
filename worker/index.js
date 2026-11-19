@@ -695,6 +695,46 @@ async function reverseGeocode(request, env) {
 }
 
 
+const PROLINK_CREDENTIAL_GUIDANCE = {
+  NGA:"Nigeria: Trade Test Certificate (Grade I, II or III), recognised technical-college or apprenticeship certificate, National Skills Qualification (NSQ) or relevant competence certificate.",
+  GHA:"Ghana: NVTI Trade Test Certificate, CTVET National Proficiency or National Certificate, or another recognised trade/TVET qualification.",
+  KEN:"Kenya: NITA Trade Test Certificate, recognised TVET/CBET qualification or artisan certificate relevant to your trade.",
+  UGA:"Uganda: DIT Uganda Vocational Qualification (UVQF), recognised vocational/trade-test award or relevant technical certificate.",
+  TZA:"Tanzania: VETA vocational award/National Vocational Award (NVA), trade assessment certificate or relevant technical qualification.",
+  RWA:"Rwanda: RTB/TVET occupational qualification, recognised vocational competence certificate or relevant trade certificate.",
+  ZAF:"South Africa: QCTO occupational qualification or trade certificate, recognised apprenticeship completion or relevant professional certificate.",
+  ZMB:"Zambia: TEVETA-accredited craft, technician or vocational qualification, trade certificate or competence award.",
+  ZWE:"Zimbabwe: HEXCO National Certificate, recognised apprenticeship/trade-test certificate or relevant technical qualification.",
+  BWA:"Botswana: BQA-registered vocational qualification, recognised trade-test certificate or relevant technical award.",
+  NAM:"Namibia: NTA-accredited vocational qualification, recognised trade-test certificate or relevant technical award.",
+  MWI:"Malawi: TEVETA-recognised vocational qualification, trade-test certificate or relevant technical/competence certificate.",
+  SLE:"Sierra Leone: recognised NCTVA/TVET vocational award, trade-test certificate or relevant technical qualification.",
+  LBR:"Liberia: recognised TVET or apprenticeship completion certificate, trade-test/competence award or relevant technical qualification.",
+  GMB:"The Gambia: recognised TVET or apprenticeship certificate, trade-test/competence award or relevant technical qualification.",
+  LSO:"Lesotho: recognised vocational/technical qualification, trade-test certificate or apprenticeship completion award.",
+  SWZ:"Eswatini: recognised vocational qualification, trade-test certificate or relevant technical/competence award.",
+  MUS:"Mauritius: MITD vocational qualification, recognised trade certificate or relevant professional competence award.",
+  SYC:"Seychelles: Seychelles Institute of Technology or other recognised TVET qualification, trade certificate or competence award.",
+  CMR:"Cameroon: relevant vocational/professional qualification such as DQP or CQP, recognised trade certificate or technical diploma.",
+  SSD:"South Sudan: recognised vocational training, apprenticeship completion or trade/competence certificate.",
+  GBR:"United Kingdom: relevant NVQ/SVQ, apprenticeship certificate, recognised trade qualification or current industry registration/licence where applicable.",
+  IRL:"Ireland: relevant QQI award, SOLAS/apprenticeship qualification, recognised trade certificate or industry registration where applicable.",
+  MLT:"Malta: MCAST or other recognised vocational qualification, trade certificate or relevant occupational award.",
+  USA:"United States: relevant state/provincial occupational licence where required, apprenticeship completion, recognised trade certificate or industry certification.",
+  CAN:"Canada: provincial/territorial Certificate of Qualification, Red Seal endorsement where applicable, apprenticeship completion or relevant trade certification.",
+  JAM:"Jamaica: NCTVET NVQ-J/CVQ, recognised HEART/NSTA Trust qualification or relevant trade certificate.",
+  TTO:"Trinidad and Tobago: National Training Agency CVQ/NVQ, recognised apprenticeship or relevant trade qualification.",
+  BRB:"Barbados: TVET Council NVQ/CVQ, recognised apprenticeship completion or relevant occupational certificate.",
+  AUS:"Australia: relevant AQF Certificate III/IV, trade qualification, apprenticeship completion or state/territory licence where required.",
+  NZL:"New Zealand: NZQA-recognised qualification, New Zealand Certificate in a relevant trade, apprenticeship completion or occupational registration where required.",
+  SGP:"Singapore: relevant WSQ qualification, recognised trade/technical certificate or occupational licence where applicable.",
+  PHL:"Philippines: TESDA National Certificate (NC I–IV), Certificate of Competency (COC) or relevant professional licence where required.",
+  IND:"India: NCVT/SCVT ITI certificate, NSQF-aligned skill qualification, apprenticeship certificate or relevant professional registration.",
+  PAK:"Pakistan: NAVTTC or provincial TEVTA vocational qualification, trade-test certificate or recognised apprenticeship award.",
+  BGD:"Bangladesh: BTEB/NSDA-recognised skills qualification, National Skills Certificate or relevant trade certificate.",
+  FJI:"Fiji: recognised TVET qualification, Fiji National University trade certificate or relevant occupational competence award.",
+  PNG:"Papua New Guinea: National Training Council-recognised TVET qualification, trade-test certificate or apprenticeship award."
+};
 const PROLINK_SUPPORT_TEXT_MODEL="@cf/zai-org/glm-4.7-flash";
 const PROLINK_SUPPORT_VISION_MODEL="@cf/meta/llama-3.2-11b-vision-instruct";
 function supportName(user){
@@ -796,6 +836,7 @@ NAVIGATION:
 
 PROFESSIONAL REGISTRATION AND REVIEW:
 - Registration requests a professional identity/ID card as the primary professional document, plus relevant supporting evidence depending on country and trade (for example trade-test, vocational/competence, academic, apprenticeship, CAC/business or professional certificates where applicable).
+- Use the exact country-specific supporting certificate guidance below when explaining registration requirements. Do not claim that a suggested backup certificate replaces the primary professional ID card unless the user's country/trade has no such card and Admin confirms an exception. Country guidance JSON: ${JSON.stringify(PROLINK_CREDENTIAL_GUIDANCE)}
 - ProLink does not perform NIN or national identity lookup. Do not request NIN or claim national ID verification.
 - Documents are reviewed manually by ProLink Admin. Never claim approval until the account's actual status confirms it.
 - Approved public professional profiles appear in Explore after publication/approval.
