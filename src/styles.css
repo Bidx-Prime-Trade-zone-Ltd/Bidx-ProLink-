@@ -429,3 +429,5 @@ body.prolink-menu-locked{position:fixed!important;overflow:hidden!important;widt
 /* Compact one-step navigation control */
 .app-back-button{width:30px!important;height:30px!important;min-width:30px!important;padding:4px!important;border-radius:50%!important;display:inline-flex;align-items:center;justify-content:center;flex:0 0 30px;color:#1769b2}
 .app-back-button svg{width:17px;height:17px;stroke-width:2}
+
+.brand-logo-image{display:block;object-fit:cover;background:#fff;border:1px solid #dbe7f5;border-radius:11px;}
