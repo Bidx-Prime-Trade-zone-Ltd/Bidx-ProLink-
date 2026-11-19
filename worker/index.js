@@ -528,6 +528,45 @@ async function adminReview(request,env) {
   }catch(error){console.error("[prolink-admin] review_failed",{name:error?.name||"Error"});return json({error:error?.message||"Document review could not be saved."},502);}
 }
 
+async function migrateVerificationDocumentsBatch(request,env){
+  const auth=await requireProlinkAdmin(request,env);
+  if(auth.error)return auth.error;
+  if(!env.R2)return json({error:"Professional document R2 binding R2 is not connected."},503);
+  const url=new URL(request.url);
+  const offset=Math.max(0,Number.parseInt(url.searchParams.get("offset")||"0",10)||0);
+  const limit=Math.min(10,Math.max(1,Number.parseInt(url.searchParams.get("limit")||"10",10)||10));
+  const config=auth.config;
+  try{
+    const rows=await supabaseRest(config,"/rest/v1/prolink_review_records?select=id,user_id,document_path,submitted_data&section=eq.supporting_document&document_path=not.is.null&order=created_at.asc&limit="+limit+"&offset="+offset);
+    let migrated=0,skipped=0,failed=0;
+    for(const item of rows||[]){
+      if(String(item.document_path||"").startsWith("verification/")){skipped++;continue;}
+      try{
+        const encoded=String(item.document_path||"").split("/").map(encodeURIComponent).join("/");
+        const source=await fetch(config.url+"/storage/v1/object/prolink-verification-documents/"+encoded,{headers:{apikey:config.serviceKey,authorization:"Bearer "+config.serviceKey}});
+        if(!source.ok)throw new Error("Legacy Supabase document download failed ("+source.status+").");
+        const contentType=source.headers.get("content-type")||item.submitted_data?.mime_type||"application/octet-stream";
+        if(!["image/jpeg","image/png","image/webp","application/pdf"].includes(contentType))throw new Error("Unsupported legacy document type.");
+        const safeName=String(item.submitted_data?.document_name||"document").replace(/[^a-zA-Z0-9._-]/g,"_").slice(-100);
+        const key="verification/"+item.user_id+"/migrated-"+crypto.randomUUID()+"-"+safeName;
+        await env.R2.put(key,await source.arrayBuffer(),{httpMetadata:{contentType,cacheControl:"private, no-store"}});
+        try{
+          const meta={...(item.submitted_data||{}),storage_provider:"cloudflare_r2",migrated_from:"supabase_storage"};
+          await supabaseRest(config,"/rest/v1/prolink_review_records?id=eq."+encodeURIComponent(item.id),{method:"PATCH",body:JSON.stringify({document_path:key,submitted_data:meta})});
+        }catch(updateError){await env.R2.delete(key);throw updateError;}
+        migrated++;
+      }catch(error){
+        failed++;
+        console.error("[prolink-documents] migration_item_failed",{id:item.id,message:String(error?.message||"").slice(0,160)});
+      }
+    }
+    return json({success:failed===0,migrated,skipped,failed,processed:(rows||[]).length,nextOffset:offset+(rows||[]).length,hasMore:(rows||[]).length===limit,message:failed?"Some documents need retry.":"Document migration batch completed. Legacy copies have been retained for safety."});
+  }catch(error){
+    console.error("[prolink-documents] migration_failed",{message:String(error?.message||"").slice(0,160)});
+    return json({error:"Could not migrate professional documents."},502);
+  }
+}
+
 async function adminDocument(request,env) {
   const auth=await requireProlinkAdmin(request,env);if(auth.error)return auth.error;
   const url=new URL(request.url),path=url.searchParams.get("path")||"";
@@ -660,6 +699,7 @@ export default {
     if (url.pathname === "/api/admin/review" && request.method === "POST") return adminReview(request, env);
     if (url.pathname === "/api/admin/document" && request.method === "GET") return adminDocument(request, env);
     if (url.pathname === "/api/verification/document" && request.method === "POST") return verificationDocumentUpload(request, env);
+    if (url.pathname === "/api/admin/verification/migrate-r2" && request.method === "POST") return migrateVerificationDocumentsBatch(request, env);
     if (url.pathname === "/api/gallery/upload" && request.method === "POST") return galleryUpload(request, env);
     if (url.pathname === "/api/gallery/photo" && request.method === "GET") return galleryPhoto(request, env);
     if (url.pathname === "/api/gallery/delete" && request.method === "DELETE") return galleryDelete(request, env);
