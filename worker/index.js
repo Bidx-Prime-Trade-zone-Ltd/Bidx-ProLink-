@@ -200,6 +200,75 @@ async function passwordChangeConfirm(request,env) {
   }catch(error){console.error("[prolink-password-change] confirmation_failed",{name:error?.name||"Error"});appUrl.searchParams.set("password_change","error");return Response.redirect(appUrl.toString(),302);}
 }
 
+
+async function galleryUpload(request,env){
+  const auth=await signedInProfileUser(request,env);
+  if(auth.error)return auth.error;
+  let form;
+  try{form=await request.formData();}catch{return json({error:"The photo upload request could not be read. Please select the photos again."},400);}
+  const files=form.getAll("files").filter(file=>file&&typeof file.arrayBuffer==="function"&&typeof file.size==="number");
+  const caption=String(form.get("caption")||"").trim().slice(0,140);
+  if(!files.length)return json({error:"Choose at least one photo to upload."},400);
+  if(files.length>15)return json({error:"You can upload no more than 15 photos at a time."},400);
+  const extensionByType={"image/jpeg":"jpg","image/png":"png","image/webp":"webp"};
+  for(const file of files){
+    if(!extensionByType[file.type])return json({error:"Only JPEG, PNG and WebP photos are supported."},400);
+    if(file.size>8388608)return json({error:"Each photo must be no larger than 8 MB."},400);
+  }
+  const config=auth.config,userId=auth.user.id;
+  const uploadedPaths=[],savedIds=[],savedItems=[];
+  const storageBase=config.url+"/storage/v1";
+  async function rollback(){
+    if(savedIds.length){
+      try{await supabaseRest(config,"/rest/v1/prolink_work_gallery?id=in.("+savedIds.join(",")+")&user_id=eq."+encodeURIComponent(userId),{method:"DELETE"});}catch(error){console.error("[prolink-gallery] rollback_records_failed",{name:error?.name||"Error"});}
+    }
+    if(uploadedPaths.length){
+      try{
+        const response=await fetch(storageBase+"/object/prolink-work-gallery",{method:"DELETE",headers:{apikey:config.serviceKey,authorization:"Bearer "+config.serviceKey,"content-type":"application/json"},body:JSON.stringify({prefixes:uploadedPaths})});
+        if(!response.ok)console.error("[prolink-gallery] rollback_files_failed",{status:response.status});
+      }catch(error){console.error("[prolink-gallery] rollback_files_failed",{name:error?.name||"Error"});}
+    }
+  }
+  try{
+    const existing=await supabaseRest(config,"/rest/v1/prolink_work_gallery?select=id&user_id=eq."+encodeURIComponent(userId)+"&limit=15");
+    if((existing?.length||0)+files.length>15)return json({error:"Your portfolio can contain up to 15 photos. Remove a photo before adding more."},400);
+    for(const file of files){
+      const safeName=String(file.name||"work-photo").replace(/[^a-zA-Z0-9._-]/g,"_").slice(-100)||"work-photo";
+      const path=userId+"/"+crypto.randomUUID()+"-"+safeName;
+      const encodedPath=path.split("/").map(encodeURIComponent).join("/");
+      const uploadResponse=await fetch(storageBase+"/object/prolink-work-gallery/"+encodedPath,{
+        method:"POST",
+        headers:{apikey:config.serviceKey,authorization:"Bearer "+config.serviceKey,"content-type":file.type,"x-upsert":"false"},
+        body:file
+      });
+      const uploadText=await uploadResponse.text();
+      let uploadData=null;try{uploadData=uploadText?JSON.parse(uploadText):null;}catch{}
+      if(!uploadResponse.ok)throw new Error(uploadData?.message||uploadData?.error||"Storage rejected the photo upload ("+uploadResponse.status+").");
+      uploadedPaths.push(path);
+      const inserted=await supabaseRest(config,"/rest/v1/prolink_work_gallery",{method:"POST",headers:{prefer:"return=representation"},body:JSON.stringify({user_id:userId,object_path:path,caption})});
+      const item=Array.isArray(inserted)?inserted[0]:null;
+      if(!item?.id)throw new Error("The photo was uploaded but its portfolio record could not be saved.");
+      savedIds.push(item.id);
+      const signedResponse=await fetch(storageBase+"/object/sign/prolink-work-gallery/"+encodedPath,{
+        method:"POST",
+        headers:{apikey:config.serviceKey,authorization:"Bearer "+config.serviceKey,"content-type":"application/json"},
+        body:JSON.stringify({expiresIn:3600})
+      });
+      const signedData=await signedResponse.json().catch(()=>({}));
+      if(!signedResponse.ok)throw new Error(signedData?.message||"The uploaded photo could not be prepared for display.");
+      const signed=signedData.signedURL||signedData.signedUrl||"";
+      if(!signed)throw new Error("The uploaded photo could not be prepared for display.");
+      savedItems.push({...item,url:signed.startsWith("http")?signed:config.url+"/storage/v1"+signed});
+    }
+    return json({items:savedItems,message:files.length+" work photo(s) uploaded successfully."});
+  }catch(error){
+    await rollback();
+    console.error("[prolink-gallery] upload_failed",{name:error?.name||"Error",message:String(error?.message||"").slice(0,180)});
+    return json({error:error?.message||"Photo upload failed. Please try again."},502);
+  }
+}
+
+
 const PROLINK_ADMIN_EMAIL = "ojepaamedu@gmail.com";
 
 function adminConfig(env) {
@@ -458,6 +527,7 @@ export default {
     if (url.pathname === "/api/admin/dashboard" && request.method === "GET") return adminDashboard(request, env);
     if (url.pathname === "/api/admin/review" && request.method === "POST") return adminReview(request, env);
     if (url.pathname === "/api/admin/document" && request.method === "GET") return adminDocument(request, env);
+    if (url.pathname === "/api/gallery/upload" && request.method === "POST") return galleryUpload(request, env);
 
     // National identity lookups are retired. Prolink now uses manual document review.
     if (url.pathname === "/api/identro-nin") {
