@@ -260,8 +260,8 @@
 /* Slim compact drawer: narrower than half the viewport with restrained surfaces. */
 @media (max-width:700px) {
   .app-menu.prolink-drawer {
-    width:min(44vw,290px);
-    max-width:44vw;
+    width:min(40vw,280px);
+    max-width:40vw;
     padding:10px 8px;
     background:#fbfcfb;
     border-radius:13px;
@@ -418,3 +418,10 @@ body,.app-shell,.prolink-home-screen{background:#eaf2fc}
 .contact-call{color:#145b9a;border-color:#b9d2ea;background:#f4f8fd}
 .contact-whatsapp{color:#287c58;border-color:#b8d9c7;background:#f3faf5}
 .contact-action strong{font-weight:800;letter-spacing:.1px}
+
+/* When the drawer is open, the page behind it is frozen; only the drawer scrolls. */
+body.prolink-menu-locked{position:fixed!important;overflow:hidden!important;width:100%!important;touch-action:none}
+@media(max-width:700px){
+  .menu-scrim{overscroll-behavior:contain;touch-action:pan-y}
+  .app-menu.prolink-drawer{overscroll-behavior:contain;touch-action:pan-y;-webkit-overflow-scrolling:touch}
+}
