@@ -79,6 +79,46 @@ function App() {
   const [directoryHasMore,setDirectoryHasMore] = useState(false);
   const [selectedGallery,setSelectedGallery] = useState([]);
   const [galleryLoading,setGalleryLoading] = useState(false);
+  const [galleryViewerOpen,setGalleryViewerOpen] = useState(false);
+  const [activeGalleryIndex,setActiveGalleryIndex] = useState(0);
+  const galleryViewerOpenRef=useRef(false);
+  galleryViewerOpenRef.current=galleryViewerOpen;
+  const galleryTouchStartX=useRef(null);
+  const openGalleryViewer=index=>{
+    if(!selectedGallery.length)return;
+    setActiveGalleryIndex(Math.max(0,Math.min(index,selectedGallery.length-1)));
+    if(!galleryViewerOpenRef.current){
+      const url=window.location.pathname+window.location.search+'#portfolio-gallery';
+      window.history.pushState({...window.history.state,prolinkGallery:true},'',url);
+    }
+    setGalleryViewerOpen(true);
+  };
+  const closeGalleryViewer=()=>{
+    if(window.history.state?.prolinkGallery)window.history.back();
+    else setGalleryViewerOpen(false);
+  };
+  const showGalleryPhoto=direction=>setActiveGalleryIndex(index=>(index+direction+selectedGallery.length)%selectedGallery.length);
+  useEffect(()=>{
+    const onPopState=()=>{if(galleryViewerOpenRef.current)setGalleryViewerOpen(false);};
+    const onKeyDown=event=>{
+      if(!galleryViewerOpenRef.current)return;
+      if(event.key==='Escape'||event.key==='Backspace'){event.preventDefault();closeGalleryViewer();}
+      else if(event.key==='ArrowLeft')setActiveGalleryIndex(index=>(index-1+selectedGallery.length)%selectedGallery.length);
+      else if(event.key==='ArrowRight')setActiveGalleryIndex(index=>(index+1)%selectedGallery.length);
+    };
+    window.addEventListener('popstate',onPopState);
+    window.addEventListener('keydown',onKeyDown);
+    return()=>{window.removeEventListener('popstate',onPopState);window.removeEventListener('keydown',onKeyDown);};
+  },[selectedGallery.length]);
+  useEffect(()=>{
+    if(!galleryViewerOpen)return;
+    const body=document.body;
+    const previous={overflow:body.style.overflow,touchAction:body.style.touchAction};
+    body.style.overflow='hidden';
+    body.style.touchAction='none';
+    return()=>{body.style.overflow=previous.overflow;body.style.touchAction=previous.touchAction;};
+  },[galleryViewerOpen]);
+
   const [myGallery,setMyGallery] = useState([]);
   const [galleryFiles,setGalleryFiles] = useState([]);
   const [galleryOptionsOpen,setGalleryOptionsOpen] = useState(false);
@@ -491,7 +531,7 @@ function App() {
             <div className="profile-stats"><div><b>{selected.jobs||'—'}</b><span>Completed jobs</span></div><div><b>{selected.years}</b><span>Experience</span></div><div><b>{selected.verified?'Approved':'Pending'}</b><span>Prolink review</span></div></div>
           </div>
           <section className="panel"><h2>About this professional</h2><p className="body-copy">{selected.about}</p><h3>Skills & services</h3><div className="skill-tags">{selected.skills.map(s=><span key={s}>{s}</span>)}</div></section>
-          <section className="panel"><div className="section-heading"><div><h2>Work gallery</h2><p>Photos shared by this professional</p></div><span className="muted-small">{selectedGallery.length} photos</span></div>{galleryLoading?<p>Loading portfolio photos…</p>:selectedGallery.length?<div className="gallery-grid">{selectedGallery.map(item=><a key={item.id} href={item.url} target="_blank" rel="noreferrer" className="gallery-photo-link"><img src={item.url} alt={item.caption||'Professional completed work'} loading="lazy"/>{item.caption&&<span>{item.caption}</span>}</a>)}</div>:<p className="body-copy">This professional has not added work photos yet.</p>}</section>
+          <section className="panel"><div className="section-heading"><div><h2>Work gallery</h2><p>Photos shared by this professional</p></div><span className="muted-small">{selectedGallery.length} photos</span></div>{galleryLoading?<p>Loading portfolio photos…</p>:selectedGallery.length?<><div className="gallery-grid public-gallery-grid">{selectedGallery.map((item,index)=><button type="button" key={item.id} className="gallery-photo-link public-gallery-photo" onClick={()=>openGalleryViewer(index)} aria-label={`Open photo ${index+1} of ${selectedGallery.length}`}><img src={item.url} alt={item.caption||'Professional completed work'} loading="lazy"/>{item.caption&&<span>{item.caption}</span>}</button>)}</div><p className="gallery-view-hint">Tap any photo to view the gallery · Swipe to browse</p></>:<p className="body-copy">This professional has not added work photos yet.</p>}</section>
           <section className="panel"><h2>Qualifications & verification</h2><div className="verification-list"><div><ShieldCheck/><span><b>Personal details &amp; working ID</b><small>Manually reviewed by the Prolink Admin team.</small></span><em className={selected.verified ? 'status-ok' : 'status-pending'}>{selected.verified ? 'Verified' : 'Not verified'}</em></div><div><Award/><span><b>Certificates & qualifications</b><small>Professional credentials can be reviewed on the profile.</small></span><em className="status-ok">Reviewed</em></div></div></section>
         </div>
         <aside className="profile-sidebar"><div className="contact-card"><span className="eyebrow">START A CONVERSATION</span><h2>Need help with a job?</h2><p>Contact {selected.name.split(' ')[0]} to discuss your project and agree on the next step.</p><div className="price-label">Indicative starting price</div><strong className="price">{selected.price}</strong><button className="primary-button full" onClick={() => startRequest(selected)}><MessageCircle size={17}/> Request a service</button>{selected.phone?<a className="outline-button full contact-action contact-call" href={`tel:${selected.phone.replace(/[^+0-9]/g,'')}`}><Phone size={23} strokeWidth={3}/> <strong>Call professional</strong></a>:<button className="outline-button full contact-action contact-call" onClick={()=>notify('This professional has not added a phone contact yet.')}><Phone size={23} strokeWidth={3}/> <strong>Phone not provided</strong></button>}{selected.whatsapp&&<button className="outline-button full contact-action contact-whatsapp" onClick={()=>{const number=selected.whatsapp.replace(/\D/g,'');if(number)window.open('https://wa.me/'+number,'_blank','noopener,noreferrer');else notify('WhatsApp number is not valid.');}}><MessageCircle size={23} strokeWidth={3}/> <strong>WhatsApp</strong></button>}<small className="safe-note"><ShieldCheck size={14}/> Keep your agreement clear before work begins.</small></div><div className="help-card"><ShieldCheck/><b>Book with confidence</b><p>Check profile details, discuss the scope and agree on price and timing before work starts.</p></div></aside>
@@ -605,6 +645,17 @@ function App() {
     </div></div>}
 
     {showRequest&&<div className="modal-backdrop" onClick={back}><div className="modal request-modal" onClick={e=>e.stopPropagation()}><button className="modal-back-arrow" onClick={back} aria-label="Go back one step"><ArrowLeft/></button><button className="modal-close" onClick={back}><X/></button>{requestSent?<div className="success-state"><span><Check/></span><h2>Request prepared</h2><p>Your service request is ready. Sign in will be required to send and track it.</p><button className="primary-button full" onClick={()=>{setShowRequest(false);openAuth();}}>Continue to sign in</button></div>:<><span className="eyebrow">SERVICE REQUEST</span><h2>Tell {selected?.name.split(' ')[0]} what you need</h2><p>Share a few details so the professional can understand your job.</p><label className="form-label">What do you need done?<textarea rows="4" placeholder="Describe the job, location and any important details..."/></label><label className="form-label">Preferred date<input type="date"/></label><label className="form-label">Job location<input placeholder="Enter the job address or area"/></label><button className="primary-button full" onClick={()=>setRequestSent(true)}>Review request <ArrowUpRight size={16}/></button><small className="legal-copy">No payment is collected in Bidx ProLink. Agree on price and terms directly with the professional.</small></>}</div></div>}
+
+
+    {galleryViewerOpen&&selectedGallery.length>0&&<div className="prolink-gallery-viewer" role="dialog" aria-modal="true" aria-label="Professional work photo gallery" onClick={closeGalleryViewer}>
+      <div className="gallery-viewer-topbar"><button type="button" className="gallery-viewer-control gallery-viewer-close" onClick={closeGalleryViewer} aria-label="Close gallery"><X size={25}/></button><span className="gallery-viewer-count">{activeGalleryIndex+1} <i>/</i> {selectedGallery.length}</span><span className="gallery-viewer-top-spacer"/></div>
+      <div className="gallery-viewer-stage" onClick={event=>event.stopPropagation()} onTouchStart={event=>{galleryTouchStartX.current=event.touches[0]?.clientX??null;}} onTouchEnd={event=>{if(galleryTouchStartX.current===null)return;const delta=event.changedTouches[0].clientX-galleryTouchStartX.current;galleryTouchStartX.current=null;if(Math.abs(delta)>45)showGalleryPhoto(delta<0?1:-1);}}>
+        {selectedGallery.length>1&&<button type="button" className="gallery-viewer-control gallery-viewer-arrow gallery-viewer-prev" onClick={()=>showGalleryPhoto(-1)} aria-label="Previous photo"><ChevronRight size={28}/></button>}
+        <img key={selectedGallery[activeGalleryIndex].id} className="gallery-viewer-image" src={selectedGallery[activeGalleryIndex].url} alt={selectedGallery[activeGalleryIndex].caption||`Professional work photo ${activeGalleryIndex+1}`} draggable="false"/>
+        {selectedGallery.length>1&&<button type="button" className="gallery-viewer-control gallery-viewer-arrow gallery-viewer-next" onClick={()=>showGalleryPhoto(1)} aria-label="Next photo"><ChevronRight size={28}/></button>}
+      </div>
+      <div className="gallery-viewer-footer">{selectedGallery[activeGalleryIndex].caption&&<p>{selectedGallery[activeGalleryIndex].caption}</p>}<span>Swipe left or right to explore</span></div>
+    </div>}
 
     {toast&&<div className="toast"><Check size={16}/>{toast}</div>}
   </div>;
