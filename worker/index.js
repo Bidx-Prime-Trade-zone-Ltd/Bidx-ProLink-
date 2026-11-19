@@ -204,7 +204,7 @@ async function passwordChangeConfirm(request,env) {
 async function galleryUpload(request,env){
   const auth=await signedInProfileUser(request,env);
   if(auth.error)return auth.error;
-  if(!env.R2)return json({error:"Cloudflare R2 is not connected. Check the Worker binding named R2."},503);
+  if(!env.MY_R2)return json({error:"Cloudflare MY_R2 is not connected. Check the Worker binding named MY_R2."},503);
   let form;
   try{form=await request.formData();}catch{return json({error:"The photo upload request could not be read. Please select the photos again."},400);}
   const files=form.getAll("files").filter(file=>file&&typeof file.arrayBuffer==="function"&&typeof file.size==="number");
@@ -220,7 +220,7 @@ async function galleryUpload(request,env){
   const uploadedKeys=[],savedIds=[],savedItems=[];
   async function rollback(){
     if(savedIds.length){try{await supabaseRest(config,"/rest/v1/prolink_work_gallery?id=in.("+savedIds.join(",")+")&user_id=eq."+encodeURIComponent(userId),{method:"DELETE"});}catch(error){console.error("[prolink-gallery] rollback_records_failed",{name:error?.name||"Error"});}}
-    if(uploadedKeys.length){try{await env.R2.delete(uploadedKeys);}catch(error){console.error("[prolink-gallery] rollback_r2_failed",{name:error?.name||"Error"});}}
+    if(uploadedKeys.length){try{await env.MY_R2.delete(uploadedKeys);}catch(error){console.error("[prolink-gallery] rollback_r2_failed",{name:error?.name||"Error"});}}
   }
   try{
     const existing=await supabaseRest(config,"/rest/v1/prolink_work_gallery?select=id&user_id=eq."+encodeURIComponent(userId)+"&limit=15");
@@ -228,7 +228,7 @@ async function galleryUpload(request,env){
     for(const file of files){
       const safeName=String(file.name||"work-photo").replace(/[^a-zA-Z0-9._-]/g,"_").slice(-100)||"work-photo";
       const key="portfolio/"+userId+"/"+crypto.randomUUID()+"-"+safeName;
-      await env.R2.put(key,await file.arrayBuffer(),{httpMetadata:{contentType:file.type,cacheControl:"public, max-age=31536000, immutable"}});
+      await env.MY_R2.put(key,await file.arrayBuffer(),{httpMetadata:{contentType:file.type,cacheControl:"public, max-age=31536000, immutable"}});
       uploadedKeys.push(key);
       const inserted=await supabaseRest(config,"/rest/v1/prolink_work_gallery",{method:"POST",headers:{prefer:"return=representation"},body:JSON.stringify({user_id:userId,object_path:key,caption})});
       const item=Array.isArray(inserted)?inserted[0]:null;
@@ -245,7 +245,7 @@ async function galleryUpload(request,env){
 }
 
 async function galleryPhoto(request,env){
-  if(!env.R2)return json({error:"Portfolio image storage is not configured."},503);
+  if(!env.MY_R2)return json({error:"Portfolio image storage is not configured."},503);
   const id=String(new URL(request.url).searchParams.get("id")||"").trim();
   if(!id)return json({error:"A portfolio photo ID is required."},400);
   const config=adminConfig(env);
@@ -265,7 +265,7 @@ async function galleryPhoto(request,env){
   }
   try{
     if(String(item.object_path||"").startsWith("portfolio/")){
-      const object=await env.R2.get(item.object_path);
+      const object=await env.MY_R2.get(item.object_path);
       if(!object)return json({error:"Portfolio image is not available in R2."},404);
       const headers=new Headers();
       object.writeHttpMetadata(headers);
@@ -299,8 +299,8 @@ async function galleryDelete(request,env){
     const item=Array.isArray(rows)?rows[0]:null;
     if(!item)return json({error:"Photo not found or you do not own it."},404);
     if(String(item.object_path||"").startsWith("portfolio/")){
-      if(!env.R2)return json({error:"R2 storage is not connected. The photo record was not deleted."},503);
-      await env.R2.delete(item.object_path);
+      if(!env.MY_R2)return json({error:"MY R2 storage is not connected. The photo record was not deleted."},503);
+      await env.MY_R2.delete(item.object_path);
     }else{
       const remove=await fetch(config.url+"/storage/v1/object/prolink-work-gallery",{method:"DELETE",headers:{apikey:config.serviceKey,authorization:"Bearer "+config.serviceKey,"content-type":"application/json"},body:JSON.stringify({prefixes:[item.object_path]})});
       if(!remove.ok)throw new Error("The stored photo could not be removed.");
@@ -316,7 +316,7 @@ async function galleryDelete(request,env){
 async function migratePortfolioBatch(request,env){
   const auth=await requireProlinkAdmin(request,env);
   if(auth.error)return auth.error;
-  if(!env.R2)return json({error:"Cloudflare R2 binding R2 is not connected."},503);
+  if(!env.MY_R2)return json({error:"Cloudflare R2 binding MY_R2 is not connected."},503);
   const url=new URL(request.url);
   const offset=Math.max(0,Number.parseInt(url.searchParams.get("offset")||"0",10)||0);
   const limit=Math.min(10,Math.max(1,Number.parseInt(url.searchParams.get("limit")||"10",10)||10));
@@ -333,9 +333,9 @@ async function migratePortfolioBatch(request,env){
         const contentType=source.headers.get("content-type")||"application/octet-stream";
         const extension=contentType==="image/png"?"png":contentType==="image/webp"?"webp":"jpg";
         const key="portfolio/"+item.user_id+"/"+crypto.randomUUID()+"."+extension;
-        await env.R2.put(key,await source.arrayBuffer(),{httpMetadata:{contentType,cacheControl:"public, max-age=31536000, immutable"}});
+        await env.MY_R2.put(key,await source.arrayBuffer(),{httpMetadata:{contentType,cacheControl:"public, max-age=31536000, immutable"}});
         try{await supabaseRest(config,"/rest/v1/prolink_work_gallery?id=eq."+encodeURIComponent(item.id),{method:"PATCH",body:JSON.stringify({object_path:key})});}
-        catch(updateError){await env.R2.delete(key);throw updateError;}
+        catch(updateError){await env.MY_R2.delete(key);throw updateError;}
         const removed=await fetch(config.url+"/storage/v1/object/prolink-work-gallery",{method:"DELETE",headers:{apikey:config.serviceKey,authorization:"Bearer "+config.serviceKey,"content-type":"application/json"},body:JSON.stringify({prefixes:[item.object_path]})});
         if(!removed.ok)console.error("[prolink-gallery] legacy_cleanup_pending",{id:item.id,status:removed.status});
         migrated++;
@@ -351,6 +351,42 @@ async function migratePortfolioBatch(request,env){
     return json({error:"Could not process this portfolio migration batch."},502);
   }
 }
+
+async function verificationDocumentUpload(request,env){
+  const auth=await signedInProfileUser(request,env);
+  if(auth.error)return auth.error;
+  if(!env.R2)return json({error:"Professional document storage is not connected. Check the Worker binding named R2."},503);
+  let form;
+  try{form=await request.formData();}catch{return json({error:"The document upload request could not be read. Please select the file again."},400);}
+  const file=form.get("file");
+  const type=String(form.get("document_type")||"");
+  const allowedTypes=new Set(["working_id","competency_certificate","additional_skill_document"]);
+  const allowedMime=new Set(["image/jpeg","image/png","image/webp","application/pdf"]);
+  if(!file||typeof file.arrayBuffer!=="function"||!allowedTypes.has(type))return json({error:"Choose a valid professional document."},400);
+  if(!allowedMime.has(file.type))return json({error:"Only JPEG, PNG, WebP and PDF documents are accepted."},400);
+  if(file.size<1||file.size>10485760)return json({error:"Each professional document must be no larger than 10 MB."},400);
+  const userId=auth.user.id;
+  const safeName=String(file.name||"professional-document").replace(/[^a-zA-Z0-9._-]/g,"_").slice(-100)||"professional-document";
+  const key="verification/"+userId+"/"+type+"-"+crypto.randomUUID()+"-"+safeName;
+  try{
+    await env.R2.put(key,await file.arrayBuffer(),{httpMetadata:{contentType:file.type,cacheControl:"private, no-store"}});
+    let record;
+    try{
+      const inserted=await supabaseRest(auth.config,"/rest/v1/prolink_review_records",{method:"POST",headers:{prefer:"return=representation"},body:JSON.stringify({
+        user_id:userId,section:"supporting_document",status:"pending",document_path:key,
+        submitted_data:{document_type:type,document_name:file.name,mime_type:file.type,country_code:String(form.get("country_code")||"").slice(0,3),storage_provider:"cloudflare_r2"}
+      })});
+      record=Array.isArray(inserted)?inserted[0]:null;
+      if(!record?.id)throw new Error("The document review record could not be saved.");
+    }catch(error){await env.R2.delete(key);throw error;}
+    return json({success:true,id:record.id,path:key,message:"Professional document submitted for manual review."});
+  }catch(error){
+    console.error("[prolink-documents] upload_failed",{name:error?.name||"Error",message:String(error?.message||"").slice(0,160)});
+    return json({error:error?.message||"Professional document upload failed."},502);
+  }
+}
+
+
 
 
 const PROLINK_ADMIN_EMAIL = "ojepaamedu@gmail.com";
@@ -497,6 +533,18 @@ async function adminDocument(request,env) {
   const url=new URL(request.url),path=url.searchParams.get("path")||"";
   if(!path||path.startsWith("/")||path.split("/").some(part=>part===".."||!part))return json({error:"Invalid document path."},400);
   try{
+    if(path.startsWith("verification/")){
+      if(!env.R2)return json({error:"Professional document R2 storage is not connected."},503);
+      const object=await env.R2.get(path);
+      if(!object)return json({error:"Professional document not found in R2."},404);
+      const headers=new Headers();
+      object.writeHttpMetadata(headers);
+      headers.set("content-type",object.httpMetadata?.contentType||"application/octet-stream");
+      headers.set("content-disposition","inline");
+      headers.set("cache-control","private, no-store");
+      headers.set("x-content-type-options","nosniff");
+      return new Response(object.body,{headers});
+    }
     const response=await fetch(auth.config.url+"/storage/v1/object/sign/prolink-verification-documents/"+path.split("/").map(encodeURIComponent).join("/") ,{
       method:"POST",headers:{apikey:auth.config.serviceKey,authorization:"Bearer "+auth.config.serviceKey,"content-type":"application/json"},
       body:JSON.stringify({expiresIn:300})
@@ -611,6 +659,7 @@ export default {
     if (url.pathname === "/api/admin/dashboard" && request.method === "GET") return adminDashboard(request, env);
     if (url.pathname === "/api/admin/review" && request.method === "POST") return adminReview(request, env);
     if (url.pathname === "/api/admin/document" && request.method === "GET") return adminDocument(request, env);
+    if (url.pathname === "/api/verification/document" && request.method === "POST") return verificationDocumentUpload(request, env);
     if (url.pathname === "/api/gallery/upload" && request.method === "POST") return galleryUpload(request, env);
     if (url.pathname === "/api/gallery/photo" && request.method === "GET") return galleryPhoto(request, env);
     if (url.pathname === "/api/gallery/delete" && request.method === "DELETE") return galleryDelete(request, env);
