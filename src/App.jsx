@@ -306,13 +306,44 @@ function App() {
     });
     return()=>{active=false;};
   },[tab,session?.user?.id]);
-  const filtered = useMemo(() => professionals.filter(p => {
-    const text = `${p.name} ${p.trade} ${p.city} ${p.skills.join(' ')} ${p.about}`.toLowerCase();
-    const matchesText = text.includes(query.toLowerCase());
-    const matchesCategory = activeCategory === 'All' || p.trade.toLowerCase().includes(activeCategory.toLowerCase()) || p.skills.join(' ').toLowerCase().includes(activeCategory.toLowerCase()) || (p.category||'').toLowerCase().includes(activeCategory.toLowerCase());
-    const matchesCity = location.trim() === '' || p.city.toLowerCase().includes(location.toLowerCase());
-    return matchesText && matchesCategory && matchesCity;
-  }), [professionals,query, activeCategory, location]);
+  const filtered = useMemo(() => {
+    const normalize = value => String(value || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    const detected = detectedLocation || {};
+    const typedLocation = normalize(location);
+    const targetArea = normalize(detected.localArea || detected.suburb || (typedLocation ? typedLocation.split(' ').slice(0, 3).join(' ') : ''));
+    const targetCity = normalize(detected.city);
+    const targetDistrict = normalize(detected.district);
+    const targetRegion = normalize(detected.region);
+    const targetCountry = normalize(detected.country);
+    const targetCountryCode = String(detected.countryCode || '').toUpperCase();
+    const ranked = professionals.map((professional, index) => {
+      const text = `${professional.name} ${professional.trade} ${professional.city} ${professional.skills.join(' ')} ${professional.about}`.toLowerCase();
+      const matchesText = text.includes(query.toLowerCase());
+      const matchesCategory = activeCategory === 'All' || professional.trade.toLowerCase().includes(activeCategory.toLowerCase()) || professional.skills.join(' ').toLowerCase().includes(activeCategory.toLowerCase()) || (professional.category||'').toLowerCase().includes(activeCategory.toLowerCase());
+      const area = normalize(professional.local_area);
+      const city = normalize(professional.city);
+      const district = normalize(professional.district);
+      const region = normalize(professional.region);
+      const country = normalize(professional.country_name);
+      const countryCode = String(professional.country_code || '').toUpperCase();
+      let proximity = 0;
+      if (targetArea && area && (area === targetArea || area.includes(targetArea) || targetArea.includes(area))) proximity = 600;
+      else if (targetCity && city && (city === targetCity || city.includes(targetCity) || targetCity.includes(city))) proximity = 500;
+      else if (targetDistrict && district && (district === targetDistrict || district.includes(targetDistrict) || targetDistrict.includes(district))) proximity = 400;
+      else if (targetRegion && region && (region === targetRegion || region.includes(targetRegion) || targetRegion.includes(region))) proximity = 300;
+      else if (targetCountryCode && countryCode === targetCountryCode) proximity = 200;
+      else if (targetCountry && country && (country === targetCountry || country.includes(targetCountry) || targetCountry.includes(country))) proximity = 200;
+      else if (typedLocation) {
+        const locationFields = [professional.local_area, professional.city, professional.district, professional.region, professional.country_name].map(normalize);
+        const matchIndex = locationFields.findIndex(value => value && (value === typedLocation || value.includes(typedLocation) || typedLocation.includes(value)));
+        proximity = matchIndex < 0 ? 0 : Math.max(100, 550 - matchIndex * 100);
+      }
+      return { professional, index, proximity, matchesText, matchesCategory };
+    });
+    return ranked.filter(item => item.matchesText && item.matchesCategory)
+      .sort((a, b) => b.proximity - a.proximity || a.index - b.index)
+      .map(item => item.professional);
+  }, [professionals, query, activeCategory, location, detectedLocation]);
 
   const notify = (message) => { setToast(message); window.setTimeout(() => setToast(''), 2600); };
   const toggleSave = (id) => setSaved(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
