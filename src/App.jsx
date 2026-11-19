@@ -1,4 +1,47 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+
+
+const PROFESSIONAL_CREDENTIAL_GUIDANCE = {
+  NGA:"Nigeria: Trade Test Certificate (Grade I, II or III), recognised technical-college or apprenticeship certificate, National Skills Qualification (NSQ) or relevant competence certificate.",
+  GHA:"Ghana: NVTI Trade Test Certificate, CTVET National Proficiency or National Certificate, or another recognised trade/TVET qualification.",
+  KEN:"Kenya: NITA Trade Test Certificate, recognised TVET/CBET qualification or artisan certificate relevant to your trade.",
+  UGA:"Uganda: DIT Uganda Vocational Qualification (UVQF), recognised vocational/trade-test award or relevant technical certificate.",
+  TZA:"Tanzania: VETA vocational award/National Vocational Award (NVA), trade assessment certificate or relevant technical qualification.",
+  RWA:"Rwanda: RTB/TVET occupational qualification, recognised vocational competence certificate or relevant trade certificate.",
+  ZAF:"South Africa: QCTO occupational qualification or trade certificate, recognised apprenticeship completion or relevant professional certificate.",
+  ZMB:"Zambia: TEVETA-accredited craft, technician or vocational qualification, trade certificate or competence award.",
+  ZWE:"Zimbabwe: HEXCO National Certificate, recognised apprenticeship/trade-test certificate or relevant technical qualification.",
+  BWA:"Botswana: BQA-registered vocational qualification, recognised trade-test certificate or relevant technical award.",
+  NAM:"Namibia: NTA-accredited vocational qualification, recognised trade-test certificate or relevant technical award.",
+  MWI:"Malawi: TEVETA-recognised vocational qualification, trade-test certificate or relevant technical/competence certificate.",
+  SLE:"Sierra Leone: recognised NCTVA/TVET vocational award, trade-test certificate or relevant technical qualification.",
+  LBR:"Liberia: recognised TVET or apprenticeship completion certificate, trade-test/competence award or relevant technical qualification.",
+  GMB:"The Gambia: recognised TVET or apprenticeship certificate, trade-test/competence award or relevant technical qualification.",
+  LSO:"Lesotho: recognised vocational/technical qualification, trade-test certificate or apprenticeship completion award.",
+  SWZ:"Eswatini: recognised vocational qualification, trade-test certificate or relevant technical/competence award.",
+  MUS:"Mauritius: MITD vocational qualification, recognised trade certificate or relevant professional competence award.",
+  SYC:"Seychelles: Seychelles Institute of Technology or other recognised TVET qualification, trade certificate or competence award.",
+  CMR:"Cameroon: relevant vocational/professional qualification such as DQP or CQP, recognised trade certificate or technical diploma.",
+  SSD:"South Sudan: recognised vocational training, apprenticeship completion or trade/competence certificate.",
+  GBR:"United Kingdom: relevant NVQ/SVQ, apprenticeship certificate, recognised trade qualification or current industry registration/licence where applicable.",
+  IRL:"Ireland: relevant QQI award, SOLAS/apprenticeship qualification, recognised trade certificate or industry registration where applicable.",
+  MLT:"Malta: MCAST or other recognised vocational qualification, trade certificate or relevant occupational award.",
+  USA:"United States: relevant state/provincial occupational licence where required, apprenticeship completion, recognised trade certificate or industry certification.",
+  CAN:"Canada: provincial/territorial Certificate of Qualification, Red Seal endorsement where applicable, apprenticeship completion or relevant trade certification.",
+  JAM:"Jamaica: NCTVET NVQ-J/CVQ, recognised HEART/NSTA Trust qualification or relevant trade certificate.",
+  TTO:"Trinidad and Tobago: National Training Agency CVQ/NVQ, recognised apprenticeship or relevant trade qualification.",
+  BRB:"Barbados: TVET Council NVQ/CVQ, recognised apprenticeship completion or relevant occupational certificate.",
+  AUS:"Australia: relevant AQF Certificate III/IV, trade qualification, apprenticeship completion or state/territory licence where required.",
+  NZL:"New Zealand: NZQA-recognised qualification, New Zealand Certificate in a relevant trade, apprenticeship completion or occupational registration where required.",
+  SGP:"Singapore: relevant WSQ qualification, recognised trade/technical certificate or occupational licence where applicable.",
+  PHL:"Philippines: TESDA National Certificate (NC I–IV), Certificate of Competency (COC) or relevant professional licence where required.",
+  IND:"India: NCVT/SCVT ITI certificate, NSQF-aligned skill qualification, apprenticeship certificate or relevant professional registration.",
+  PAK:"Pakistan: NAVTTC or provincial TEVTA vocational qualification, trade-test certificate or recognised apprenticeship award.",
+  BGD:"Bangladesh: BTEB/NSDA-recognised skills qualification, National Skills Certificate or relevant trade certificate.",
+  FJI:"Fiji: recognised TVET qualification, Fiji National University trade certificate or relevant occupational competence award.",
+  PNG:"Papua New Guinea: National Training Council-recognised TVET qualification, trade-test certificate or apprenticeship award."
+};
+const getProfessionalCredentialGuidance = iso3 => PROFESSIONAL_CREDENTIAL_GUIDANCE[iso3] || "Upload a recognised qualification or competence certificate issued by an accredited training provider, trade-testing body, professional association, employer apprenticeship programme or relevant authority in your country. If your trade has no formal certificate, provide the strongest available evidence of training and practical competence for manual review.";
 import AuthModal from './AuthModal.jsx';
 import { TermsContent, PrivacyContent, ProfessionalPolicyContent } from './LegalPages.jsx';
 import { PROFESSION_GROUPS, ALL_PROFESSIONS } from './professions.js';
@@ -510,7 +553,7 @@ function App() {
         <label className="form-label">Years of experience *<select value={joinData.experience} onChange={e=>setJoinData(p=>({...p,experience:e.target.value}))}><option value="">Select experience</option><option>Less than 1 year</option><option>1–2 years</option><option>3–5 years</option><option>6–10 years</option><option>More than 10 years</option></select></label>
         <label className="form-label wide-field">Skills and services offered *<textarea rows="3" value={joinData.skills} onChange={e=>setJoinData(p=>({...p,skills:e.target.value}))} placeholder="List the services and skills you provide"/></label>
         <label className="form-label wide-field">About your professional work<textarea rows="3" value={joinData.about} onChange={e=>setJoinData(p=>({...p,about:e.target.value}))} placeholder="Describe your experience and work"/></label>
-        <div className="document-required wide-field"><b>Competency / trade-test / skills certificate *</b><small>Upload a certificate of competency, trade-test certificate, apprenticeship completion certificate, professional qualification or another relevant document proving your skills. This is reviewed manually by Prolink Admin.</small><input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" capture="environment" onChange={e=>setCompetencyFile(e.target.files?.[0]||null)}/>{competencyFile&&<small>Selected: {competencyFile.name}</small>}</div>
+        <div className="document-required wide-field"><b>Competency / trade-test / skills certificate *</b><small>Upload a certificate of competency, trade-test certificate, apprenticeship completion certificate, professional qualification or another relevant document proving your skills. This is reviewed manually by Prolink Admin.</small><small className="country-document-guidance">{getProfessionalCredentialGuidance(joinData.country_iso3)}</small><input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" capture="environment" onChange={e=>setCompetencyFile(e.target.files?.[0]||null)}/>{competencyFile&&<small>Selected: {competencyFile.name}</small>}</div>
         <div className="document-required wide-field"><b>Additional skills document (optional)</b><small>Upload another certificate, licence or supporting document if applicable.</small><input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" capture="environment" onChange={e=>setExtraSkillFile(e.target.files?.[0]||null)}/>{extraSkillFile&&<small>Selected: {extraSkillFile.name}</small>}</div>
         <label className="form-label">Business phone<input type="tel" inputMode="numeric" value={joinData.business_phone||''} onChange={e=>setJoinData(p=>({...p,business_phone:e.target.value.replace(/\D/g,'').slice(0,15)}))} placeholder="Business contact number"/></label>
         <label className="form-label">Business email<input type="email" value={joinData.business_email||''} onChange={e=>setJoinData(p=>({...p,business_email:e.target.value}))} placeholder="Separate business email (optional)"/></label>
