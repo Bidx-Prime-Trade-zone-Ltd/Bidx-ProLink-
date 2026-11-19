@@ -125,7 +125,48 @@ function App() {
   const [tab, setTab] = useState('Explore');
   const [query, setQuery] = useState('');
   const [location, setLocation] = useState('');
+  const [locationBusy, setLocationBusy] = useState(false);
+  const [locationStatus, setLocationStatus] = useState('');
+  const [detectedLocation, setDetectedLocation] = useState(null);
   const [activeCategory, setActiveCategory] = useState('All');
+  const detectMyLocation = () => {
+    if (!navigator.geolocation) {
+      setLocationStatus("Location is not supported on this device. Enter your city manually.");
+      return;
+    }
+    setLocationBusy(true);
+    setLocationStatus("Finding your location…");
+    navigator.geolocation.getCurrentPosition(async position => {
+      try {
+        const params = new URLSearchParams({
+          lat: String(position.coords.latitude),
+          lon: String(position.coords.longitude)
+        });
+        const response = await fetch("/api/location/reverse?" + params.toString());
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "We could not identify your location.");
+        setDetectedLocation(result);
+        setLocation(result.displayName);
+        setLocationStatus("Your current location");
+      } catch (error) {
+        setLocationStatus(error.message || "Location lookup failed. Enter your city manually.");
+      } finally {
+        setLocationBusy(false);
+      }
+    }, error => {
+      const message = error.code === 1
+        ? "Location permission was denied. Enter your city or allow location access in your browser settings."
+        : error.code === 3
+          ? "Location request timed out. Try again or enter your city manually."
+          : "Your location is unavailable. Enter your city manually.";
+      setLocationStatus(message);
+      setLocationBusy(false);
+    }, { enableHighAccuracy: false, timeout: 12000, maximumAge: 300000 });
+  };
+  useEffect(() => {
+    if (tab === "Explore" && !detectedLocation && !locationBusy && !locationStatus) detectMyLocation();
+  }, [tab]);
+
   const [selected, setSelected] = useState(null);
   const [saved, setSaved] = useState([]);
   const [showAuth, setShowAuth] = useState(false);
@@ -341,7 +382,11 @@ function App() {
           <div className="prolink-search-row">
             <label className="prolink-search-input"><Search size={19}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search for a service..."/></label>
           </div>
-          <label className="prolink-area-input"><MapPin size={16}/><input value={location} onChange={e=>setLocation(e.target.value)} placeholder="Enter a city or local area"/></label>
+          <label className="prolink-area-input"><MapPin size={16}/><input value={location} onChange={e=>{setLocation(e.target.value);setDetectedLocation(null);setLocationStatus("Location filter");}} placeholder="City or local area"/></label>
+          <div className="prolink-location-status" role="status" aria-live="polite">
+            <span>{locationBusy ? "Finding your location…" : locationStatus || (location ? "Location filter" : "Use your current location to find professionals nearby")}</span>
+            <button type="button" className="text-button" onClick={detectMyLocation} disabled={locationBusy}>{locationBusy ? "Locating…" : detectedLocation ? "Refresh location" : "Use my location"}</button>
+          </div>
           <button className="prolink-search-button" onClick={()=>notify(query.trim() ? 'Search is ready.' : 'Enter a service to search.')}>Search</button>
         </div>
       </section>
