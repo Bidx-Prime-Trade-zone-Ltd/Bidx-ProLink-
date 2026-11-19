@@ -381,3 +381,13 @@
   .prolink-directory-card .skill-tags span{font-size:9px;padding:4px 6px}
   .prolink-directory-card>.outline-button.full{font-size:10px;padding:9px 5px}
 }
+
+/* Portrait picker: reveal clearly labelled camera and gallery choices only after tapping the main control. */
+.portrait-picker-actions{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:9px;margin:8px 0 12px}
+.portrait-action-trigger{font-weight:700;min-height:46px;padding:10px 14px;font-size:13px}
+.portrait-picker-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;width:min(100%,390px);padding:11px;border:1px solid #dce8df;border-radius:12px;background:#fff;box-shadow:0 8px 22px rgba(22,62,40,.10)}
+.portrait-picker-options .portrait-action-icon{min-height:88px;width:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;padding:12px 8px;border:1px solid #dce8df;border-radius:10px;background:#f7fbf8;color:#205b43;font-size:12px;font-weight:750;text-align:center}
+.portrait-picker-options .portrait-action-icon svg{width:25px;height:25px;stroke-width:2.8}
+.portrait-picker-options .portrait-action-icon input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}
+.portrait-picker-options .portrait-action-icon:has(input:focus-visible){outline:2px solid #267b53;outline-offset:2px}
+@media(max-width:420px){.portrait-picker-options{width:100%;gap:8px;padding:8px}.portrait-picker-options .portrait-action-icon{min-height:82px;font-size:11px}}
