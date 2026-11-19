@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase, supabaseConfigError } from './lib/supabase.js';
-import { LoaderCircle, CheckCircle2, Eye, EyeOff } from 'lucide-react';
+import { LoaderCircle, CheckCircle2, Eye, EyeOff, ArrowLeft } from 'lucide-react';
 
 export default function AuthModal({ onClose }) {
   const [mode,setMode]=useState('Sign in');
@@ -67,6 +67,7 @@ export default function AuthModal({ onClose }) {
   const signedIn=Boolean(session?.user);
   return <div className="modal-backdrop auth-progress-backdrop">
     <div className="modal auth-modal" onClick={e=>e.stopPropagation()}>
+      <button type="button" className="modal-back-arrow" onClick={onClose} aria-label="Go back one step"><ArrowLeft/></button>
       <div className="brand-mark"><span className="brand-symbol">B</span><span>Bidx <b>ProLink</b><small>SKILLED PEOPLE. QUALITY WORK.</small></span></div>
       <h2>{signedIn?'Opening your account…':recovery?'Reset your password':mode+' to Bidx ProLink'}</h2>
       <p>{signedIn?'Your sign-in is complete. Taking you into ProLink now.':'Sign in or create an account to continue.'}</p>
