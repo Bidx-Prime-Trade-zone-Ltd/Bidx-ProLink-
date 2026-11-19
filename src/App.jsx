@@ -84,10 +84,13 @@ function App() {
         const city=[row.local_area,row.city,row.district,row.region,row.country_name].filter(Boolean).join(', ');
         return {...row,id:row.user_id,name,trade:row.subcategory||row.category||'Skilled professional',city:city||row.country_name||'Location not provided',rating:'New',reviews:0,jobs:0,verified:true,price:'Request quote',initials,color:'avatar-green',skills:Array.isArray(row.skills)?row.skills:[],about:row.about||'Contact this professional to learn more about their services.',years:row.experience||'Experience not specified',phone:row.business_phone||'',whatsapp:row.whatsapp||''};
       });
+      const {data:portraitRows}=await supabase.from('prolink_profile_media').select('user_id,portrait_path').in('user_id',rows.map(row=>row.id));
+      const portraitEntries=await Promise.all((portraitRows||[]).map(async item=>{const {data:signed}=await supabase.storage.from('prolink-profile-portraits').createSignedUrl(item.portrait_path,3600);return [item.user_id,signed?.signedUrl||''];}));
+      const publicPortraits=Object.fromEntries(portraitEntries.filter(entry=>entry[1]));
       const viewerCountry=String(session?.user?.user_metadata?.country_code||profile.country_code||'').toUpperCase();
       const viewerRegion=String(session?.user?.user_metadata?.region||profile.region||'').toLowerCase();
       const viewerCity=String(session?.user?.user_metadata?.city||profile.city||'').toLowerCase();
-      const ranked=rows.map((row,index)=>({row:{...row,portraitUrl:portraitUrls[row.id]||''},index,score:(viewerCountry&&String(row.country_code||'').toUpperCase()===viewerCountry?100:0)+(viewerRegion&&String(row.region||'').toLowerCase()===viewerRegion?25:0)+(viewerCity&&String(row.city||'').toLowerCase()===viewerCity?35:0)})).sort((x,y)=>y.score-x.score||x.index-y.index).map(x=>x.row);
+      const ranked=rows.map((row,index)=>({row:{...row,portraitUrl:publicPortraits[row.id]||''},index,score:(viewerCountry&&String(row.country_code||'').toUpperCase()===viewerCountry?100:0)+(viewerRegion&&String(row.region||'').toLowerCase()===viewerRegion?25:0)+(viewerCity&&String(row.city||'').toLowerCase()===viewerCity?35:0)})).sort((x,y)=>y.score-x.score||x.index-y.index).map(x=>x.row);
       setProfessionals(previous=>append?[...previous,...ranked]:ranked);
       setDirectoryHasMore((data||[]).length===50);
     }
