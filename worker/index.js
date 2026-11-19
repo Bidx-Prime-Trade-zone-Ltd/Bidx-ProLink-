@@ -808,8 +808,7 @@ async function supportAiReply(env,context,history,message){
   if(!env.AI||typeof env.AI.run!=="function")return "I’m sorry, my AI service is not connected at the moment. Your message is saved in this support conversation. You can request a human Admin, and I’ll be available again when the AI service is restored.";
   const messages=[
     {role:"system",content:prolinkSupportSystemPrompt(context)},
-    ...history.filter(item=>["user","ai","admin"].includes(item.sender_role)).slice(-12).map(item=>({role:item.sender_role==="ai"?"assistant":item.sender_role==="admin"?"assistant":"user",content:String(item.content||"").slice(0,2500)})),
-    {role:"user",content:String(message||"").slice(0,4000)}
+    ...history.filter(item=>["user","ai","admin"].includes(item.sender_role)).slice(-12).map(item=>({role:item.sender_role==="ai"?"assistant":item.sender_role==="admin"?"assistant":"user",content:String(item.content||"").slice(0,2500)}))
   ];
   const result=await env.AI.run(PROLINK_SUPPORT_TEXT_MODEL,{messages,max_tokens:650,temperature:0.35});
   return String(result?.response||result?.result||result?.output_text||"I’m here to help. Could you tell me a little more?").trim().slice(0,7000);
@@ -818,7 +817,11 @@ async function supportMessages(request,env){
   const auth=await signedInProfileUser(request,env);if(auth.error)return auth.error;
   try{
     const conversation=await supportConversation(auth.config,auth.user.id);
-    const messages=await supabaseRest(auth.config,"/rest/v1/prolink_support_messages?select=id,sender_role,content,attachments,pinned_for_admin,created_at&conversation_id=eq."+encodeURIComponent(conversation.id)+"&order=created_at.asc&limit=150");
+    let messages=await supabaseRest(auth.config,"/rest/v1/prolink_support_messages?select=id,sender_role,content,attachments,pinned_for_admin,created_at&conversation_id=eq."+encodeURIComponent(conversation.id)+"&order=created_at.asc&limit=150");
+    if(!messages?.length){
+      await supportInsertMessage(auth.config,conversation.id,"ai",supportTimeGreeting("Africa/Lagos")+", "+supportName(auth.user)+". Welcome to Bidx ProLink Support. I’m your AI assistant. I can help you navigate the app, understand professional registration and membership, check your account information, and connect you with a human Admin when needed.");
+      messages=await supabaseRest(auth.config,"/rest/v1/prolink_support_messages?select=id,sender_role,content,attachments,pinned_for_admin,created_at&conversation_id=eq."+encodeURIComponent(conversation.id)+"&order=created_at.asc&limit=150");
+    }
     return json({conversation,messages:messages||[]});
   }catch(error){console.error("[prolink-support] load_failed",{name:error?.name||"Error"});return json({error:"Your support conversation could not be loaded. Please try again."},502);}
 }
@@ -887,6 +890,20 @@ async function supportAttachment(request,env){
     return json({success:true,messages:[saved,ai].filter(Boolean)});
   }catch(error){console.error("[prolink-support] attachment_failed",{name:error?.name||"Error",message:String(error?.message||"").slice(0,160)});return json({error:"Your attachment could not be saved. Please try again."},502);}
 }
+async function supportUserAttachment(request,env){
+  const auth=await signedInProfileUser(request,env);if(auth.error)return auth.error;
+  if(!env.R2)return json({error:"Support file storage is unavailable."},503);
+  const path=String(new URL(request.url).searchParams.get("path")||"");
+  if(!path.startsWith("support/"+auth.user.id+"/"))return json({error:"Attachment not found."},404);
+  try{
+    const rows=await supabaseRest(auth.config,"/rest/v1/prolink_support_messages?select=attachments&limit=2000");
+    const allowed=(rows||[]).some(m=>(m.attachments||[]).some(a=>a.path===path));
+    if(!allowed)return json({error:"Attachment not found."},404);
+    const object=await env.R2.get(path);if(!object)return json({error:"The attachment is no longer available."},404);
+    return new Response(object.body,{headers:{"content-type":object.httpMetadata?.contentType||"application/octet-stream","content-disposition":"inline","cache-control":"private, no-store","x-content-type-options":"nosniff"}});
+  }catch(error){return json({error:"Could not open this attachment."},502);}
+}
+
 async function adminSupportInbox(request,env){
   const auth=await requireProlinkAdmin(request,env);if(auth.error)return auth.error;
   try{
@@ -907,7 +924,7 @@ async function adminSupportMessages(request,env){
   const id=String(new URL(request.url).searchParams.get("conversationId")||"");
   if(!id)return json({error:"Select a support conversation."},400);
   try{
-    const rows=await supabaseRest(auth.config,"/rest/v1/prolink_support_conversations?select=id,user_id,status& id=eq."+encodeURIComponent(id)+"&limit=1".replace("?select=id,user_id,status& id","?select=id,user_id,status&id"));
+    const rows=await supabaseRest(auth.config,"/rest/v1/prolink_support_conversations?select=id,user_id,status&id=eq."+encodeURIComponent(id)+"&limit=1");
     if(!rows?.[0])return json({error:"Support conversation not found."},404);
     const messages=await supabaseRest(auth.config,"/rest/v1/prolink_support_messages?select=*&conversation_id=eq."+encodeURIComponent(id)+"&order=created_at.asc&limit=300");
     return json({conversation:rows[0],messages:messages||[]});
@@ -967,6 +984,7 @@ export default {
     if (url.pathname === "/api/support/message" && request.method === "POST") return supportSend(request, env);
     if (url.pathname === "/api/support/request-admin" && request.method === "POST") return supportRequestAdmin(request, env);
     if (url.pathname === "/api/support/attachment" && request.method === "POST") return supportAttachment(request, env);
+    if (url.pathname === "/api/support/attachment" && request.method === "GET") return supportUserAttachment(request, env);
     if (url.pathname === "/api/admin/support/inbox" && request.method === "GET") return adminSupportInbox(request, env);
     if (url.pathname === "/api/admin/support/messages" && request.method === "GET") return adminSupportMessages(request, env);
     if (url.pathname === "/api/admin/support/action" && request.method === "POST") return adminSupportAction(request, env);
