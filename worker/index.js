@@ -397,7 +397,9 @@ async function subscriptionCallback(request,env) {
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
-    if (url.pathname === "/api/subscription/checkout" && request.method === "POST") return subscriptionStart(request, env);\n    if (url.pathname === "/api/subscription/callback" && request.method === "GET") return subscriptionCallback(request, env);\n    if (url.pathname === "/api/auth/password-change" && request.method === "POST") return passwordChangeStart(request, env);
+    if (url.pathname === "/api/subscription/checkout" && request.method === "POST") return subscriptionStart(request, env);
+    if (url.pathname === "/api/subscription/callback" && request.method === "GET") return subscriptionCallback(request, env);
+    if (url.pathname === "/api/auth/password-change" && request.method === "POST") return passwordChangeStart(request, env);
     if (url.pathname === "/api/auth/password-change/confirm" && request.method === "GET") return passwordChangeConfirm(request, env);
     if (url.pathname === "/api/geography" && request.method === "GET") return geography(request, ctx);
     if (url.pathname === "/api/profile/change-status" && request.method === "GET") return profileChangeStatus(request, env);
