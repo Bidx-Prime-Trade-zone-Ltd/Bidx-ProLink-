@@ -431,3 +431,10 @@ body.prolink-menu-locked{position:fixed!important;overflow:hidden!important;widt
 .app-back-button svg{width:17px;height:17px;stroke-width:2}
 
 .brand-logo-image{display:block;object-fit:cover;background:#fff;border:1px solid #dbe7f5;border-radius:11px;}
+
+
+/* Automatic global location display */
+.prolink-location-status{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:7px 0 0;padding:0 2px;color:#64748b;font-size:11px;line-height:1.4}
+.prolink-location-status button{flex:0 0 auto;color:#1769b2;font-size:11px;font-weight:750;padding:4px 0}
+.prolink-location-status button:disabled{opacity:.55;cursor:wait}
+@media(max-width:480px){.prolink-location-status{align-items:flex-start;font-size:10px}.prolink-location-status button{font-size:10px}}
