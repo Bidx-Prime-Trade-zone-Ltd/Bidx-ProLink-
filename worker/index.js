@@ -591,7 +591,16 @@ async function adminDocument(request,env) {
     const data=await response.json();
     if(!response.ok)throw new Error(data?.message||"Document preview unavailable.");
     const signed=data.signedURL||data.signedUrl||"";
-    return json({url:signed.startsWith("http")?signed:auth.config.url+"/storage/v1"+signed});
+    if(!signed)throw new Error("Document preview URL was not returned.");
+    const signedUrl=signed.startsWith("http")?signed:auth.config.url+"/storage/v1"+signed;
+    const legacyDocument=await fetch(signedUrl);
+    if(!legacyDocument.ok)throw new Error("Legacy document preview could not be retrieved.");
+    const headers=new Headers();
+    headers.set("content-type",legacyDocument.headers.get("content-type")||"application/octet-stream");
+    headers.set("content-disposition","inline");
+    headers.set("cache-control","private, no-store");
+    headers.set("x-content-type-options","nosniff");
+    return new Response(legacyDocument.body,{headers});
   }catch(error){return json({error:error?.message||"Document preview unavailable."},502);}
 }
 
