@@ -105,7 +105,7 @@ function App() {
         const name=row.professional_name||row.full_name||'Prolink professional';
         const initials=name.split(/\s+/).slice(0,2).map(part=>part[0]||'').join('').toUpperCase()||'P';
         const city=[row.local_area,row.city,row.district,row.region,row.country_name].filter(Boolean).join(', ');
-        return {...row,id:row.user_id,name,trade:row.subcategory||row.category||'Skilled professional',city:city||row.country_name||'Location not provided',rating:'New',reviews:0,jobs:0,verified:true,price:'Request quote',initials,color:'avatar-green',skills:Array.isArray(row.skills)?row.skills:[],about:row.about||'Contact this professional to learn more about their services.',years:row.experience||'Experience not specified',phone:row.business_phone||'',whatsapp:row.whatsapp||''};
+        return {...row,id:row.user_id,name,city_name:row.city||'',trade:row.subcategory||row.category||'Skilled professional',city:city||row.country_name||'Location not provided',rating:'New',reviews:0,jobs:0,verified:true,price:'Request quote',initials,color:'avatar-green',skills:Array.isArray(row.skills)?row.skills:[],about:row.about||'Contact this professional to learn more about their services.',years:row.experience||'Experience not specified',phone:row.business_phone||'',whatsapp:row.whatsapp||''};
       });
       const {data:portraitRows}=await supabase.from('prolink_profile_media').select('user_id,portrait_path').in('user_id',rows.map(row=>row.id));
       const portraitEntries=await Promise.all((portraitRows||[]).map(async item=>{const {data:signed}=await supabase.storage.from('prolink-profile-portraits').createSignedUrl(item.portrait_path,3600);return [item.user_id,signed?.signedUrl||''];}));
@@ -307,7 +307,7 @@ function App() {
     return()=>{active=false;};
   },[tab,session?.user?.id]);
   const filtered = useMemo(() => {
-    const normalize = value => String(value || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    const normalize = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
     const detected = detectedLocation || {};
     const typedLocation = normalize(location);
     const targetArea = normalize(detected.localArea || detected.suburb || (typedLocation ? typedLocation.split(' ').slice(0, 3).join(' ') : ''));
@@ -321,7 +321,7 @@ function App() {
       const matchesText = text.includes(query.toLowerCase());
       const matchesCategory = activeCategory === 'All' || professional.trade.toLowerCase().includes(activeCategory.toLowerCase()) || professional.skills.join(' ').toLowerCase().includes(activeCategory.toLowerCase()) || (professional.category||'').toLowerCase().includes(activeCategory.toLowerCase());
       const area = normalize(professional.local_area);
-      const city = normalize(professional.city);
+      const city = normalize(professional.city_name || professional.city);
       const district = normalize(professional.district);
       const region = normalize(professional.region);
       const country = normalize(professional.country_name);
