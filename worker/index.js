@@ -876,11 +876,16 @@ ${JSON.stringify(context)}`;
 }
 async function supportAiReply(env,context,history,message){
   if(!env.AI||typeof env.AI.run!=="function")return "I’m sorry, my AI service is not connected at the moment. Your message is saved in this support conversation. You can request a human Admin, and I’ll be available again when the AI service is restored.";
+  const latestUserMessage=String(message||"").trim();
+  const broadRequest=/\b(everything|full overview|tell me about (the )?(business|app)|explain.*(app|business)|how does .* work)\b/i.test(latestUserMessage);
+  // Keep routine replies compact for faster generation while preserving room
+  // for the structured explanations users request.
+  const maxTokens=broadRequest?850:latestUserMessage.length<90?320:560;
   const messages=[
     {role:"system",content:prolinkSupportSystemPrompt(context)},
-    ...history.filter(item=>["user","ai","admin"].includes(item.sender_role)).slice(-12).map(item=>({role:item.sender_role==="ai"?"assistant":item.sender_role==="admin"?"assistant":"user",content:String(item.content||"").slice(0,2500)}))
+    ...history.filter(item=>["user","ai","admin"].includes(item.sender_role)).slice(-8).map(item=>({role:item.sender_role==="ai"?"assistant":item.sender_role==="admin"?"assistant":"user",content:String(item.content||"").slice(0,1200)}))
   ];
-  const result=await env.AI.run(PROLINK_SUPPORT_TEXT_MODEL,{messages,max_tokens:1100,temperature:0.2});
+  const result=await env.AI.run(PROLINK_SUPPORT_TEXT_MODEL,{messages,max_tokens:maxTokens,temperature:0.15});
   const generated=result?.response||result?.result||result?.output_text||result?.choices?.[0]?.message?.content||result?.message?.content||"";
   const text=Array.isArray(generated)?generated.map(part=>typeof part==="string"?part:part?.text||"").join("\n"):String(generated||"");
   return text.trim().slice(0,7000)||"I’m here to help. Could you tell me a little more?";
@@ -912,10 +917,14 @@ async function supportSend(request,env){
     await supportInsertMessage(auth.config,conversation.id,"user",message,{senderUserId:auth.user.id});
     if(conversation.status==="admin_attending")return json({conversation:{...conversation,last_message_at:new Date().toISOString()},messages:[],awaitingAdmin:true});
     const greeting=supportGreetingReply(message,supportName(auth.user),timeZone);
-    const context=await supportAccountContext(auth.config,auth.user);
     let reply=greeting;
     if(!reply){
-      const history=await supabaseRest(auth.config,"/rest/v1/prolink_support_messages?select=sender_role,content&conversation_id=eq."+encodeURIComponent(conversation.id)+"&order=created_at.desc&limit=12");
+      // Fetch account facts and recent chat history concurrently to avoid
+      // making the user wait for two sequential Supabase round trips.
+      const [context,history]=await Promise.all([
+        supportAccountContext(auth.config,auth.user),
+        supabaseRest(auth.config,"/rest/v1/prolink_support_messages?select=sender_role,content&conversation_id=eq."+encodeURIComponent(conversation.id)+"&order=created_at.desc&limit=8")
+      ]);
       reply=await supportAiReply(env,context,(history||[]).reverse(),message);
     }
     const saved=await supportInsertMessage(auth.config,conversation.id,"ai",reply);
