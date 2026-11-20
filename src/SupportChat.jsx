@@ -21,6 +21,33 @@ export default function SupportChat({session,profile}){
  const fileRef=useRef(null);
  const stickToBottom=useRef(true);
  const token=session?.access_token;
+
+ // Lock the page behind the support window while keeping the chat's own message
+ // list scrollable. Restore the exact previous page position when it closes.
+ useEffect(()=>{
+  if(!open)return;
+  const scrollY=window.scrollY;
+  const body=document.body;
+  const html=document.documentElement;
+  const previous={position:body.style.position,top:body.style.top,left:body.style.left,right:body.style.right,width:body.style.width,overflow:body.style.overflow,htmlOverflow:html.style.overflow};
+  body.style.position='fixed';
+  body.style.top=`-${scrollY}px`;
+  body.style.left='0';
+  body.style.right='0';
+  body.style.width='100%';
+  body.style.overflow='hidden';
+  html.style.overflow='hidden';
+  return()=>{
+   body.style.position=previous.position;
+   body.style.top=previous.top;
+   body.style.left=previous.left;
+   body.style.right=previous.right;
+   body.style.width=previous.width;
+   body.style.overflow=previous.overflow;
+   html.style.overflow=previous.htmlOverflow;
+   window.scrollTo(0,scrollY);
+  };
+ },[open]);
  const firstName=(profile?.full_name||session?.user?.user_metadata?.full_name||session?.user?.user_metadata?.name||'').trim().split(/\s+/)[0];
 
  const load=useCallback(async(silent=false)=>{
@@ -109,7 +136,7 @@ export default function SupportChat({session,profile}){
   <button type="button" className={'prolink-support-fab'+(open?' is-open':'')} onClick={()=>setOpen(v=>!v)} aria-label={open?'Close ProLink support':'Chat with ProLink Admin'}>
    {open?<X size={21}/>:<MessageCircle size={21}/>}<span>{open?'Close':'Chat Admin'}</span>
   </button>
-  {open&&<section className="prolink-support-panel" role="dialog" aria-modal="false" aria-label="Bidx ProLink support chat">
+  {open&&<section className="prolink-support-panel" role="dialog" aria-modal="true" aria-label="Bidx ProLink support chat">
    <header className="prolink-support-header">
     <div className="prolink-support-avatar"><Headset size={21}/></div>
     <div className="prolink-support-heading"><b>ProLink Support</b><small><span className="prolink-support-live-dot"/> {statusLabel}</small></div>
