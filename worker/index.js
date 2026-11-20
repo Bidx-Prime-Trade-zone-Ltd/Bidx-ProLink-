@@ -769,7 +769,7 @@ function supportMessageIntent(message,history=[]){
   const directAdmin=/\b(?:connect|put me through|transfer|speak|talk|chat|contact|reach|escalate)\b.{0,90}\b(?:human\s+)?admin\b|\bhuman admin\b.{0,70}\b(?:please|now|for me|connect|talk|speak)\b/i.test(text);
   const decline=/\b(?:do not|don't|dont|never|not)\b.{0,35}\b(?:connect|contact|transfer|send|talk|speak|escalate)\b.{0,35}\badmin\b/i.test(text);
   const offered=assistants.some(item=>/\b(?:send|submit|raise|make)\b.{0,80}\b(?:handover|hand[- ]?over|human admin|admin request)\b|\bhandover request\b|\bconnect(?: you| the user)? to (?:a )?human admin\b/i.test(String(item.content||"")));
-  const affirmative=/^(?:okay|ok|yes|yeah|yep|sure|certainly|please do|do it|go ahead|go-ahead|proceed|i agree|that is fine|that's fine|alright|all right)(?:[.!\s].*)?$/i.test(text);
+  const affirmative=/^(?:okay|ok|yes|yeah|yep|sure|certainly|absolutely|of course|please do|do it|go ahead|go-ahead|proceed|i agree|that is fine|that's fine|that works|sounds good|alright|all right)(?:[,.!?;:\s].*)?$/i.test(text);
   if(directAdmin&&!decline)return "human_admin_request";
   if(affirmative&&offered&&!decline)return "confirm_human_admin";
   if(/^(?:no|no thanks|not now|cancel|stop|don't|do not)(?:[.!\s].*)?$/i.test(text))return "decline";
