@@ -891,7 +891,7 @@ async function supportAiReply(env,context,history,message){
   const result=await env.AI.run(PROLINK_SUPPORT_TEXT_MODEL,{messages,max_tokens:maxTokens,temperature:0.15});
   const generated=result?.response||result?.result||result?.output_text||result?.choices?.[0]?.message?.content||result?.message?.content||"";
   const text=Array.isArray(generated)?generated.map(part=>typeof part==="string"?part:part?.text||"").join("\n"):String(generated||"");
-  const cleaned=text.trim().replace(/^(?:(?:hello|hi|hey|good\\s+morning|good\\s+afternoon|good\\s+evening)(?:\\s*,\\s*[^.!?\\n]{1,60})?[.!?]\\s*)+/i,"");
+  const cleaned=text.trim().replace(/^(?:(?:hello|hi|hey|good morning|good afternoon|good evening)(?:, [^.!?]{1,60})?[.!?] *)+/i,"");
   return cleaned.slice(0,7000)||"Please clarify the specific detail you need so I can give you an accurate answer.";
 }
 async function supportMessages(request,env){
