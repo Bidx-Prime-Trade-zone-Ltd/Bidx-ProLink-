@@ -67,6 +67,7 @@ export default function SupportChat({session,profile}){
    const payload=await response.json();
    if(!response.ok)throw new Error(payload.error||'Your message could not be sent.');
    const aiMessage=(payload.messages||[]).find(item=>item.sender_role==='ai');
+   setAiTyping(Boolean(aiMessage));
    if(aiMessage){
     const remaining=Math.max(0,typingDuration(aiMessage.content)-(Date.now()-started));
     if(remaining)await wait(remaining);
