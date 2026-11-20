@@ -8,7 +8,7 @@ const env={
   SUPABASE_ANON_KEY:"anon-test"
 };
 const userRows=Array.from({length:5},(_,i)=>({
-  id:"user-"+i,email:"user"+i+"@example.test",created_at:new Date().toISOString(),
+  id:"user-"+i,email:i===0?"ojepaamedu@gmail.com":"user"+i+"@example.test",created_at:new Date().toISOString(),
   last_sign_in_at:null,email_confirmed_at:new Date().toISOString(),app_metadata:{provider:"email"}
 }));
 const profileRows=[{user_id:"profile-1",full_name:"Test Professional"}];
@@ -46,8 +46,8 @@ test("admin dashboard returns real counts from the ProLink account and review ta
     const response=await adminDashboard(adminRequest(),env);
     const body=await response.json();
     assert.equal(response.status,200);
-    assert.equal(body.counts.totalUsers,5);
-    assert.equal(body.counts.newUsersToday,5);
+    assert.equal(body.counts.totalUsers,4);
+    assert.equal(body.counts.newUsersToday,4);
     assert.equal(body.counts.professionalProfiles,1);
     assert.equal(body.counts.pendingDocuments,0);
     assert.equal(body.counts.approvedDocuments,4);
