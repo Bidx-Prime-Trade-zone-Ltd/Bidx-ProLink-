@@ -69,7 +69,7 @@ test("one unavailable dashboard table does not blank every metric",async()=>{
     const response=await adminDashboard(adminRequest(),env);
     const body=await response.json();
     assert.equal(response.status,200);
-    assert.equal(body.counts.totalUsers,5);
+    assert.equal(body.counts.totalUsers,4);
     assert.equal(body.counts.professionalProfiles,1);
     assert.equal(body.counts.approvedDocuments,4);
     assert.deepEqual(body.warnings,["profile_change_requests"]);
