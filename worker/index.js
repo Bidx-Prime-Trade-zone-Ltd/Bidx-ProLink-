@@ -878,8 +878,9 @@ async function supportMessages(request,env){
   try{
     const conversation=await supportConversation(auth.config,auth.user.id);
     let messages=await supabaseRest(auth.config,"/rest/v1/prolink_support_messages?select=id,sender_role,content,attachments,pinned_for_admin,created_at&conversation_id=eq."+encodeURIComponent(conversation.id)+"&order=created_at.asc&limit=150");
-    if(!messages?.length){
-      const timeZone=String(new URL(request.url).searchParams.get("timeZone")||"Africa/Lagos").slice(0,80);
+    const latestMessage=messages?.length?messages[messages.length-1]:null;
+    const inactiveFor24Hours=!latestMessage||(Date.now()-new Date(latestMessage.created_at).getTime()>=24*60*60*1000);
+    if(inactiveFor24Hours&&conversation.status!=="admin_attending"){
       await supportInsertMessage(auth.config,conversation.id,"ai","Welcome, "+supportName(auth.user)+". I’m your AI assistant. I can help you navigate the app, understand professional registration and membership, check your account information, and connect you with a human Admin when needed.");
       messages=await supabaseRest(auth.config,"/rest/v1/prolink_support_messages?select=id,sender_role,content,attachments,pinned_for_admin,created_at&conversation_id=eq."+encodeURIComponent(conversation.id)+"&order=created_at.asc&limit=150");
     }
