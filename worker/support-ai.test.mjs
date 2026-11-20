@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { supportGreetingReply, supportMessageIntent, supportAttachmentCategory } from "./index.js";
+import { supportGreetingReply, supportGreetingPrefix, supportMessageIntent, supportAttachmentCategory } from "./index.js";
 
 test("greeting replies match the user's exact greeting and include their first name", () => {
   assert.equal(supportGreetingReply("Good morning", "Ada"), "Good morning, Ada. How may I help you today?");
@@ -15,6 +15,12 @@ test("ProLink does not greet when the message is not a greeting by itself", () =
   assert.equal(supportGreetingReply("Can you tell me about this app?", "Ada"), "");
   assert.equal(supportGreetingReply("Hi, can you help me register?", "Ada"), "");
   assert.equal(supportGreetingReply("Thank you", "Ada"), "");
+});
+
+test("greetings followed by questions are preserved without replacing the question", () => {
+  assert.equal(supportGreetingPrefix("Good morning, can you explain ProLink?", "Ada"), "Good morning, Ada.");
+  assert.equal(supportGreetingPrefix("Hi, how do I register?", "Ada"), "Hi, Ada.");
+  assert.equal(supportGreetingPrefix("Can you explain ProLink?", "Ada"), "");
 });
 
 test("contextual confirmation accepts an offered Admin handover", () => {
