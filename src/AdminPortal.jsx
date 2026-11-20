@@ -10,7 +10,7 @@ const label=value=>String(value||'').replaceAll('_',' ').replace(/\b\w/g,c=>c.to
 
 export default function AdminPortal(){
  const [user,setUser]=useState(null),[ready,setReady]=useState(false),[tab,setTab]=useState('Overview');
- const [dashboard,setDashboard]=useState({counts:{},users:[],profiles:[],reviews:[],profileChangeRequests:[]});
+ const [dashboard,setDashboard]=useState({counts:{},users:[],profiles:[],reviews:[],profileChangeRequests:[],warnings:[]});
  const [query,setQuery]=useState(''),[selected,setSelected]=useState(null),[reason,setReason]=useState('');
  const [notice,setNotice]=useState(''),[busy,setBusy]=useState(false),[documentUrl,setDocumentUrl]=useState('');
  const [documentLoading,setDocumentLoading]=useState(false);
@@ -25,7 +25,7 @@ export default function AdminPortal(){
    const response=await fetch('/api/admin/dashboard',{headers:{authorization:'Bearer '+session.access_token}});
    const payload=await response.json();
    if(!response.ok)throw new Error(payload.error||'Dashboard could not be loaded.');
-   setDashboard({counts:payload.counts||{},users:payload.users||[],profiles:payload.profiles||[],reviews:payload.reviews||[],profileChangeRequests:payload.profileChangeRequests||[]});
+   setDashboard({counts:payload.counts||{},users:payload.users||[],profiles:payload.profiles||[],reviews:payload.reviews||[],profileChangeRequests:payload.profileChangeRequests||[],warnings:payload.warnings||[]});
   }catch(error){setNotice(error.message||'Dashboard could not be loaded.');}
   finally{setBusy(false);}
  };
@@ -87,20 +87,21 @@ export default function AdminPortal(){
  if(!admin)return <div className="admin-login"><LockKeyhole size={38}/><h1>Access restricted</h1><p>This account is not authorised to access ProLink Internal Admin.</p><button onClick={()=>supabase.auth.signOut()}>Sign out</button></div>;
 
  const metrics=[
-  ['Registered users',counts.totalUsers??'—',Users],
-  ['New users today',counts.newUsersToday??'—',CalendarDays],
-  ['Professional profiles',counts.professionalProfiles??'—',UserRound],
-  ['Documents awaiting review',counts.pendingDocuments??'—',Clock3],
-  ['Approved documents',counts.approvedDocuments??'—',CheckCircle2],
-  ['Rejected documents',counts.rejectedDocuments??'—',FileCheck]
+  ['Registered users',counts.totalUsers,Users],
+  ['New users today',counts.newUsersToday,CalendarDays],
+  ['Professional profiles',counts.professionalProfiles,UserRound],
+  ['Documents awaiting review',counts.pendingDocuments,Clock3],
+  ['Approved documents',counts.approvedDocuments,CheckCircle2],
+  ['Rejected documents',counts.rejectedDocuments,FileCheck]
  ];
  return <div className="admin-shell">
   <header className="admin-header"><div><span className="admin-kicker">RESTRICTED · DOCUMENT REVIEW & SUPPORT</span><h1>Bidx ProLink Internal Admin</h1><p className="admin-subtitle">{ADMIN_EMAIL}</p></div><button onClick={()=>supabase.auth.signOut()}><LogOut size={16}/> Sign out</button></header>
   <div className="admin-security-note"><LockKeyhole size={16}/><span>Account and professional records are view-only. Authorised Admins can review documents and attend, reply to, and resolve ProLink Support conversations.</span></div>
   <nav className="admin-tabs">{tabs.map(t=><button key={t} className={tab===t?'active':''} onClick={()=>{setTab(t);setSelected(null);setQuery('');}}>{t}</button>)}</nav>
   {notice&&<p className="admin-notice" role="status">{notice}</p>}
+  {!!dashboard.warnings?.length&&<p className="admin-notice admin-warning" role="status">Some dashboard sections could not be loaded: {dashboard.warnings.map(name=>name.replaceAll('_',' ')).join(', ')}. Other figures are still available. Use Refresh to try again.</p>}
   {tab==='Overview'&&<>
-   <div className="admin-metrics">{metrics.map(([name,value,Icon])=><article className="admin-metric" key={name}><Icon size={18}/><span>{name}</span><b>{value}</b></article>)}</div>
+   <div className="admin-metrics">{metrics.map(([name,value,Icon])=><article className="admin-metric" key={name}><Icon size={18}/><span>{name}</span><b className={value==null?'admin-metric-unavailable':''}>{value==null?'Unavailable':value}</b></article>)}</div>
    <section className="admin-panel"><div className="admin-panel-heading"><div><h2>Pending document reviews</h2><p>Latest submissions requiring an approval decision.</p></div><button onClick={load} disabled={busy}><RefreshCw size={15}/> Refresh</button></div>
     {dashboard.reviews.filter(r=>r.status==='pending').slice(0,8).map(r=><button key={r.id} className="admin-row" onClick={()=>{setSelected(r);setTab('Document review');}}><span><b>{label(r.submitted_data?.document_type||r.section)}</b><small>{r.submitted_data?.document_name||r.user_id}</small></span><em>Pending</em><small>{fmt(r.submitted_at)}</small></button>)}
     {!pending.length&&<p className="admin-empty">There are no pending document reviews.</p>}
