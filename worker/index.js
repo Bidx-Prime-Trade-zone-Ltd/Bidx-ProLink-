@@ -773,8 +773,27 @@ function supportGreetingPrefix(message,name=""){
   return greeting+(firstName&&firstName.toLowerCase()!=="there"?", "+firstName:"")+".";
 }
 
+function supportAccountLookupChoice(message,history=[]){
+  const text=String(message||"").toLowerCase().trim().replace(/[.!?,;:]+$/g,"").replace(/\s+/g," ");
+  // The most recent AI/Admin turn is the only valid context for a short consent
+  // reply. Non-assistant system notices cannot create or replace a consent request.
+  const previous=(history||[]).find(item=>item.sender_role==="ai"||item.sender_role==="admin");
+  const prompt=String(previous?.content||"");
+  const asksPermission=/\b(?:would you like me to|may i|can i|please confirm|do i have your permission|with your permission|shall i)\b/i.test(prompt)
+    &&/\b(?:check|look up|access|review|retrieve|verify)\b/i.test(prompt)
+    &&/\b(?:account|membership|subscription|professional profile|profile|verification status|approval status)\b/i.test(prompt);
+  if(!asksPermission)return "none";
+  const affirmative=/^(?:okay|ok|yes|yeah|yep|sure|certainly|absolutely|of course|please do|do it|go ahead|go-ahead|proceed|i agree|that is fine|that's fine|that works|sounds good|alright|all right)(?:[,.!?;:\s].*)?$/i.test(text);
+  const refusal=/^(?:no|no thanks|no thank you|not now|not yet|cancel|stop|don't|do not|i decline|i do not agree|leave it)(?:[,.!?;:\s].*)?$/i.test(text);
+  if(refusal)return "decline";
+  if(affirmative)return "accept";
+  return "none";
+}
 function supportMessageIntent(message,history=[]){
   const text=String(message||"").toLowerCase().trim();
+  const accountChoice=supportAccountLookupChoice(message,history);
+  if(accountChoice==="accept")return "confirm_account_lookup";
+  if(accountChoice==="decline")return "decline_account_lookup";
   const assistants=(history||[]).filter(item=>item.sender_role==="ai"||item.sender_role==="admin");
   const directAdmin=/\b(?:connect|put me through|transfer|speak|talk|chat|contact|reach|escalate)\b.{0,90}\b(?:human\s+)?admin\b|\bhuman admin\b.{0,70}\b(?:please|now|for me|connect|talk|speak)\b/i.test(text);
   const decline=/\b(?:do not|don't|dont|never|not)\b.{0,35}\b(?:connect|contact|transfer|send|talk|speak|escalate)\b.{0,35}\badmin\b/i.test(text);
@@ -783,8 +802,8 @@ function supportMessageIntent(message,history=[]){
   if(directAdmin&&!decline)return "human_admin_request";
   if(affirmative&&offered&&!decline)return "confirm_human_admin";
   if(/^(?:no|no thanks|not now|cancel|stop|don't|do not)(?:[,.!?;:\s].*)?$/i.test(text))return "decline";
-  if(/^(?:thank you|thanks|thx)(?:[.!\s].*)?$/i.test(text))return "thanks";
-  if(/^(?:okay|ok|alright|all right|got it|understood)(?:[.!\s].*)?$/i.test(text))return "acknowledgement";
+  if(/^(?:thank you|thanks|thx)(?:[.!\\s].*)?$/i.test(text))return "thanks";
+  if(/^(?:okay|ok|alright|all right|got it|understood)(?:[.!\\s].*)?$/i.test(text))return "acknowledgement";
   return "general";
 }
 function supportAttachmentCategory(fileName,mimeType){
@@ -927,6 +946,11 @@ PROFESSIONAL REGISTRATION AND REVIEW:
 - Approved public professional profiles appear in Explore after publication/approval.
 
 ACCOUNT AND MEMBERSHIP LOOKUPS:
+- Protect private account information with explicit, contextual consent. If a user asks for their own membership expiry/status, account details, profile status, verification/approval status, or another private account-specific fact, first explain what you need to check and ask: "Would you like me to check that securely for you?" Do not state or imply that you have already checked.
+- The application supplies private account context only after the user clearly accepts that specific lookup. A reply such as "Okay", "Yes", "Sure", "Go ahead", "Please do" or "Proceed" immediately after that permission question authorises only that requested lookup. Then answer from the verified context provided.
+- If the user replies "No", "No thanks", "Not now" or otherwise declines, do not retrieve, reveal, infer or summarise the private account information. Acknowledge the refusal and continue helping with general ProLink information.
+- An unrelated timeout notice or system message must not be mistaken for consent or erase a still-pending permission question. Match short replies to the most recent relevant AI/Admin permission request.
+- Never treat an acknowledgement in an unrelated conversation turn as consent. Never use private account context to volunteer subscription, profile or verification details that the user did not ask to check.
 - Use only the verified account context below. Tell the user their membership is active or expired and give the exact expiry date when available.
 - If no membership record exists, say no active membership record is currently available; do not guess.
 - ProLink does not currently provide an in-app cash wallet or wallet balance. If asked for balance, explain that there is no wallet balance to display; do not invent an amount.
@@ -1040,11 +1064,17 @@ async function supportSend(request,env){
     const priorHistory=await supabaseRest(auth.config,"/rest/v1/prolink_support_messages?select=sender_role,content&conversation_id=eq."+encodeURIComponent(conversation.id)+"&order=created_at.desc&limit=30");
     const intent=supportMessageIntent(message,priorHistory||[]);
     const shouldRequestAdmin=intent==="human_admin_request"||intent==="confirm_human_admin";
+    const accountLookupAccepted=intent==="confirm_account_lookup";
+    const accountLookupDeclined=intent==="decline_account_lookup";
     if(conversation.status==="resolved"){
       await supabaseRest(auth.config,"/rest/v1/prolink_support_conversations?id=eq."+encodeURIComponent(conversation.id),{method:"PATCH",headers:{prefer:"return=minimal"},body:JSON.stringify({status:"ai_active",resolved_at:null,updated_at:new Date().toISOString()})});
     }
     await supportInsertMessage(auth.config,conversation.id,"user",message,{senderUserId:auth.user.id});
     if(conversation.status==="admin_attending")return json({conversation:{...conversation,last_message_at:new Date().toISOString()},messages:[],awaitingAdmin:true});
+    if(accountLookupDeclined){
+      const saved=await supportInsertMessage(auth.config,conversation.id,"ai","Understood. I will not access or check your private account or membership information. I can still help with general ProLink questions, and you can ask me to check it whenever you choose.");
+      return json({conversation,messages:saved?[saved]:[],awaitingAdmin:conversation.status==="admin_requested"});
+    }
     // A direct request to connect with Admin, or an affirmative reply to
     // an earlier Admin-handover offer anywhere in recent history, is a clear
     // instruction to submit the handover. Do not ask the user to repeat it.
@@ -1064,7 +1094,7 @@ async function supportSend(request,env){
       // Fetch account facts and recent chat history concurrently to avoid
       // making the user wait for two sequential Supabase round trips.
       const [context,history]=await Promise.all([
-        supportAccountContext(auth.config,auth.user),
+        accountLookupAccepted?supportAccountContext(auth.config,auth.user):Promise.resolve(null),
         supabaseRest(auth.config,"/rest/v1/prolink_support_messages?select=sender_role,content&conversation_id=eq."+encodeURIComponent(conversation.id)+"&order=created_at.desc&limit=12")
       ]);
       reply=await supportAiReply(env,context,(history||[]).reverse(),message);
