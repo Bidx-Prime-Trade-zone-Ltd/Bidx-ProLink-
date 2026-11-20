@@ -769,12 +769,12 @@ function supportMessageIntent(message,history=[]){
   const directAdmin=/\b(?:connect|put me through|transfer|speak|talk|chat|contact|reach|escalate)\b.{0,90}\b(?:human\s+)?admin\b|\bhuman admin\b.{0,70}\b(?:please|now|for me|connect|talk|speak)\b/i.test(text);
   const decline=/\b(?:do not|don't|dont|never|not)\b.{0,35}\b(?:connect|contact|transfer|send|talk|speak|escalate)\b.{0,35}\badmin\b/i.test(text);
   const offered=assistants.some(item=>/\b(?:send|submit|raise|make)\b.{0,80}\b(?:handover|hand[- ]?over|human admin|admin request)\b|\bhandover request\b|\bconnect(?: you| the user)? to (?:a )?human admin\b/i.test(String(item.content||"")));
-  const affirmative=/^(?:okay|ok|yes|yeah|yep|sure|certainly|please do|do it|go ahead|go-ahead|proceed|i agree|that is fine|that's fine|alright|all right)(?:[.!\\s].*)?$/i.test(text);
+  const affirmative=/^(?:okay|ok|yes|yeah|yep|sure|certainly|please do|do it|go ahead|go-ahead|proceed|i agree|that is fine|that's fine|alright|all right)(?:[.!\s].*)?$/i.test(text);
   if(directAdmin&&!decline)return "human_admin_request";
   if(affirmative&&offered&&!decline)return "confirm_human_admin";
-  if(/^(?:no|no thanks|not now|cancel|stop|don't|do not)(?:[.!\\s].*)?$/i.test(text))return "decline";
-  if(/^(?:thank you|thanks|thx)(?:[.!\\s].*)?$/i.test(text))return "thanks";
-  if(/^(?:okay|ok|alright|all right|got it|understood)(?:[.!\\s].*)?$/i.test(text))return "acknowledgement";
+  if(/^(?:no|no thanks|not now|cancel|stop|don't|do not)(?:[.!\s].*)?$/i.test(text))return "decline";
+  if(/^(?:thank you|thanks|thx)(?:[.!\s].*)?$/i.test(text))return "thanks";
+  if(/^(?:okay|ok|alright|all right|got it|understood)(?:[.!\s].*)?$/i.test(text))return "acknowledgement";
   return "general";
 }
 function supportAttachmentCategory(fileName,mimeType){
@@ -830,7 +830,7 @@ function supportBytesToBase64(buffer){
   return btoa(binary);
 }
 function prolinkSupportSystemPrompt(context){
-  return `You are the Bidx ProLink AI Admin Assistant, the helpful in-app support guide for Bidx ProLink, a global directory and professional showcase connecting customers with skilled people and quality work. Speak clearly, patiently and professionally. For every substantive question or request, answer the exact question immediately. Do not begin with hello, hi, hey, good morning, good afternoon or good evening. Do not mention, repeat or address the user by their name in an answer. Do not add greetings or the user’s name as conversational filler. The only exception is a greeting-only message, which the application handles separately.
+  return `You are the Bidx ProLink AI Admin Assistant, the helpful in-app support guide for Bidx ProLink, a global directory and professional showcase connecting customers with skilled people and quality work. Speak clearly, patiently and professionally. For every substantive question or request, answer the exact question immediately. Do not begin with hello, hi, hey, good morning, good afternoon or good evening. Do not add greetings or the user’s name as filler in substantive answers. For a greeting-only message, use the account first name when it is available; the application handles that greeting separately.
 
 GREETING RULES:
 - A greeting-only message is handled by the application with a deterministic greeting in the user's local time.
@@ -839,10 +839,10 @@ GREETING RULES:
 
 CONVERSATION, GREETING AND AGREEMENT INTELLIGENCE:
 - Respond naturally to the user's actual message. Do not greet users merely because a chat window opened, a conversation was loaded, or time has passed. Never send an unsolicited welcome message.
-- When the user sends only "Good morning" or "Morning", reply exactly in this style: "Good morning. How may I help you today?"
-- When the user sends only "Good afternoon" or "Afternoon", reply: "Good afternoon. How may I help you today?"
-- When the user sends only "Good evening" or "Evening", reply: "Good evening. How may I help you today?"
-- When the user sends only "Hi", "Hey" or "Hello", reply respectively: "Hi, how may I help you?", "Hey, how may I help you?" or "Hello, how may I help you?"
+- When the user sends only "Good morning" or "Morning", reply in this style: "Good morning, [first name]. How may I help you today?"
+- When the user sends only "Good afternoon" or "Afternoon", reply: "Good afternoon, [first name]. How may I help you today?"
+- When the user sends only "Good evening" or "Evening", reply: "Good evening, [first name]. How may I help you today?"
+- When the user sends only "Hi", "Hey" or "Hello", reply respectively: "Hi, [first name]. How may I help you today?", "Hey, [first name]. How may I help you today?" or "Hello, [first name]. How may I help you today?"
 - Match the greeting the user actually used. Do not replace "Good morning" with a different time greeting. Do not add the user's name unless they explicitly ask you to use it.
 - Recognise greetings with normal punctuation, capitalisation, repeated letters, or a brief "there" (for example "HI!", "Hello there", "Good morning!").
 - If a greeting is followed by a real question or request, acknowledge the greeting once and then answer the question directly in the same response. Do not answer a substantive request with only a greeting.
@@ -1006,7 +1006,7 @@ async function supportAiReply(env,context,history,message){
   const generated=result?.response||result?.result||result?.output_text||result?.choices?.[0]?.message?.content||result?.message?.content||"";
   const text=Array.isArray(generated)?generated.map(part=>typeof part==="string"?part:part?.text||"").join("\n"):String(generated||"");
   const cleaned=text.trim().replace(/^(?:(?:hello|hi|hey|good morning|good afternoon|good evening)(?:, [^.!?]{1,60})?[.!?] *)+/i,"");
-  return cleaned.slice(0,7000)||"Please clarify the specific detail you need so I can give you an accurate answer.";
+  return cleaned.slice(0,7000)||"I’m sorry, I could not prepare a reliable answer just now. Please try sending your question again, or select “Connect me to human Admin” if you need personal assistance.";
 }
 async function supportMessages(request,env){
   const auth=await signedInProfileUser(request,env);if(auth.error)return auth.error;
