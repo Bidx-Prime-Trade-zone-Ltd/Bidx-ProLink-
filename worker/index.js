@@ -763,6 +763,16 @@ function supportGreetingReply(message,name=""){
   }
   return "";
 }
+function supportGreetingPrefix(message,name=""){
+  const raw=String(message||"").trim();
+  const match=raw.match(/^(good\s+morning|morning|good\s+afternoon|afternoon|good\s+evening|evening|hello|hey|hi|hiya)(?:\s+there)?[,\s!?.]+(.+)$/i);
+  if(!match)return "";
+  const phrase=match[1].toLowerCase();
+  const greeting=phrase.includes("morning")?"Good morning":phrase.includes("afternoon")?"Good afternoon":phrase.includes("evening")?"Good evening":phrase.startsWith("hello")?"Hello":phrase.startsWith("hey")?"Hey":"Hi";
+  const firstName=String(name||"").trim();
+  return greeting+(firstName&&firstName.toLowerCase()!=="there"?", "+firstName:"")+".";
+}
+
 function supportMessageIntent(message,history=[]){
   const text=String(message||"").toLowerCase().trim();
   const assistants=(history||[]).filter(item=>item.sender_role==="ai"||item.sender_role==="admin");
@@ -1048,6 +1058,7 @@ async function supportSend(request,env){
       return json({conversation,messages:saved?[saved]:[],awaitingAdmin:true});
     }
     const greeting=supportGreetingReply(message,supportName(auth.user));
+    const greetingPrefix=greeting?"":supportGreetingPrefix(message,supportName(auth.user));
     let reply=greeting;
     if(!reply){
       // Fetch account facts and recent chat history concurrently to avoid
@@ -1057,6 +1068,7 @@ async function supportSend(request,env){
         supabaseRest(auth.config,"/rest/v1/prolink_support_messages?select=sender_role,content&conversation_id=eq."+encodeURIComponent(conversation.id)+"&order=created_at.desc&limit=12")
       ]);
       reply=await supportAiReply(env,context,(history||[]).reverse(),message);
+      if(greetingPrefix)reply=greetingPrefix+" "+reply;
     }
     const saved=await supportInsertMessage(auth.config,conversation.id,"ai",reply);
     return json({conversation,messages:saved?[saved]:[],awaitingAdmin:conversation.status==="admin_requested"});
@@ -1251,4 +1263,4 @@ export default {
   }
 };
 
-export { supportGreetingReply, supportMessageIntent, supportAttachmentCategory };
+export { supportGreetingReply, supportGreetingPrefix, supportMessageIntent, supportAttachmentCategory };
