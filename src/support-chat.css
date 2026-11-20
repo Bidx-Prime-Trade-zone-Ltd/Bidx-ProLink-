@@ -1,3 +1,5 @@
+/* A full-screen scrim intercepts every tap outside the support panel. */
+.prolink-support-overlay{position:fixed;inset:0;z-index:10019;background:rgba(8,24,40,.10);overscroll-behavior:none;touch-action:none;}
 /* Prevent background-page scrolling whenever a ProLink modal, dialog or overlay is open. */
 html:has(body .prolink-support-panel),
 body:has(.prolink-support-panel),
@@ -5,6 +7,9 @@ body:has(.modal-backdrop),
 body:has([aria-modal="true"]){overscroll-behavior:none}
 body:has(.modal-backdrop),
 body:has([aria-modal="true"]){overflow:hidden}
+html:has(.prolink-support-overlay),body:has(.prolink-support-overlay){overscroll-behavior:none;overflow:hidden}
+.prolink-support-panel{z-index:10021}
+.prolink-support-fab{z-index:10022}
 
 .prolink-support-fab{position:fixed;right:16px;bottom:calc(82px + env(safe-area-inset-bottom));z-index:10020;display:flex;align-items:center;gap:9px;padding:13px 17px;border:0;border-radius:999px;background:linear-gradient(135deg,#1769b2,#0d4c88);color:#fff;box-shadow:0 8px 26px rgba(9,50,91,.3);font-size:13px;font-weight:850;letter-spacing:.1px;cursor:pointer}
 .prolink-support-fab svg{flex:0 0 auto}.prolink-support-fab:active{transform:scale(.97)}.prolink-support-fab.is-open{background:#263b50}
