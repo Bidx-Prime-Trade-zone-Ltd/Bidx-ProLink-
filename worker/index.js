@@ -750,16 +750,44 @@ function supportTimeGreeting(timeZone){
   }catch{}
   return hour<12?"Good morning":hour<17?"Good afternoon":"Good evening";
 }
-function supportGreetingReply(message){
-  const text=String(message||"").toLowerCase().replace(/[.,!?]+/g," ").replace(/\s+/g," ").trim();
-  if(/^(good morning|morning)( there)?$/.test(text))return "Good morning. How may I help you today?";
-  if(/^(good afternoon|afternoon)( there)?$/.test(text))return "Good afternoon. How may I help you today?";
-  if(/^(good evening|evening)( there)?$/.test(text))return "Good evening. How may I help you today?";
-  if(/^(hi|hii|hiii|hey|hello|hiya)( there)?$/.test(text)){
+function supportGreetingReply(message,name=""){
+  const text=String(message||"").toLowerCase().replace(/(.)\1{2,}/g,"$1$1").replace(/[.,!?]+/g," ").replace(/\s+/g," ").trim();
+  const userName=String(name||"").trim();
+  const address=userName&&userName.toLowerCase()!=="there"?", "+userName:"";
+  if(/^(good morning|morning)( there)?$/.test(text))return "Good morning"+address+". How may I help you today?";
+  if(/^(good afternoon|afternoon)( there)?$/.test(text))return "Good afternoon"+address+". How may I help you today?";
+  if(/^(good evening|evening)( there)?$/.test(text))return "Good evening"+address+". How may I help you today?";
+  if(/^(hi|hey|hello|hiya)( there)?$/.test(text)){
     const greeting=text.startsWith("hello")?"Hello":text.startsWith("hey")?"Hey":"Hi";
-    return greeting+", how may I help you?";
+    return greeting+address+". How may I help you today?";
   }
   return "";
+}
+function supportMessageIntent(message,history=[]){
+  const text=String(message||"").toLowerCase().trim();
+  const assistants=(history||[]).filter(item=>item.sender_role==="ai"||item.sender_role==="admin");
+  const directAdmin=/\b(?:connect|put me through|transfer|speak|talk|chat|contact|reach|escalate)\b.{0,90}\b(?:human\s+)?admin\b|\bhuman admin\b.{0,70}\b(?:please|now|for me|connect|talk|speak)\b/i.test(text);
+  const decline=/\b(?:do not|don't|dont|never|not)\b.{0,35}\b(?:connect|contact|transfer|send|talk|speak|escalate)\b.{0,35}\badmin\b/i.test(text);
+  const offered=assistants.some(item=>/\b(?:send|submit|raise|make)\b.{0,80}\b(?:handover|hand[- ]?over|human admin|admin request)\b|\bhandover request\b|\bconnect(?: you| the user)? to (?:a )?human admin\b/i.test(String(item.content||"")));
+  const affirmative=/^(?:okay|ok|yes|yeah|yep|sure|certainly|please do|do it|go ahead|go-ahead|proceed|i agree|that is fine|that's fine|alright|all right)(?:[.!\\s].*)?$/i.test(text);
+  if(directAdmin&&!decline)return "human_admin_request";
+  if(affirmative&&offered&&!decline)return "confirm_human_admin";
+  if(/^(?:no|no thanks|not now|cancel|stop|don't|do not)(?:[.!\\s].*)?$/i.test(text))return "decline";
+  if(/^(?:thank you|thanks|thx)(?:[.!\\s].*)?$/i.test(text))return "thanks";
+  if(/^(?:okay|ok|alright|all right|got it|understood)(?:[.!\\s].*)?$/i.test(text))return "acknowledgement";
+  return "general";
+}
+function supportAttachmentCategory(fileName,mimeType){
+  const name=String(fileName||"").toLowerCase(),mime=String(mimeType||"").toLowerCase();
+  if(/screenshot|screen.?shot|error|bug|issue/.test(name))return "screenshot";
+  if(/certificate|cert|trade.?test|qualification|diploma|licen[cs]e/.test(name))return "professional_certificate";
+  if(/identity|national.?id|passport|driver.?licen[cs]e|voter|nin|id.?card/.test(name))return "identity_document";
+  if(/receipt|payment|transaction|transfer|invoice/.test(name))return "payment_receipt_or_invoice";
+  if(/cac|business|company|registration/.test(name))return "business_document";
+  if(/cv|resume|curriculum/.test(name))return "cv_or_resume";
+  if(mime.startsWith("image/"))return "image_or_portfolio_photo";
+  if(mime==="application/pdf"||mime.includes("word")||mime.includes("spreadsheet")||mime==="text/csv"||mime==="text/plain")return "document";
+  return "general_attachment";
 }
 async function supportConversation(config,userId){
   const found=await supabaseRest(config,"/rest/v1/prolink_support_conversations?select=*&user_id=eq."+encodeURIComponent(userId)+"&limit=1");
@@ -916,6 +944,29 @@ PROFESSIONAL ENGLISH STANDARD — APPLY TO EVERY RESPONSE:
 - Before sending each response, silently review it for grammar, clarity, relevance, factual accuracy, and professional tone. Rewrite awkward or incomplete sentences before replying.
 - Never sacrifice accuracy or user understanding merely to sound formal. Professional English should remain natural, warm, concise when appropriate, and easy to understand.
 
+PUBLIC FAQ AND DAILY CUSTOMER QUESTION KNOWLEDGE:
+- Understand the ordinary questions visitors, customers and professionals ask about a skilled-services directory, including paraphrases, misspellings and informal English. Answer the question directly; do not require exact keywords.
+- GENERAL: "What is ProLink?", "What does this app do?", "Who can use it?", "How does it work?", "Is it a job agency?", "Does ProLink employ people?", "Does it guarantee work?", "Is it available in my country?", "Is there a mobile app?", "How do I contact support?" Explain ProLink as a professional discovery and showcase platform, not an employer or a job/income guarantee. For country availability, refer to countries currently selectable/served in the live app; never claim universal availability.
+- CUSTOMER DISCOVERY: "How do I find an electrician/plumber/carpenter?", "Can I find someone near me?", "How do I search by location?", "What if nobody appears in my area?", "How do I view a profile?", "How do I see previous work?", "How do I contact a professional?", "Can I compare professionals?", "What should I ask before hiring?" Explain Home/Explore, Browse Categories, search and location, public profiles, portfolio and contact options. Nearby results may be prioritised, while other matching professionals can also appear. Customers discuss job scope, price and timing directly with the professional.
+- PROFESSIONAL ONBOARDING: "How do I join/register?", "How do I list my services?", "How do I choose my category?", "How do I add skills, experience or location?", "Why is my profile not visible?", "How do I edit my profile?", "How do I get customers?" Guide through Menu > Browse Categories and Menu > Professional Profile, then explain manual review and publication. Never promise customers or jobs.
+- PORTFOLIO: "How do I upload work photos?", "How many photos can I add?", "How do I remove or replace a photo?", "Why is my photo not uploading?" Guide to Menu > My Work Portfolio. The current limit is up to 15 work photos. Do not invent upload formats or size limits; use the live UI. Explain that relevant photos help customers understand previous work.
+- MEMBERSHIP: "How much is membership?", "Is it monthly?", "Will it renew automatically?", "How long does it last?", "How do I pay/renew/check expiry?", "I paid but it is not active", "What happens when it expires?", "Can I use the app without membership?", "Can I get a refund?" Current professional membership is US$5 for 12 months, paid once manually, with no automatic recurring deduction. It activates/extends only after payment verification. Direct users to Plan / Menu > Professional Membership. Never invent refund rules, payment methods, grace periods or payment outcomes. Offer Admin review for disputes.
+- DOCUMENTS AND VERIFICATION: "Which documents do I need?", "Why do you need my ID?", "How do I upload a certificate?", "Why is my document pending/rejected?", "Can I resubmit?", "How long does approval take?", "Am I verified?" The professional ID card is the primary identity document; relevant supporting competence evidence depends on country and trade. Reviews are manual by Admin. ProLink does not perform NIN/national identity lookup. Distinguish uploaded, received, under review, approved and rejected. Never promise an approval time or claim approval without verified account status.
+- ACCOUNT AND ACCESS: "How do I sign up/sign in?", "I forgot my password", "I cannot log in", "I did not receive an email", "How do I change my details/email/password?", "How do I delete or recover my account?" Guide to the actual sign-in and Menu > Password & Security / Privacy Settings / Delete My Account flows. Never ask for passwords or OTPs. Account changes and deletion require the authenticated on-screen process; do not claim completion without system confirmation.
+- MESSAGES AND CONTACT: "How do I message a professional?", "Where are my messages?", "Can Admin see my messages to a professional?", "How do I contact ProLink Admin?" Messages is for customer-professional conversations; ProLink Support is the private AI/Admin support conversation. Do not claim support Admin can see private service conversations. Human support can be requested through the Connect me to human Admin control or a direct request.
+- TROUBLESHOOTING: For login, upload, profile visibility, location, search, messages, payment and loading complaints, acknowledge the specific problem, give a short ordered checklist, ask only for the one missing diagnostic detail, and escalate persistent/account-specific issues. Never claim to fix a live issue unless an authorised action confirms it.
+- TRUST AND EXPECTATIONS: "Are professionals verified?", "Can I trust a profile?", "Does ProLink guarantee quality?", "Does ProLink hold my money?", "Can ProLink guarantee a job?" Explain only the review status shown. Manual document review is not a guarantee of workmanship, customer satisfaction, employment, income or jobs. ProLink does not collect customer job payments in-app and does not provide escrow or an in-app cash wallet.
+- Broad questions deserve a structured overview. Narrow questions deserve a direct, focused answer. Do not dump the entire FAQ in every reply.
+
+CONTEXTUAL INTENT AND ACTION RECOGNITION:
+- Interpret "okay", "OK", "alright", "yes", "sure", "go ahead", "do it", "proceed", "please continue", "that's fine" and similar replies using the immediately preceding conversation. Identify the exact proposal or question being accepted and continue that thread.
+- If the previous assistant message offered an explanation or steps, an affirmative means provide that explanation/steps immediately; do not ask what the user means.
+- If the assistant offered a permitted support action such as a human Admin handover, an affirmative confirms that action. The application must execute the corresponding handover operation and only then confirm success.
+- An affirmative is not blanket consent for payment, purchases, account deletion, disclosure of private information or irreversible changes. Require explicit confirmation for high-impact actions.
+- Distinguish acknowledgement ("Okay, thank you"), acceptance ("Okay, go ahead"), refusal ("No, don't do that"), correction ("I meant..."), continuation ("Go on"), and resolution ("It works now"). Never treat refusal as agreement.
+- Recognise indirect human-support requests such as "I need somebody from your team", "Can I speak with a real person?", "Please let Admin take over", and "I want to talk to a human". Use the existing support handover route.
+- Never state an action was completed unless the relevant backend operation succeeded. If no action/tool exists, explain the limitation and provide the supported next step.
+
 ANSWER QUALITY AND QUESTION MATCHING:
 - Start every substantive answer with the answer itself. Never prepend hello, hi, hey, a time-of-day greeting, the user's name, or a welcome phrase.
 - Never mention or address the user by their name in replies, including follow-up replies.
@@ -940,12 +991,8 @@ ${JSON.stringify(context)}`;
 }
 async function supportAiReply(env,context,history,message){
   const latestUserMessage=String(message||"").trim();
-  // Answer common product-overview questions deterministically. These are
-  // clear questions, so never let a model fallback ask the user to clarify.
-  const asksAboutProLink=/\b(?:what is|what's|tell me about|explain|describe|what does|how does)\b.{0,70}\b(?:this app|the app|prolink|this platform|the platform|your app|your platform)\b|\b(?:this app|the app|prolink|this platform)\b.{0,45}\b(?:about|for|do|work)\b/i.test(latestUserMessage);
-  if(asksAboutProLink){
-    return "Bidx ProLink is a platform that helps skilled professionals build a professional presence and helps customers discover people who offer the services they need.\n\n**What you can do on ProLink**\n- **Discover professionals:** Explore service categories, search for skills and services, and use location to help find relevant professionals.\n- **Create a professional profile:** Register and add your professional name, trade, skills, experience and location so customers can understand the services you offer.\n- **Showcase your work:** Add photos to My Work Portfolio to demonstrate your previous work.\n- **Connect with customers:** Customers can open public professional profiles and use the contact options shown there to discuss a job, price, timing and arrangements directly.\n- **Manage conversations:** Use Messages for customer-to-professional enquiries. Use ProLink Support when you need help from the AI Assistant or a human Admin.\n- **Manage your account:** Use Profile for your account details and Plan for Professional Membership.\n\n**Professional membership**\nThe current annual professional membership is US$5 for 12 months. It is a one-time payment, with no automatic recurring deductions. Membership becomes active or is extended after payment verification.\n\n**How to get started**\n1. Open Home to explore professionals and services.\n2. If you want to offer services, use the menu and choose Browse Categories or Professional Profile to begin setting up your professional presence.\n3. Add your skills, experience, location and work photos.\n4. Review the membership information under Plan.\n\nProLink helps people find and contact professionals; it does not collect customer job payments in the app or guarantee jobs or income. What would you like to do first: find a professional, register as a professional, or manage your profile?";
-  }
+  // Product FAQs are answered through the shared master knowledge prompt below,
+  // rather than a growing collection of one-off keyword patches.
   if(!env.AI||typeof env.AI.run!=="function")return "I’m sorry, my AI service is not connected at the moment. Your message is saved in this support conversation. You can request a human Admin, and I’ll be available again when the AI service is restored.";
   const broadRequest=/\b(everything|full overview|tell me about (the )?(business|app)|explain.*(app|business)|how does .* work)\b/i.test(latestUserMessage);
   // Keep routine replies compact for faster generation while preserving room
@@ -953,7 +1000,7 @@ async function supportAiReply(env,context,history,message){
   const maxTokens=broadRequest?850:latestUserMessage.length<90?320:560;
   const messages=[
     {role:"system",content:prolinkSupportSystemPrompt(context)},
-    ...history.filter(item=>["user","ai","admin"].includes(item.sender_role)).slice(-8).map(item=>({role:item.sender_role==="ai"?"assistant":item.sender_role==="admin"?"assistant":"user",content:String(item.content||"").slice(0,1200)}))
+    ...history.filter(item=>["user","ai","admin"].includes(item.sender_role)).slice(-12).map(item=>({role:item.sender_role==="ai"?"assistant":item.sender_role==="admin"?"assistant":"user",content:String(item.content||"").slice(0,1800)}))
   ];
   const result=await env.AI.run(PROLINK_SUPPORT_TEXT_MODEL,{messages,max_tokens:maxTokens,temperature:0.15});
   const generated=result?.response||result?.result||result?.output_text||result?.choices?.[0]?.message?.content||result?.message?.content||"";
@@ -981,15 +1028,8 @@ async function supportSend(request,env){
     // Read the preceding turn BEFORE saving this user message so short
     // confirmations can be resolved against the actual assistant offer.
     const priorHistory=await supabaseRest(auth.config,"/rest/v1/prolink_support_messages?select=sender_role,content&conversation_id=eq."+encodeURIComponent(conversation.id)+"&order=created_at.desc&limit=30");
-    const priorAssistantMessages=[...(priorHistory||[])].filter(item=>item.sender_role==="ai"||item.sender_role==="admin");
-    const affirmative=/\b(?:go ahead|go-ahead|okay|ok|yes|yeah|yep|sure|certainly|please do|do it|proceed|i agree|that is fine|that's fine|alright|all right)\b/i.test(message);
-    // Search the recent conversation, not only the immediately preceding
-    // assistant turn: a generic clarification must not erase an earlier
-    // explicit offer to connect the user with a human Admin.
-    const priorOfferedAdminHandover=priorAssistantMessages.some(item=>/\b(?:send|submit|raise|make)\b.{0,80}\b(?:handover|hand[- ]?over|human admin|admin request)\b|\bhandover request\b|\bconnect(?: you| the user)? to (?:a )?human admin\b/i.test(String(item.content||"")));
-    const directAdminConnectionRequest=/\b(?:connect|put me through|transfer|speak|talk|chat|contact|reach)\b.{0,65}\b(?:human\s+)?admin\b|\bhuman admin\b.{0,65}\b(?:please|now|for me|connect|talk|speak)\b/i.test(message);
-    const explicitlyDeclinesAdmin=/\b(?:do not|don't|dont|never|not)\b.{0,35}\b(?:connect|contact|transfer|send|talk|speak)\b.{0,35}\badmin\b/i.test(message);
-    const shouldRequestAdmin=!explicitlyDeclinesAdmin&&(directAdminConnectionRequest||(affirmative&&priorOfferedAdminHandover));
+    const intent=supportMessageIntent(message,priorHistory||[]);
+    const shouldRequestAdmin=intent==="human_admin_request"||intent==="confirm_human_admin";
     if(conversation.status==="resolved"){
       await supabaseRest(auth.config,"/rest/v1/prolink_support_conversations?id=eq."+encodeURIComponent(conversation.id),{method:"PATCH",headers:{prefer:"return=minimal"},body:JSON.stringify({status:"ai_active",resolved_at:null,updated_at:new Date().toISOString()})});
     }
@@ -1007,14 +1047,14 @@ async function supportSend(request,env){
       const saved=await supportInsertMessage(auth.config,conversation.id,"ai","Your request for human Admin assistance is already in the support queue. I will remain available while you wait.");
       return json({conversation,messages:saved?[saved]:[],awaitingAdmin:true});
     }
-    const greeting=supportGreetingReply(message,supportName(auth.user),timeZone);
+    const greeting=supportGreetingReply(message,supportName(auth.user));
     let reply=greeting;
     if(!reply){
       // Fetch account facts and recent chat history concurrently to avoid
       // making the user wait for two sequential Supabase round trips.
       const [context,history]=await Promise.all([
         supportAccountContext(auth.config,auth.user),
-        supabaseRest(auth.config,"/rest/v1/prolink_support_messages?select=sender_role,content&conversation_id=eq."+encodeURIComponent(conversation.id)+"&order=created_at.desc&limit=8")
+        supabaseRest(auth.config,"/rest/v1/prolink_support_messages?select=sender_role,content&conversation_id=eq."+encodeURIComponent(conversation.id)+"&order=created_at.desc&limit=12")
       ]);
       reply=await supportAiReply(env,context,(history||[]).reverse(),message);
     }
@@ -1048,6 +1088,7 @@ async function supportAttachment(request,env){
     const key="support/"+auth.user.id+"/"+conversation.id+"/"+crypto.randomUUID()+"-"+safe;
     const bytes=await file.arrayBuffer();
     await env.R2.put(key,bytes,{httpMetadata:{contentType:file.type,contentDisposition:"inline; filename*=UTF-8''"+encodeURIComponent(safe)}});
+    const category=supportAttachmentCategory(safe,file.type);
     let summary="";
     if(file.type.startsWith("image/")&&env.AI){
       try{
@@ -1056,10 +1097,21 @@ async function supportAttachment(request,env){
         summary=String(vision?.description||vision?.response||vision?.result||"").trim().slice(0,1800);
       }catch(error){console.error("[prolink-support] vision_failed",{name:error?.name||"Error"});}
     }
-    const attachment={name:safe,mime_type:file.type,size:file.size,path:key,kind:file.type.startsWith("image/")?"image":"document",ai_summary:summary||null};
-    const messageText=summary?"Image received. AI visual summary: "+summary:"Attachment received: "+safe+". The file is securely stored and pinned for Admin review.";
+    const readableText=file.type==="text/plain"||file.type==="text/csv";
+    if(readableText&&bytes.byteLength){
+      try{summary=new TextDecoder("utf-8",{fatal:false}).decode(bytes).replace(/\u0000/g,"").slice(0,10000);}catch{}
+    }
+    const attachment={name:safe,mime_type:file.type,size:file.size,path:key,kind:file.type.startsWith("image/")?"image":"document",category,ai_summary:summary||null};
+    const messageText=readableText&&summary
+      ?"Text document received: "+safe+". Extracted text (up to 10,000 characters):\n"+summary
+      :summary?"Image received. AI visual summary: "+summary
+      :"Attachment received: "+safe+". Detected attachment category: "+category+". MIME type: "+file.type+". The original file is securely stored and pinned for Admin review. Its full contents have not been extracted by this support service.";
     const saved=await supportInsertMessage(auth.config,conversation.id,"user",messageText,{senderUserId:auth.user.id,attachments:[attachment],pinned:true});
-    const confirmation=summary?"I’ve received your image and reviewed its visible contents. It is securely attached and pinned for Admin review in this conversation. Admin can inspect the original image and respond here. This confirmation does not mean Admin has opened it yet.": "I’ve securely received your file and attached it to this support conversation. It is pinned for Admin review, and Admin can inspect it and respond here. I’ll let you know when a response arrives; this does not mean Admin has opened it yet.";
+    const confirmation=file.type.startsWith("image/")&&summary
+      ?"I’ve received your image and reviewed its visible contents. It is securely attached and pinned for Admin review in this conversation. Admin can inspect the original image and respond here. This confirmation does not mean Admin has opened it yet."
+      :readableText&&summary
+      ?"I’ve received your text document and extracted its readable text for this support conversation. It is securely attached and pinned for Admin review. What would you like me to explain or help you do with it?"
+      :"I’ve received your "+category.replace(/_/g," ")+" ("+safe+"). The original file is securely stored and pinned for Admin review. I can recognise the file type, but its full contents have not been extracted here. What would you like me to help you do with it?";
     const ai=await supportInsertMessage(auth.config,conversation.id,"ai",confirmation);
     return json({success:true,messages:[saved,ai].filter(Boolean)});
   }catch(error){console.error("[prolink-support] attachment_failed",{name:error?.name||"Error",message:String(error?.message||"").slice(0,160)});return json({error:"Your attachment could not be saved. Please try again."},502);}
@@ -1198,3 +1250,5 @@ export default {
       .transform(assetsResponse);
   }
 };
+
+export { supportGreetingReply, supportMessageIntent, supportAttachmentCategory };
