@@ -757,7 +757,7 @@ function supportGreetingReply(message,name=""){
   if(/^(good morning|morning)( there)?$/.test(text))return "Good morning"+address+". How may I help you today?";
   if(/^(good afternoon|afternoon)( there)?$/.test(text))return "Good afternoon"+address+". How may I help you today?";
   if(/^(good evening|evening)( there)?$/.test(text))return "Good evening"+address+". How may I help you today?";
-  if(/^(hi|hey|hello|hiya)( there)?$/.test(text)){
+  if(/^(h+i+|he+y+|hel+o+|hiya+)( there)?$/.test(text)){
     const greeting=text.startsWith("hello")?"Hello":text.startsWith("hey")?"Hey":"Hi";
     return greeting+address+". How may I help you today?";
   }
@@ -772,7 +772,7 @@ function supportMessageIntent(message,history=[]){
   const affirmative=/^(?:okay|ok|yes|yeah|yep|sure|certainly|absolutely|of course|please do|do it|go ahead|go-ahead|proceed|i agree|that is fine|that's fine|that works|sounds good|alright|all right)(?:[,.!?;:\s].*)?$/i.test(text);
   if(directAdmin&&!decline)return "human_admin_request";
   if(affirmative&&offered&&!decline)return "confirm_human_admin";
-  if(/^(?:no|no thanks|not now|cancel|stop|don't|do not)(?:[.!\s].*)?$/i.test(text))return "decline";
+  if(/^(?:no|no thanks|not now|cancel|stop|don't|do not)(?:[,.!?;:\s].*)?$/i.test(text))return "decline";
   if(/^(?:thank you|thanks|thx)(?:[.!\s].*)?$/i.test(text))return "thanks";
   if(/^(?:okay|ok|alright|all right|got it|understood)(?:[.!\s].*)?$/i.test(text))return "acknowledgement";
   return "general";
