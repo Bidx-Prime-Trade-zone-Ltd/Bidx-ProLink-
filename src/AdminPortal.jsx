@@ -95,8 +95,8 @@ export default function AdminPortal(){
   ['Rejected documents',counts.rejectedDocuments??'—',FileCheck]
  ];
  return <div className="admin-shell">
-  <header className="admin-header"><div><span className="admin-kicker">RESTRICTED · DOCUMENT APPROVAL ONLY</span><h1>Bidx ProLink Internal Admin</h1><p className="admin-subtitle">{ADMIN_EMAIL}</p></div><button onClick={()=>supabase.auth.signOut()}><LogOut size={16}/> Sign out</button></header>
-  <div className="admin-security-note"><LockKeyhole size={16}/><span>Read-only access to account and professional information. This administrator can approve or reject submitted documents only. Profile details cannot be edited here.</span></div>
+  <header className="admin-header"><div><span className="admin-kicker">RESTRICTED · DOCUMENT REVIEW & SUPPORT</span><h1>Bidx ProLink Internal Admin</h1><p className="admin-subtitle">{ADMIN_EMAIL}</p></div><button onClick={()=>supabase.auth.signOut()}><LogOut size={16}/> Sign out</button></header>
+  <div className="admin-security-note"><LockKeyhole size={16}/><span>Account and professional records are view-only. Authorised Admins can review documents and attend, reply to, and resolve ProLink Support conversations.</span></div>
   <nav className="admin-tabs">{tabs.map(t=><button key={t} className={tab===t?'active':''} onClick={()=>{setTab(t);setSelected(null);setQuery('');}}>{t}</button>)}</nav>
   {notice&&<p className="admin-notice" role="status">{notice}</p>}
   {tab==='Overview'&&<>
@@ -130,6 +130,6 @@ export default function AdminPortal(){
    <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Document</th><th>Applicant ID</th><th>Decision</th><th>Submitted</th><th>Reviewed</th><th>Reason</th></tr></thead><tbody>{reviews.filter(r=>r.status!=='pending').map(r=><tr key={r.id}><td>{label(r.submitted_data?.document_type||r.section)}</td><td className="admin-id">{r.user_id}</td><td><span className={'admin-status '+r.status}>{label(r.status)}</span></td><td>{fmt(r.submitted_at)}</td><td>{fmt(r.reviewed_at)}</td><td>{r.review_reason||'—'}</td></tr>)}</tbody></table></div>
   </section>}
   {tab==='Support Inbox'&&<SupportInbox/>}
-  <footer className="admin-footer"><ShieldCheck size={15}/> Bidx ProLink · Internal document moderation · Read-only user records</footer>
+  <footer className="admin-footer"><ShieldCheck size={15}/> Bidx ProLink · Internal document review and customer support · User records remain read-only</footer>
  </div>;
 }
