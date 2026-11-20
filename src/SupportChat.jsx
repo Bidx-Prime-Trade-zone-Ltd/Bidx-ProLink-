@@ -99,8 +99,15 @@ export default function SupportChat({session,profile}){
    if(aiMessage){
     const remaining=Math.max(0,typingDuration(aiMessage.content)-(Date.now()-started));
     if(remaining)await wait(remaining);
+    // The POST already returns the saved AI message; avoid a second GET round trip.
+    setMessages(current=>{
+     const withoutPending=current.filter(item=>item.id!==localId);
+     if(withoutPending.some(item=>item.id===aiMessage.id))return withoutPending;
+     return [...withoutPending,{...aiMessage}];
+    });
+   }else{
+    setMessages(current=>current.map(item=>item.id===localId?{...item,local_status:'sent'}:item));
    }
-   await load(true);
   }catch(err){
    setMessages(current=>current.filter(item=>item.id!==localId));
    setDraft(message);setError(err.message||'Your message could not be sent.');
