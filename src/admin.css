@@ -119,3 +119,5 @@
  .admin-support-reply{flex-direction:column}
  .admin-support-reply button{align-self:stretch;width:100%;min-height:42px}
 }
+
+.admin-metric b.admin-metric-unavailable{font-size:12px;line-height:1.25;color:#9a6a25}.admin-warning{background:#fff8e9;border:1px solid #f1dfb7;color:#76551c}
