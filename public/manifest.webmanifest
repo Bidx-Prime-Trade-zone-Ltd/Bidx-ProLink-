@@ -1,7 +1,7 @@
 {
   "name": "Bidx ProLink",
   "short_name": "ProLink",
-  "description": "Find trusted skilled professionals across Nigeria.",
+  "description": "Discover skilled professionals and showcase your services across supported countries, with more countries and languages added over time.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
