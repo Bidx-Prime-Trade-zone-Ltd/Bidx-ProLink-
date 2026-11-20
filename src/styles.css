@@ -587,3 +587,20 @@ body.prolink-menu-locked{position:fixed!important;overflow:hidden!important;widt
 @media(min-width:760px){.gallery-viewer-stage{padding-left:80px;padding-right:80px}.gallery-viewer-prev{left:22px}.gallery-viewer-next{right:22px}}
 @media(max-width:560px){.public-gallery-grid{gap:10px!important}.public-gallery-photo img{border-radius:10px}.gallery-viewer-stage{padding-left:42px;padding-right:42px}.gallery-viewer-arrow{width:34px;height:46px}.gallery-viewer-prev{left:4px}.gallery-viewer-next{right:4px}}
 @media(prefers-reduced-motion:reduce){.public-gallery-photo img{transition:none}}
+
+
+/* Public legal pages: accessible without signing in */
+.legal-route-page{min-height:100vh;background:#f6f8f6;color:#24372d;padding:0 22px 64px}
+.legal-route-header{width:min(980px,100%);margin:0 auto;min-height:76px;display:flex;align-items:center;justify-content:space-between;gap:18px;border-bottom:1px solid #e4ebe5}
+.legal-route-header>a:first-child{text-decoration:none}
+.legal-route-back{color:#236a49;font-size:13px;font-weight:700;text-decoration:none}
+.legal-route-content{width:min(820px,100%);margin:42px auto;background:#fff;border:1px solid #e2e9e3;border-radius:16px;padding:clamp(22px,5vw,48px);box-shadow:0 12px 36px #183b2410}
+.legal-route-content h1{font:800 clamp(30px,5vw,42px)/1.15 Manrope,sans-serif;color:#183c2a;margin:10px 0 28px}
+.legal-route-content .legal-copy-block{font-size:14px;line-height:1.8;color:#526258;overflow-wrap:anywhere}
+.legal-route-content .legal-copy-block p{margin:0 0 16px}
+.legal-route-content .legal-copy-block h2{font:750 19px/1.35 Manrope,sans-serif;color:#254a35;margin:28px 0 10px}
+.legal-route-content .legal-copy-block li{margin:0 0 9px}
+.legal-route-content .legal-copy-block a,.legal-route-updated a{color:#176b49;text-decoration:underline}
+.legal-route-updated{border-top:1px solid #e8eee9;padding-top:18px;margin-top:30px;color:#68776d;font-size:13px}
+.auth-modal .legal-copy a{color:#176b49;font-weight:700;text-decoration:underline}
+@media(max-width:700px){.legal-route-page{padding:0 14px 40px}.legal-route-header{min-height:66px}.legal-route-content{margin:22px auto;padding:22px 18px}.legal-route-content .legal-copy-block{font-size:13px}}
