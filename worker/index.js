@@ -754,7 +754,7 @@ const PROLINK_CREDENTIAL_GUIDANCE = {
   FJI:"Fiji: recognised TVET qualification, Fiji National University trade certificate or relevant occupational competence award.",
   PNG:"Papua New Guinea: National Training Council-recognised TVET qualification, trade-test certificate or apprenticeship award."
 };
-const PROLINK_SUPPORT_TEXT_MODEL="@cf/zai-org/glm-4.7-flash";
+const PROLINK_SUPPORT_TEXT_MODEL="@cf/meta/llama-3.1-8b-instruct-fast";
 const PROLINK_SUPPORT_VISION_MODEL="@cf/meta/llama-3.2-11b-vision-instruct";
 function supportName(user){
   const meta=user?.user_metadata||{};
@@ -1077,23 +1077,18 @@ async function supportAiReply(env,context,history,message){
   // rather than a growing collection of one-off keyword patches.
   if(!env.AI||typeof env.AI.run!=="function")return "I’m sorry, my AI service is not connected at the moment. Your message is saved in this support conversation. You can request a human Admin, and I’ll be available again when the AI service is restored.";
   const broadRequest=/\b(everything|full overview|tell me about (the )?(business|app)|explain.*(app|business)|how does .* work)\b/i.test(latestUserMessage);
-  // GLM-4.7-Flash supports reasoning; leave enough completion budget for
-  // both its reasoning and the user-facing answer. max_tokens is deprecated
-  // by Workers AI in favour of max_completion_tokens.
-  const maxCompletionTokens=broadRequest?1800:latestUserMessage.length<90?900:1300;
+  // Use Cloudflare's optimized fast 8B model and small completion budgets for low-latency support.
+  const maxTokens=broadRequest?384:latestUserMessage.length<90?160:256;
   const messages=[
     {role:"system",content:prolinkSupportSystemPrompt(context)},
-    ...history.filter(item=>["user","ai","admin"].includes(item.sender_role)).slice(-12).map(item=>({role:item.sender_role==="ai"?"assistant":item.sender_role==="admin"?"assistant":"user",content:String(item.content||"").slice(0,1800)}))
+    ...history.filter(item=>["user","ai","admin"].includes(item.sender_role)).slice(-6).map(item=>({role:item.sender_role==="ai"?"assistant":item.sender_role==="admin"?"assistant":"user",content:String(item.content||"").slice(0,1000)}))
   ];
   try{
     const result=await env.AI.run(PROLINK_SUPPORT_TEXT_MODEL,{
        messages,
-       max_completion_tokens:maxCompletionTokens,
-       temperature:0.15,
-       // GLM-4.7-Flash can spend a short response budget on hidden reasoning.
-       // Disable reasoning for this customer-support chat so the user receives
-       // a direct answer instead of an empty visible completion.
-       chat_template_kwargs:{enable_thinking:false}
+       max_tokens:maxTokens,
+       temperature:0.2,
+       top_p:0.85
      });
     const generated=supportAiExtractText(result);
     const cleaned=generated.trim().replace(/^(?:(?:hello|hi|hey|good morning|good afternoon|good evening)(?:, [^.!?]{1,60})?[.!?] *)+/i,"");
