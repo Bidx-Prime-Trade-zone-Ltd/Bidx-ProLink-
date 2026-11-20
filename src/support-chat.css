@@ -16,10 +16,18 @@
 .prolink-support-sender{margin-bottom:4px;color:#45617b;font-size:9px;font-weight:850;letter-spacing:.25px;text-transform:uppercase}
 .prolink-support-message p{margin:0;color:#1b3045;font-size:12px;line-height:1.55;white-space:pre-wrap}
 .prolink-support-message time{display:block;margin-top:6px;color:#77889a;font-size:9px;text-align:right}
+.prolink-support-message-meta{display:flex;align-items:center;justify-content:flex-end;gap:5px;margin-top:6px}
+.prolink-support-message-meta time{margin:0}
+.prolink-support-delivery{display:inline-flex;align-items:center;gap:3px;color:#7c91a5;font-size:9px}
+.prolink-support-delivery.is-read{color:#1680c6}
+.prolink-support-delivery small{font-size:8px}
 .prolink-support-attachment{display:flex;align-items:center;gap:7px;margin-top:7px;padding:8px;border:1px solid #c8d8e8;border-radius:9px;background:rgba(255,255,255,.7);font-size:10px}
 .prolink-support-attachment span{flex:1;min-width:0;overflow-wrap:anywhere;font-weight:750}.prolink-support-attachment small{color:#6b7c8f}
 .prolink-support-pinned{display:flex;align-items:center;gap:4px;margin-top:6px;color:#28744d;font-size:9px;font-weight:800}
-.prolink-support-typing{align-self:flex-start;color:#718297;font-size:10px;padding:4px 8px}
+.prolink-support-typing{align-self:flex-start;display:flex;align-items:center;gap:4px;color:#718297;font-size:10px;padding:7px 10px;border:1px solid #e2e9f0;border-radius:12px;background:#fff}
+.prolink-support-typing i{width:5px;height:5px;border-radius:50%;background:#6c849b;animation:prolink-support-typing 1s infinite ease-in-out}
+.prolink-support-typing i:nth-of-type(2){animation-delay:.15s}.prolink-support-typing i:nth-of-type(3){animation-delay:.3s}
+@keyframes prolink-support-typing{0%,60%,100%{opacity:.35;transform:translateY(0)}30%{opacity:1;transform:translateY(-3px)}}
 .prolink-support-actions{display:flex;flex-direction:column;gap:7px;padding:7px 11px 9px;border-top:1px solid #e5ebf2;background:#fff}
 .prolink-support-actions>button{align-self:flex-start;padding:8px 11px;border:1px solid #b8d3ed;border-radius:9px;background:#eff6fd;color:#13558f;font-size:10px;font-weight:850}
 .prolink-support-pending{display:flex;align-items:center;gap:6px;color:#526b83;font-size:10px;line-height:1.4}
