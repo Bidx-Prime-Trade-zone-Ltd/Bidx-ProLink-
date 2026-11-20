@@ -965,7 +965,8 @@ SUPPORT AND HUMAN ADMIN:
 - Never ask for passwords, one-time codes, card numbers or secret credentials.
 
 PROFESSIONAL ENGLISH STANDARD — APPLY TO EVERY RESPONSE:
-- Always write in clear, correct, polished professional English, regardless of the grammar, spelling, slang, abbreviations, dialect, or language level used by the user.
+- Understand Nigerian Pidgin English, Nigerian informal expressions, common spelling variations and ordinary conversational English. Infer the likely meaning from context; if a phrase has two materially different meanings, ask one brief clarification rather than failing.
+- Respond in clear, correct, polished professional English by default. Do not imitate grammatical errors or mock the user's language. If the user explicitly requests Pidgin, you may reply naturally in Pidgin.
 - Do not imitate the user's grammatical errors, misspellings, broken sentence structure, informal shorthand, or unprofessional wording. Understand the intended meaning and respond in well-formed English without criticising or correcting the user's English unless they ask for language correction.
 - Use complete sentences, correct grammar, spelling, punctuation, and natural word choice. Avoid fragments, awkward phrasing, repeated words, excessive exclamation marks, and confusing constructions.
 - Maintain a courteous, calm, respectful, confident and service-oriented tone. Be professional without sounding cold, robotic, overly formal, or unnecessarily verbose.
@@ -1023,24 +1024,59 @@ RESPONSE STYLE:
 VERIFIED ACCOUNT CONTEXT (JSON):
 ${JSON.stringify(context)}`;
 }
+function supportAiExtractText(result){
+  const candidates=[
+    result?.response,
+    result?.result,
+    result?.output_text,
+    result?.choices?.[0]?.message?.content,
+    result?.choices?.[0]?.text,
+    result?.message?.content,
+    result?.output?.[0]?.content,
+    result?.content
+  ];
+  for(const candidate of candidates){
+    if(typeof candidate==="string"&&candidate.trim())return candidate.trim();
+    if(Array.isArray(candidate)){
+      const joined=candidate.map(part=>typeof part==="string"?part:part?.text||part?.content||"").filter(Boolean).join("\n").trim();
+      if(joined)return joined;
+    }
+    if(candidate&&typeof candidate==="object"){
+      const nested=candidate.text||candidate.content||candidate.response||candidate.output_text;
+      if(typeof nested==="string"&&nested.trim())return nested.trim();
+      if(Array.isArray(nested)){
+        const joined=nested.map(part=>typeof part==="string"?part:part?.text||part?.content||"").filter(Boolean).join("\n").trim();
+        if(joined)return joined;
+      }
+    }
+  }
+  return "";
+}
 async function supportAiReply(env,context,history,message){
   const latestUserMessage=String(message||"").trim();
   // Product FAQs are answered through the shared master knowledge prompt below,
   // rather than a growing collection of one-off keyword patches.
   if(!env.AI||typeof env.AI.run!=="function")return "I’m sorry, my AI service is not connected at the moment. Your message is saved in this support conversation. You can request a human Admin, and I’ll be available again when the AI service is restored.";
   const broadRequest=/\b(everything|full overview|tell me about (the )?(business|app)|explain.*(app|business)|how does .* work)\b/i.test(latestUserMessage);
-  // Keep routine replies compact for faster generation while preserving room
-  // for the structured explanations users request.
-  const maxTokens=broadRequest?850:latestUserMessage.length<90?320:560;
+  // GLM-4.7-Flash supports reasoning; leave enough completion budget for
+  // both its reasoning and the user-facing answer. max_tokens is deprecated
+  // by Workers AI in favour of max_completion_tokens.
+  const maxCompletionTokens=broadRequest?1800:latestUserMessage.length<90?900:1300;
   const messages=[
     {role:"system",content:prolinkSupportSystemPrompt(context)},
-    ...history.filter(item=>["user","ai","admin"].includes(item.sender_role)).slice(-12).map(item=>({role:item.sender_role==="ai"?"assistant":item.sender_role==="admin"?"assistant":"user",content:String(item.content||"").slice(0,1800)}))
+    ...history.filter(item=>["user","ai","admin"].includes(item.sender_role)).slice(-12).map(item=>({role:item.sender_role==="ai"?"assistant":item.sender_role==="admin"?"assistant":"user",content:String(item.content||"").slice(0,1800)})),
+    {role:"user",content:latestUserMessage}
   ];
-  const result=await env.AI.run(PROLINK_SUPPORT_TEXT_MODEL,{messages,max_tokens:maxTokens,temperature:0.15});
-  const generated=result?.response||result?.result||result?.output_text||result?.choices?.[0]?.message?.content||result?.message?.content||"";
-  const text=Array.isArray(generated)?generated.map(part=>typeof part==="string"?part:part?.text||"").join("\n"):String(generated||"");
-  const cleaned=text.trim().replace(/^(?:(?:hello|hi|hey|good morning|good afternoon|good evening)(?:, [^.!?]{1,60})?[.!?] *)+/i,"");
-  return cleaned.slice(0,7000)||"I’m sorry, I could not prepare a reliable answer just now. Please try sending your question again, or select “Connect me to human Admin” if you need personal assistance.";
+  try{
+    const result=await env.AI.run(PROLINK_SUPPORT_TEXT_MODEL,{messages,max_completion_tokens:maxCompletionTokens,temperature:0.15});
+    const generated=supportAiExtractText(result);
+    const cleaned=generated.trim().replace(/^(?:(?:hello|hi|hey|good morning|good afternoon|good evening)(?:, [^.!?]{1,60})?[.!?] *)+/i,"");
+    if(cleaned)return cleaned.slice(0,7000);
+    console.error("[prolink-support] ai_empty_response",{model:PROLINK_SUPPORT_TEXT_MODEL,success:result?.success,keys:result&&typeof result==="object"?Object.keys(result).slice(0,12):[]});
+  }catch(error){
+    console.error("[prolink-support] ai_inference_failed",{model:PROLINK_SUPPORT_TEXT_MODEL,name:error?.name||"Error",message:String(error?.message||"").slice(0,180)});
+  }
+  return "I’m having trouble generating a response right now, but your message has been saved. Please try again shortly, or select “Connect me to human Admin” for personal assistance.";
 }
 async function supportMessages(request,env){
   const auth=await signedInProfileUser(request,env);if(auth.error)return auth.error;
@@ -1293,4 +1329,4 @@ export default {
   }
 };
 
-export { supportGreetingReply, supportGreetingPrefix, supportMessageIntent, supportAttachmentCategory, supportAccountLookupChoice };
+export { supportGreetingReply, supportGreetingPrefix, supportMessageIntent, supportAttachmentCategory, supportAccountLookupChoice, supportAiExtractText };
