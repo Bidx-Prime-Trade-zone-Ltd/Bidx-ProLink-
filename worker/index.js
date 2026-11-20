@@ -1293,4 +1293,4 @@ export default {
   }
 };
 
-export { supportGreetingReply, supportGreetingPrefix, supportMessageIntent, supportAttachmentCategory };
+export { supportGreetingReply, supportGreetingPrefix, supportMessageIntent, supportAttachmentCategory, supportAccountLookupChoice };
