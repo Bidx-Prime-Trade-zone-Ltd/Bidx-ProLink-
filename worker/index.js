@@ -1086,13 +1086,21 @@ async function supportAiReply(env,context,history,message){
     ...history.filter(item=>["user","ai","admin"].includes(item.sender_role)).slice(-12).map(item=>({role:item.sender_role==="ai"?"assistant":item.sender_role==="admin"?"assistant":"user",content:String(item.content||"").slice(0,1800)}))
   ];
   try{
-    const result=await env.AI.run(PROLINK_SUPPORT_TEXT_MODEL,{messages,max_completion_tokens:maxCompletionTokens,temperature:0.15});
+    const result=await env.AI.run(PROLINK_SUPPORT_TEXT_MODEL,{
+       messages,
+       max_completion_tokens:maxCompletionTokens,
+       temperature:0.15,
+       // GLM-4.7-Flash can spend a short response budget on hidden reasoning.
+       // Disable reasoning for this customer-support chat so the user receives
+       // a direct answer instead of an empty visible completion.
+       chat_template_kwargs:{enable_thinking:false}
+     });
     const generated=supportAiExtractText(result);
     const cleaned=generated.trim().replace(/^(?:(?:hello|hi|hey|good morning|good afternoon|good evening)(?:, [^.!?]{1,60})?[.!?] *)+/i,"");
     if(cleaned)return cleaned.slice(0,7000);
     console.error("[prolink-support] ai_empty_response",{model:PROLINK_SUPPORT_TEXT_MODEL,success:result?.success,keys:result&&typeof result==="object"?Object.keys(result).slice(0,12):[]});
   }catch(error){
-    console.error("[prolink-support] ai_inference_failed",{model:PROLINK_SUPPORT_TEXT_MODEL,name:error?.name||"Error",message:String(error?.message||"").slice(0,180)});
+    console.error("[prolink-support] ai_inference_failed",{model:PROLINK_SUPPORT_TEXT_MODEL,name:error?.name||"Error",message:String(error?.message||"").slice(0,500),stack:String(error?.stack||"").slice(0,700)});
   }
   return "I’m having trouble generating a response right now, but your message has been saved. Please try again shortly, or select “Connect me to human Admin” for personal assistance.";
 }
