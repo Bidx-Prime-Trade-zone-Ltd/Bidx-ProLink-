@@ -974,19 +974,25 @@ async function supportSend(request,env){
     const conversation=await supportConversation(auth.config,auth.user.id);
     // Read the preceding turn BEFORE saving this user message so short
     // confirmations can be resolved against the actual assistant offer.
-    const priorHistory=await supabaseRest(auth.config,"/rest/v1/prolink_support_messages?select=sender_role,content&conversation_id=eq."+encodeURIComponent(conversation.id)+"&order=created_at.desc&limit=8");
-    const priorAssistant=[...(priorHistory||[])].reverse().find(item=>item.sender_role==="ai"||item.sender_role==="admin");
-    const affirmative=/^(?:go ahead|go-ahead|okay|ok|yes|yeah|yep|sure|certainly|please do|do it|proceed|i agree|that is fine|that's fine|alright|all right)[.!\s]*$/i.test(message);
-    const priorOfferedAdminHandover=!!priorAssistant&&/\b(?:send|submit|raise|make)\b.{0,55}\b(?:handover|hand[- ]?over|human admin|admin request)\b|\bhandover request\b/i.test(String(priorAssistant.content||""));
+    const priorHistory=await supabaseRest(auth.config,"/rest/v1/prolink_support_messages?select=sender_role,content&conversation_id=eq."+encodeURIComponent(conversation.id)+"&order=created_at.desc&limit=30");
+    const priorAssistantMessages=[...(priorHistory||[])].filter(item=>item.sender_role==="ai"||item.sender_role==="admin");
+    const affirmative=/\b(?:go ahead|go-ahead|okay|ok|yes|yeah|yep|sure|certainly|please do|do it|proceed|i agree|that is fine|that's fine|alright|all right)\b/i.test(message);
+    // Search the recent conversation, not only the immediately preceding
+    // assistant turn: a generic clarification must not erase an earlier
+    // explicit offer to connect the user with a human Admin.
+    const priorOfferedAdminHandover=priorAssistantMessages.some(item=>/\b(?:send|submit|raise|make)\b.{0,80}\b(?:handover|hand[- ]?over|human admin|admin request)\b|\bhandover request\b|\bconnect(?: you| the user)? to (?:a )?human admin\b/i.test(String(item.content||"")));
+    const directAdminConnectionRequest=/\b(?:connect|put me through|transfer|speak|talk|chat|contact|reach)\b.{0,65}\b(?:human\s+)?admin\b|\bhuman admin\b.{0,65}\b(?:please|now|for me|connect|talk|speak)\b/i.test(message);
+    const explicitlyDeclinesAdmin=/\b(?:do not|don't|dont|never|not)\b.{0,35}\b(?:connect|contact|transfer|send|talk|speak)\b.{0,35}\badmin\b/i.test(message);
+    const shouldRequestAdmin=!explicitlyDeclinesAdmin&&(directAdminConnectionRequest||(affirmative&&priorOfferedAdminHandover));
     if(conversation.status==="resolved"){
       await supabaseRest(auth.config,"/rest/v1/prolink_support_conversations?id=eq."+encodeURIComponent(conversation.id),{method:"PATCH",headers:{prefer:"return=minimal"},body:JSON.stringify({status:"ai_active",resolved_at:null,updated_at:new Date().toISOString()})});
     }
     await supportInsertMessage(auth.config,conversation.id,"user",message,{senderUserId:auth.user.id});
     if(conversation.status==="admin_attending")return json({conversation:{...conversation,last_message_at:new Date().toISOString()},messages:[],awaitingAdmin:true});
-    // "Go ahead" after the AI explicitly offers a human-Admin handover is
-    // consent to submit that handover. Do not send it back to the language
-    // model as an isolated phrase or ask the user to repeat their request.
-    if(affirmative&&priorOfferedAdminHandover){
+    // A direct request to connect with Admin, or an affirmative reply to
+    // an earlier Admin-handover offer anywhere in recent history, is a clear
+    // instruction to submit the handover. Do not ask the user to repeat it.
+    if(shouldRequestAdmin){
       if(conversation.status!=="admin_requested"){
         await supabaseRest(auth.config,"/rest/v1/prolink_support_conversations?id=eq."+encodeURIComponent(conversation.id),{method:"PATCH",headers:{prefer:"return=minimal"},body:JSON.stringify({status:"admin_requested",admin_requested_at:new Date().toISOString(),updated_at:new Date().toISOString()})});
         const saved=await supportInsertMessage(auth.config,conversation.id,"ai","Your request for human Admin assistance has been submitted successfully. It is now in the ProLink Admin support queue. I will remain available while you wait. Admin has not yet marked this conversation as attending.");
