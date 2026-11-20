@@ -72,7 +72,7 @@ The dedicated floating **Chat Admin** surface is separate from customer-to-profe
 
 Before enabling the feature in production:
 
-1. Apply `supabase/migrations/202611200001_prolink_unified_support_chat.sql` to the ProLink Supabase project.
+1. Apply `supabase/migrations/202611200001_prolink_unified_support_chat.sql` and `supabase/migrations/202611200002_prolink_support_read_receipts.sql` to the ProLink Supabase project.
 2. Ensure the ProLink Cloudflare Worker has a Workers AI binding named `AI` (the Wrangler config declares this binding). The support assistant uses Workers AI text generation and image understanding.
 3. Deploy the updated ProLink Worker and frontend assets.
 4. Sign in to the app and test AI greeting, account/membership lookup, image/PDF upload, Admin handoff, Admin attendance, human reply, and resolution.
