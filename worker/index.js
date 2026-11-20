@@ -1064,8 +1064,7 @@ async function supportAiReply(env,context,history,message){
   const maxCompletionTokens=broadRequest?1800:latestUserMessage.length<90?900:1300;
   const messages=[
     {role:"system",content:prolinkSupportSystemPrompt(context)},
-    ...history.filter(item=>["user","ai","admin"].includes(item.sender_role)).slice(-12).map(item=>({role:item.sender_role==="ai"?"assistant":item.sender_role==="admin"?"assistant":"user",content:String(item.content||"").slice(0,1800)})),
-    {role:"user",content:latestUserMessage}
+    ...history.filter(item=>["user","ai","admin"].includes(item.sender_role)).slice(-12).map(item=>({role:item.sender_role==="ai"?"assistant":item.sender_role==="admin"?"assistant":"user",content:String(item.content||"").slice(0,1800)}))
   ];
   try{
     const result=await env.AI.run(PROLINK_SUPPORT_TEXT_MODEL,{messages,max_completion_tokens:maxCompletionTokens,temperature:0.15});
