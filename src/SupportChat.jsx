@@ -1,9 +1,11 @@
 import React,{useCallback,useEffect,useRef,useState} from 'react';
-import {MessageCircle,Send,X,Paperclip,ShieldCheck,Headset,LoaderCircle,FileText,Image as ImageIcon,CheckCheck} from 'lucide-react';
+import {MessageCircle,Send,X,Paperclip,ShieldCheck,Headset,LoaderCircle,FileText,Image as ImageIcon,Check,CheckCheck} from 'lucide-react';
 import './support-chat.css';
 
 const formatTime=value=>value?new Date(value).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}):'';
 const shortSize=value=>value<1024*1024?Math.max(1,Math.round(value/1024))+' KB':(value/1024/1024).toFixed(1)+' MB';
+const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+const typingDuration=text=>{const length=String(text||'').trim().length;return length<=140?1000:length<=500?1500:2000;};
 
 export default function SupportChat({session,profile}){
  const [open,setOpen]=useState(false);
@@ -12,10 +14,12 @@ export default function SupportChat({session,profile}){
  const [draft,setDraft]=useState('');
  const [loading,setLoading]=useState(false);
  const [sending,setSending]=useState(false);
+ const [aiTyping,setAiTyping]=useState(false);
  const [uploading,setUploading]=useState(false);
  const [error,setError]=useState('');
  const listRef=useRef(null);
  const fileRef=useRef(null);
+ const stickToBottom=useRef(true);
  const token=session?.access_token;
  const firstName=(profile?.full_name||session?.user?.user_metadata?.full_name||session?.user?.user_metadata?.name||'').trim().split(/\s+/)[0];
 
@@ -23,7 +27,7 @@ export default function SupportChat({session,profile}){
   if(!token)return;
   if(!silent)setLoading(true);
   try{
-   const response=await fetch('/api/support/messages?timeZone='+encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone||'Africa/Lagos'),{headers:{authorization:'Bearer '+token}});
+   const response=await fetch('/api/support/messages',{headers:{authorization:'Bearer '+token}});
    const payload=await response.json();
    if(!response.ok)throw new Error(payload.error||'Support chat could not be loaded.');
    setConversation(payload.conversation||null);
@@ -33,27 +37,50 @@ export default function SupportChat({session,profile}){
   finally{if(!silent)setLoading(false);}
  },[token]);
 
- useEffect(()=>{if(open)load();},[open,load]);
+ useEffect(()=>{if(open){stickToBottom.current=true;load();}},[open,load]);
  useEffect(()=>{
   if(!open||!token)return;
   const timer=setInterval(()=>load(true),7000);
   return()=>clearInterval(timer);
  },[open,token,load]);
- useEffect(()=>{if(open&&listRef.current)listRef.current.scrollTop=listRef.current.scrollHeight;},[open,messages]);
+ useEffect(()=>{
+  if(open&&stickToBottom.current&&listRef.current){
+   const node=listRef.current;
+   node.scrollTop=node.scrollHeight;
+  }
+ },[open,messages,aiTyping]);
+
+ const onMessagesScroll=()=>{
+  const node=listRef.current;if(!node)return;
+  stickToBottom.current=node.scrollHeight-node.scrollTop-node.clientHeight<44;
+ };
 
  const send=async()=>{
   const message=draft.trim();if(!message||sending||!token)return;
-  setSending(true);setError('');setDraft('');
+  const localId='pending-'+Date.now();
+  const started=Date.now();
+  stickToBottom.current=true;
+  setSending(true);setAiTyping(true);setError('');setDraft('');
+  setMessages(current=>[...current,{id:localId,sender_role:'user',content:message,created_at:new Date().toISOString(),local_status:'sending'}]);
   try{
    const response=await fetch('/api/support/message',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+token},body:JSON.stringify({message,timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone||'Africa/Lagos'})});
    const payload=await response.json();
    if(!response.ok)throw new Error(payload.error||'Your message could not be sent.');
+   const aiMessage=(payload.messages||[]).find(item=>item.sender_role==='ai');
+   if(aiMessage){
+    const remaining=Math.max(0,typingDuration(aiMessage.content)-(Date.now()-started));
+    if(remaining)await wait(remaining);
+   }
    await load(true);
-  }catch(err){setDraft(message);setError(err.message||'Your message could not be sent.');}
-  finally{setSending(false);}
+  }catch(err){
+   setMessages(current=>current.filter(item=>item.id!==localId));
+   setDraft(message);setError(err.message||'Your message could not be sent.');
+  }finally{setSending(false);setAiTyping(false);}
  };
+
  const upload=async file=>{
   if(!file||!token)return;
+  stickToBottom.current=true;
   setUploading(true);setError('');
   try{
    const form=new FormData();form.append('file',file);
@@ -88,17 +115,19 @@ export default function SupportChat({session,profile}){
     <button type="button" onClick={()=>setOpen(false)} aria-label="Close support chat"><X size={20}/></button>
    </header>
    <div className="prolink-support-security"><ShieldCheck size={15}/> Private conversation with AI Assistant and ProLink Admin</div>
-   <div className="prolink-support-messages" ref={listRef}>
+   <div className="prolink-support-messages" ref={listRef} onScroll={onMessagesScroll}>
     {loading&&!messages.length&&<div className="prolink-support-loading"><LoaderCircle className="spin" size={20}/> Opening your support chat…</div>}
     {!loading&&!messages.length&&<div className="prolink-support-loading">Welcome{firstName?', '+firstName:''}. How can we help?</div>}
     {messages.map(message=><article key={message.id} className={'prolink-support-message '+(message.sender_role==='user'?'from-user':message.sender_role==='admin'?'from-admin':'from-ai')}>
       <div className="prolink-support-sender">{message.sender_role==='user'?'You':message.sender_role==='admin'?'ProLink Admin':message.sender_role==='system'?'Support update':'AI Assistant'}</div>
       {message.content&&<p>{message.content}</p>}
       {(message.attachments||[]).map((file,index)=><div className="prolink-support-attachment" key={file.path||index}>{file.kind==='image'?<ImageIcon size={16}/>:<FileText size={16}/>}<span>{file.name}</span><small>{shortSize(file.size||0)}</small></div>)}
-      <time>{formatTime(message.created_at)}</time>
+      <div className="prolink-support-message-meta"><time>{formatTime(message.created_at)}</time>
+       {message.sender_role==='user'&&<span className={'prolink-support-delivery '+(message.read_at?'is-read':'')} title={message.read_at?'Read by Admin':'Sent to support'} aria-label={message.read_at?'Read by Admin':'Sent to support'}>{message.local_status==='sending'?<LoaderCircle className="spin" size={12}/>:message.read_at?<CheckCheck size={14}/>:<Check size={14}/>}<small>{message.local_status==='sending'?'Sending':message.read_at?'Read':'Sent'}</small></span>}
+      </div>
       {message.pinned_for_admin&&<small className="prolink-support-pinned"><CheckCheck size={12}/> Pinned for Admin review</small>}
     </article>)}
-    {sending&&<div className="prolink-support-typing">Sending securely…</div>}
+    {aiTyping&&<div className="prolink-support-typing" aria-live="polite"><span>AI Assistant is typing</span><i/><i/><i/></div>}
    </div>
    <div className="prolink-support-actions">
     {status==='admin_requested'&&<span className="prolink-support-pending"><ClockIcon/> Admin request is in the queue. AI help remains available.</span>}
