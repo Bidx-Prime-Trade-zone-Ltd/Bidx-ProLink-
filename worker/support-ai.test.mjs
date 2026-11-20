@@ -21,6 +21,8 @@ test("contextual confirmation accepts an offered Admin handover", () => {
   assert.equal(supportMessageIntent("Okay", history), "confirm_human_admin");
   assert.equal(supportMessageIntent("Go ahead", history), "confirm_human_admin");
   assert.equal(supportMessageIntent("Okay, please do.", history), "confirm_human_admin");
+  assert.equal(supportMessageIntent("Okay, go ahead.", history), "confirm_human_admin");
+  assert.equal(supportMessageIntent("Sounds good, proceed.", history), "confirm_human_admin");
 });
 
 test("direct Admin requests and refusals are distinguished", () => {
