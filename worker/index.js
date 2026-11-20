@@ -855,8 +855,20 @@ SUPPORT AND HUMAN ADMIN:
 - Confirm that an attachment is securely received and pinned for Admin review when the application says it was saved. Do not claim the Admin has opened or reviewed it until they have.
 - Never ask for passwords, one-time codes, card numbers or secret credentials.
 
+ANSWER QUALITY AND QUESTION MATCHING:
+- Answer the exact question the user asked first. Do not reply with a generic "I'm here to help" or "Could you tell me more?" when the question is already clear.
+- Treat each message as a real support request: identify its intent, use the relevant ProLink facts below, and provide a complete, direct answer with useful detail.
+- If the user asks "tell me about your business", explain that Bidx ProLink is a global professional directory and showcase product of BIDX PRIME TRADE ZONE LTD. Explain how customers discover skilled workers, search by category/service and location, review professional profiles and work galleries, and contact professionals directly. Explain how professionals create a profile, present skills and experience, submit a professional ID card and relevant supporting competence documents for manual review, showcase up to 15 portfolio photos, and use membership to maintain professional visibility. Be clear that the platform connects people but does not guarantee jobs, income or customer enquiries.
+- If the user asks "tell me everything about the app" or a similarly broad question, give a structured overview with sections for purpose, customer benefits, professional benefits, discovery and contact, registration and document review, portfolio, membership, navigation, messaging and support. Do not give a two-sentence answer to a request for a full explanation.
+- When asked about a particular feature, explain what it does, who uses it, its benefit, and exact steps to find or use it in the app.
+- Ask a follow-up question only when a missing detail is genuinely necessary to answer correctly. Never ask the user to restate a question that is already understandable.
+- Use conversation history to understand references such as "that", "it", "the page" or follow-up questions. Do not repeat the entire business introduction in every reply.
+- Distinguish confirmed account facts from general app guidance. Never claim to have checked a balance, status, document or approval unless that value is present in verified account context.
+- Write in polished, natural, professional English. Use short paragraphs and clear headings or numbered steps for longer answers. Avoid unfinished sentences and vague filler.
+
 RESPONSE STYLE:
-- Be useful and concise. Give numbered steps for navigation when needed. If a question needs account-specific facts, rely on the account context. If information is unavailable, say so plainly and offer to pass the question to Admin.
+- Be warm, respectful and confident without sounding promotional in every answer. Give enough detail to resolve the question; concise answers are appropriate only for simple requests.
+- If information is unavailable, say exactly what is unavailable and offer human Admin handover.
 - Do not invent features, charges, balances, policy terms, approval outcomes or support response times.
 
 VERIFIED ACCOUNT CONTEXT (JSON):
@@ -868,7 +880,7 @@ async function supportAiReply(env,context,history,message){
     {role:"system",content:prolinkSupportSystemPrompt(context)},
     ...history.filter(item=>["user","ai","admin"].includes(item.sender_role)).slice(-12).map(item=>({role:item.sender_role==="ai"?"assistant":item.sender_role==="admin"?"assistant":"user",content:String(item.content||"").slice(0,2500)}))
   ];
-  const result=await env.AI.run(PROLINK_SUPPORT_TEXT_MODEL,{messages,max_tokens:650,temperature:0.35});
+  const result=await env.AI.run(PROLINK_SUPPORT_TEXT_MODEL,{messages,max_tokens:1100,temperature:0.2});
   const generated=result?.response||result?.result||result?.output_text||result?.choices?.[0]?.message?.content||result?.message?.content||"";
   const text=Array.isArray(generated)?generated.map(part=>typeof part==="string"?part:part?.text||"").join("\n"):String(generated||"");
   return text.trim().slice(0,7000)||"I’m here to help. Could you tell me a little more?";
@@ -877,7 +889,7 @@ async function supportMessages(request,env){
   const auth=await signedInProfileUser(request,env);if(auth.error)return auth.error;
   try{
     const conversation=await supportConversation(auth.config,auth.user.id);
-    let messages=await supabaseRest(auth.config,"/rest/v1/prolink_support_messages?select=id,sender_role,content,attachments,pinned_for_admin,created_at&conversation_id=eq."+encodeURIComponent(conversation.id)+"&order=created_at.asc&limit=150");
+    let messages=await supabaseRest(auth.config,"/rest/v1/prolink_support_messages?select=id,sender_role,content,attachments,pinned_for_admin,created_at,read_at&conversation_id=eq."+encodeURIComponent(conversation.id)+"&order=created_at.asc&limit=150");
     const latestMessage=messages?.length?messages[messages.length-1]:null;
     const inactiveFor24Hours=!latestMessage||(Date.now()-new Date(latestMessage.created_at).getTime()>=24*60*60*1000);
     if(inactiveFor24Hours&&conversation.status!=="admin_attending"){
@@ -988,6 +1000,8 @@ async function adminSupportMessages(request,env){
   try{
     const rows=await supabaseRest(auth.config,"/rest/v1/prolink_support_conversations?select=id,user_id,status&id=eq."+encodeURIComponent(id)+"&limit=1");
     if(!rows?.[0])return json({error:"Support conversation not found."},404);
+    const readAt=new Date().toISOString();
+    await supabaseRest(auth.config,"/rest/v1/prolink_support_messages?conversation_id=eq."+encodeURIComponent(id)+"&sender_role=eq.user&read_at=is.null",{method:"PATCH",headers:{prefer:"return=minimal"},body:JSON.stringify({read_at:readAt})});
     const messages=await supabaseRest(auth.config,"/rest/v1/prolink_support_messages?select=*&conversation_id=eq."+encodeURIComponent(id)+"&order=created_at.asc&limit=300");
     return json({conversation:rows[0],messages:messages||[]});
   }catch(error){return json({error:"Could not load this support conversation."},502);}
