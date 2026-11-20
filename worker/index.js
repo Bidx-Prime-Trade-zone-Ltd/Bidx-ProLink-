@@ -1096,7 +1096,7 @@ async function adminSupportMessages(request,env){
     if(!rows?.[0])return json({error:"Support conversation not found."},404);
     const readAt=new Date().toISOString();
     await supabaseRest(auth.config,"/rest/v1/prolink_support_messages?conversation_id=eq."+encodeURIComponent(id)+"&sender_role=eq.user&read_at=is.null",{method:"PATCH",headers:{prefer:"return=minimal"},body:JSON.stringify({read_at:readAt})});
-    const messages=await supabaseRest(auth.config,"/rest/v1/prolink_support_messages?select=*&conversation_id=eq."+encodeURIComponent(id)+"&order=created_at.asc&limit=300");
+    const messages=await supabaseRest(auth.config,"/rest/v1/prolink_support_messages?select=*&conversation_id=eq."+encodeURIComponent(id)+"&order=created_at.asc&limit=1000");
     return json({conversation:rows[0],messages:messages||[]});
   }catch(error){return json({error:"Could not load this support conversation."},502);}
 }
