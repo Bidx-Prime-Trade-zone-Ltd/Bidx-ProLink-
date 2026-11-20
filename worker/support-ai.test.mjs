@@ -7,6 +7,7 @@ test("greeting replies match the user's exact greeting and include their first n
   assert.equal(supportGreetingReply("GOOD AFTERNOON!", "Ada"), "Good afternoon, Ada. How may I help you today?");
   assert.equal(supportGreetingReply("Good evening", "Ada"), "Good evening, Ada. How may I help you today?");
   assert.equal(supportGreetingReply("Hiiii", "Ada"), "Hi, Ada. How may I help you today?");
+  assert.equal(supportGreetingReply("Hii", "Ada"), "Hi, Ada. How may I help you today?");
   assert.equal(supportGreetingReply("Hello there", "Ada"), "Hello, Ada. How may I help you today?");
 });
 
