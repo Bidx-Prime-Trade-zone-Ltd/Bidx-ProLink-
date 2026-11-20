@@ -18,6 +18,7 @@ export default function SupportChat({session,profile}){
  const [uploading,setUploading]=useState(false);
  const [error,setError]=useState('');
  const listRef=useRef(null);
+ const panelRef=useRef(null);
  const fileRef=useRef(null);
  const stickToBottom=useRef(true);
  const token=session?.access_token;
@@ -133,10 +134,11 @@ export default function SupportChat({session,profile}){
  const statusLabel=status==='admin_attending'?'Admin is attending':status==='admin_requested'?'Admin requested · AI remains available':status==='resolved'?'Resolved · AI available':'AI Assistant is available';
 
  return <>
+  {open&&<div className="prolink-support-overlay" aria-hidden="true"/>}
   <button type="button" className={'prolink-support-fab'+(open?' is-open':'')} onClick={()=>setOpen(v=>!v)} aria-label={open?'Close ProLink support':'Chat with ProLink Admin'}>
    {open?<X size={21}/>:<MessageCircle size={21}/>}<span>{open?'Close':'Chat Admin'}</span>
   </button>
-  {open&&<section className="prolink-support-panel" role="dialog" aria-modal="true" aria-label="Bidx ProLink support chat">
+  {open&&<section ref={panelRef} className="prolink-support-panel" role="dialog" aria-modal="true" aria-label="Bidx ProLink support chat">
    <header className="prolink-support-header">
     <div className="prolink-support-avatar"><Headset size={21}/></div>
     <div className="prolink-support-heading"><b>ProLink Support</b><small><span className="prolink-support-live-dot"/> {statusLabel}</small></div>
