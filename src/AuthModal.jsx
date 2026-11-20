@@ -90,7 +90,7 @@ export default function AuthModal({ onClose }) {
         {mode==='Forgot password'&&<p className="auth-switch"><button type="button" onClick={()=>{setMode('Sign in');setError('');setMessage('');}}>Back to sign in</button></p>}
       </>}
       {error&&signedIn===false&&busy&&<p className="auth-feedback error" role="alert">{error}</p>}
-      <small className="legal-copy">By continuing, you agree to our Terms of Service and Privacy Policy.</small>
+      <small className="legal-copy">By continuing, you agree to our <a href="/terms">Terms of Service</a> and <a href="/privacy">Privacy Policy</a>.</small>
     </div>
   </div>;
 }
