@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { supportGreetingReply, supportGreetingPrefix, supportMessageIntent, supportAttachmentCategory } from "./index.js";
+import { supportGreetingReply, supportGreetingPrefix, supportMessageIntent, supportAttachmentCategory, supportAccountLookupChoice } from "./index.js";
 
 test("greeting replies match the user's exact greeting and include their first name", () => {
   assert.equal(supportGreetingReply("Good morning", "Ada"), "Good morning, Ada. How may I help you today?");
@@ -30,6 +30,32 @@ test("contextual confirmation accepts an offered Admin handover", () => {
   assert.equal(supportMessageIntent("Okay, please do.", history), "confirm_human_admin");
   assert.equal(supportMessageIntent("Okay, go ahead.", history), "confirm_human_admin");
   assert.equal(supportMessageIntent("Sounds good, proceed.", history), "confirm_human_admin");
+});
+
+test("private account lookups require contextual consent and respect refusal", () => {
+  const permission = [{ sender_role: "ai", content: "Would you like me to check your subscription status securely? I need to access your account information." }];
+  for (const message of ["Okay", "OK", "Yes", "Sure", "Go ahead", "Please do", "Proceed"]) {
+    assert.equal(supportAccountLookupChoice(message, permission), "accept", message);
+    assert.equal(supportMessageIntent(message, permission), "confirm_account_lookup", message);
+  }
+  for (const message of ["No", "No thanks", "Not now", "Cancel", "I decline"]) {
+    assert.equal(supportAccountLookupChoice(message, permission), "decline", message);
+    assert.equal(supportMessageIntent(message, permission), "decline_account_lookup", message);
+  }
+});
+
+test("timeout or unrelated assistant messages do not create account consent", () => {
+  const unrelated = [{ sender_role: "ai", content: "Your support session has expired. The AI Assistant is available again." }];
+  assert.equal(supportAccountLookupChoice("No", unrelated), "none");
+  assert.equal(supportAccountLookupChoice("Okay", unrelated), "none");
+  assert.equal(supportMessageIntent("Okay", []), "acknowledgement");
+  assert.equal(supportMessageIntent("No", []), "decline");
+});
+
+test("account lookup permission is not inferred from unrelated assistant questions", () => {
+  const history = [{ sender_role: "ai", content: "Would you like me to explain how Professional Membership works?" }];
+  assert.equal(supportAccountLookupChoice("Okay", history), "none");
+  assert.equal(supportMessageIntent("Go ahead", history), "general");
 });
 
 test("direct Admin requests and refusals are distinguished", () => {
