@@ -504,7 +504,7 @@ async function adminDashboard(request,env) {
     for(let page=1;page<=100;page++){
       const result=await supabaseRest(config,"/auth/v1/admin/users?page="+page+"&per_page=1000");
       const batch=result?.users||[];
-      users.push(...batch.map(u=>({id:u.id,email:u.email||"",created_at:u.created_at||null,last_sign_in_at:u.last_sign_in_at||null,email_confirmed_at:u.email_confirmed_at||null,provider:u.app_metadata?.provider||"email"})));
+      users.push(...batch.filter(u=>String(u.email||"").toLowerCase()!==PROLINK_ADMIN_EMAIL).map(u=>({id:u.id,email:u.email||"",created_at:u.created_at||null,last_sign_in_at:u.last_sign_in_at||null,email_confirmed_at:u.email_confirmed_at||null,provider:u.app_metadata?.provider||"email"})));
       if(batch.length<1000)break;
     }
   }catch(error){
