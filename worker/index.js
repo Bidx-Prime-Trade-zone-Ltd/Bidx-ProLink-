@@ -894,7 +894,7 @@ async function supportMessages(request,env){
     const inactiveFor24Hours=!latestMessage||(Date.now()-new Date(latestMessage.created_at).getTime()>=24*60*60*1000);
     if(inactiveFor24Hours&&conversation.status!=="admin_attending"){
       await supportInsertMessage(auth.config,conversation.id,"ai","Welcome, "+supportName(auth.user)+". I’m your AI assistant. I can help you navigate the app, understand professional registration and membership, check your account information, and connect you with a human Admin when needed.");
-      messages=await supabaseRest(auth.config,"/rest/v1/prolink_support_messages?select=id,sender_role,content,attachments,pinned_for_admin,created_at&conversation_id=eq."+encodeURIComponent(conversation.id)+"&order=created_at.asc&limit=150");
+      messages=await supabaseRest(auth.config,"/rest/v1/prolink_support_messages?select=id,sender_role,content,attachments,pinned_for_admin,created_at,read_at&conversation_id=eq."+encodeURIComponent(conversation.id)+"&order=created_at.asc&limit=150");
     }
     return json({conversation,messages:messages||[]});
   }catch(error){console.error("[prolink-support] load_failed",{name:error?.name||"Error"});return json({error:"Your support conversation could not be loaded. Please try again."},502);}
