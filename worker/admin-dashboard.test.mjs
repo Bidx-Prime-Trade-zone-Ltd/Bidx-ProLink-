@@ -47,6 +47,8 @@ test("admin dashboard returns real counts from the ProLink account and review ta
     const body=await response.json();
     assert.equal(response.status,200);
     assert.equal(body.counts.totalUsers,4);
+    assert.equal(body.users.length,4);
+    assert.equal(body.users.some(user=>user.email.toLowerCase()==='ojepaamedu@gmail.com'),false);
     assert.equal(body.counts.newUsersToday,4);
     assert.equal(body.counts.professionalProfiles,1);
     assert.equal(body.counts.pendingDocuments,0);
