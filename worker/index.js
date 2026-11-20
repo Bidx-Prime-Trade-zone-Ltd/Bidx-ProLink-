@@ -482,31 +482,50 @@ async function adminProfileChange(request,env){
 
 async function adminDashboard(request,env) {
   const auth=await requireProlinkAdmin(request,env);if(auth.error)return auth.error;
+  const {config}=auth;
+  const warnings=[];
+  const readRows=async(source,path)=>{
+    try{
+      const rows=await supabaseRest(config,path);
+      return Array.isArray(rows)?rows:[];
+    }catch(error){
+      warnings.push(source);
+      console.error("[prolink-admin] dashboard_source_failed",{source,name:error?.name||"Error",message:String(error?.message||"").slice(0,180)});
+      return null;
+    }
+  };
+  const [profilesResult,reviewsResult,profileChangeRequestsResult]=await Promise.all([
+    readRows("professional_profiles","/rest/v1/prolink_professional_profiles?select=*&order=approved_at.desc&limit=5000"),
+    readRows("document_reviews","/rest/v1/prolink_review_records?select=*&order=submitted_at.desc&limit=5000"),
+    readRows("profile_change_requests","/rest/v1/prolink_profile_change_requests?select=*&order=requested_at.desc&limit=1000")
+  ]);
+  let users=[],usersAvailable=true;
   try{
-    const {config}=auth;
-    const [profiles,reviews,profileChangeRequests]=await Promise.all([
-      supabaseRest(config,"/rest/v1/prolink_professional_profiles?select=*&order=approved_at.desc&limit=5000"),
-      supabaseRest(config,"/rest/v1/prolink_review_records?select=*&order=submitted_at.desc&limit=5000"),
-      supabaseRest(config,"/rest/v1/prolink_profile_change_requests?select=*&order=requested_at.desc&limit=1000")
-    ]);
-    let users=[],page=1;
-    for(;page<=100;page++){
-      const result=await supabaseRest(config,`/auth/v1/admin/users?page=${page}&per_page=1000`);
+    for(let page=1;page<=100;page++){
+      const result=await supabaseRest(config,"/auth/v1/admin/users?page="+page+"&per_page=1000");
       const batch=result?.users||[];
       users.push(...batch.map(u=>({id:u.id,email:u.email||"",created_at:u.created_at||null,last_sign_in_at:u.last_sign_in_at||null,email_confirmed_at:u.email_confirmed_at||null,provider:u.app_metadata?.provider||"email"})));
       if(batch.length<1000)break;
     }
-    const counts={
-      totalUsers:users.length,
-      newUsersToday:users.filter(u=>u.created_at&&new Date(u.created_at).toDateString()===new Date().toDateString()).length,
-      professionalProfiles:profiles.length,
-      pendingDocuments:reviews.filter(r=>r.status==="pending"&&r.document_path).length,
-      pendingReviews:reviews.filter(r=>r.status==="pending").length,
-      approvedDocuments:reviews.filter(r=>r.status==="approved").length,
-      rejectedDocuments:reviews.filter(r=>r.status==="rejected").length
-    };
-    return json({counts,users,profiles,reviews,profileChangeRequests,adminEmail:auth.user.email});
-  }catch(error){console.error("[prolink-admin] dashboard_failed",{name:error?.name||"Error"});return json({error:"Could not load the internal admin dashboard. Check the ProLink tables and service configuration."},502);}
+  }catch(error){
+    usersAvailable=false;
+    warnings.push("registered_users");
+    console.error("[prolink-admin] dashboard_source_failed",{source:"registered_users",name:error?.name||"Error",message:String(error?.message||"").slice(0,180)});
+  }
+  const todayFormatter=new Intl.DateTimeFormat("en-CA",{timeZone:"Africa/Lagos",year:"numeric",month:"2-digit",day:"2-digit"});
+  const today=todayFormatter.format(new Date());
+  const newUsersToday=users.filter(user=>user.created_at&&todayFormatter.format(new Date(user.created_at))===today).length;
+  const profiles=profilesResult||[],reviews=reviewsResult||[],profileChangeRequests=profileChangeRequestsResult||[];
+  const counts={
+    totalUsers:usersAvailable?users.length:null,
+    newUsersToday:usersAvailable?newUsersToday:null,
+    professionalProfiles:profilesResult?profiles.length:null,
+    pendingDocuments:reviewsResult?reviews.filter(r=>r.status==="pending"&&r.document_path).length:null,
+    pendingReviews:reviewsResult?reviews.filter(r=>r.status==="pending").length:null,
+    approvedDocuments:reviewsResult?reviews.filter(r=>r.status==="approved").length:null,
+    rejectedDocuments:reviewsResult?reviews.filter(r=>r.status==="rejected").length:null
+  };
+  return json({counts,users,profiles,reviews,profileChangeRequests,warnings,adminEmail:auth.user.email});
 }
 
 async function adminReview(request,env) {
@@ -1328,4 +1347,4 @@ export default {
   }
 };
 
-export { supportGreetingReply, supportGreetingPrefix, supportMessageIntent, supportAttachmentCategory, supportAccountLookupChoice, supportAiExtractText };
+export { supportGreetingReply, supportGreetingPrefix, supportMessageIntent, supportAttachmentCategory, supportAccountLookupChoice, supportAiExtractText, adminDashboard };
