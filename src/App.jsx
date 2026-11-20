@@ -503,6 +503,23 @@ function App() {
   const startJoin = (category = '', service = '') => { pushView({overlay:'join',menu:false,selected:null});setJoinData(p=>({...p,category:category||p.category,subcategory:service||p.subcategory}));setJoinStep(1);setShowCategories(false);setShowJoin(true); };
   const openCategoryBrowser = (group = '') => { pushView({overlay:'categories',menu:false,selected:null});setCategoryGroup(group);setCategorySearch('');setMenuOpen(false);setShowCategories(true); };
 
+  const publicPath = window.location.pathname.replace(/\/$/, '') || '/';
+  if (publicPath === '/terms' || publicPath === '/privacy') {
+    const isPrivacyPage = publicPath === '/privacy';
+    return <main className="legal-route-page">
+      <header className="legal-route-header">
+        <a href="/" aria-label="Bidx ProLink home"><Brand /></a>
+        <a className="legal-route-back" href="/">Back to sign in</a>
+      </header>
+      <article className="legal-route-content">
+        <span className="eyebrow">BIDX PROLINK · COMPANY & LEGAL</span>
+        <h1>{isPrivacyPage ? 'Privacy Policy' : 'Terms of Service'}</h1>
+        {isPrivacyPage ? <PrivacyContent /> : <TermsContent />}
+        <p className="legal-route-updated">For questions, contact <a href="mailto:Support@bidxpro.online">Support@bidxpro.online</a>.</p>
+      </article>
+    </main>;
+  }
+
   if (window.location.pathname.replace(/\/$/, '') === '/admin') return <AdminPortal />;
   if (!authReady) return <div className="app-loading">Loading Bidx ProLink…</div>;
   if (!session) return <div className="auth-entry"><AuthModal onClose={()=>{}} /></div>;
