@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { supportGreetingReply, supportGreetingPrefix, supportMessageIntent, supportAttachmentCategory, supportAccountLookupChoice } from "./index.js";
+import { supportGreetingReply, supportGreetingPrefix, supportMessageIntent, supportAttachmentCategory, supportAccountLookupChoice, supportAiExtractText } from "./index.js";
 
 test("greeting replies match the user's exact greeting and include their first name", () => {
   assert.equal(supportGreetingReply("Good morning", "Ada"), "Good morning, Ada. How may I help you today?");
@@ -75,4 +75,13 @@ test("attachments are classified from filename and MIME type", () => {
   assert.equal(supportAttachmentCategory("my-screenshot.png", "image/png"), "screenshot");
   assert.equal(supportAttachmentCategory("portfolio.jpg", "image/jpeg"), "image_or_portfolio_photo");
   assert.equal(supportAttachmentCategory("application.pdf", "application/pdf"), "document");
+});
+
+test("AI response extraction handles Workers AI and OpenAI-compatible response shapes", () => {
+  assert.equal(supportAiExtractText({ response: "Hello there" }), "Hello there");
+  assert.equal(supportAiExtractText({ choices: [{ message: { content: "How can I help?" } }] }), "How can I help?");
+  assert.equal(supportAiExtractText({ output: [{ content: [{ type: "text", text: "I can assist." }] }] }), "I can assist.");
+  assert.equal(supportAiExtractText({ result: { response: "A nested response." } }), "A nested response.");
+  assert.equal(supportAiExtractText({ success: false, errors: [{ message: "Inference unavailable" }] }), "");
+  assert.equal(supportAiExtractText({ response: "" }), "");
 });
