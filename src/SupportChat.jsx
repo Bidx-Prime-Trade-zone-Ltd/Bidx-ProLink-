@@ -118,7 +118,7 @@ export default function SupportChat({session,profile}){
    <div className="prolink-support-security"><ShieldCheck size={15}/> Private conversation with AI Assistant and ProLink Admin</div>
    <div className="prolink-support-messages" ref={listRef} onScroll={onMessagesScroll}>
     {loading&&!messages.length&&<div className="prolink-support-loading"><LoaderCircle className="spin" size={20}/> Opening your support chat…</div>}
-    {!loading&&!messages.length&&<div className="prolink-support-loading">Welcome{firstName?', '+firstName:''}. How can we help?</div>}
+    {!loading&&!messages.length&&<div className="prolink-support-loading">Ask ProLink anything about professional registration, profiles, membership or app navigation.</div>}
     {messages.map(message=><article key={message.id} className={'prolink-support-message '+(message.sender_role==='user'?'from-user':message.sender_role==='admin'?'from-admin':'from-ai')}>
       <div className="prolink-support-sender">{message.sender_role==='user'?'You':message.sender_role==='admin'?'ProLink Admin':message.sender_role==='system'?'Support update':'AI Assistant'}</div>
       {message.content&&<p>{message.content}</p>}
