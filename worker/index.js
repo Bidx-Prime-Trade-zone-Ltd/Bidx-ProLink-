@@ -865,6 +865,8 @@ ANSWER QUALITY AND QUESTION MATCHING:
 - Use conversation history to understand references such as "that", "it", "the page" or follow-up questions. Do not repeat the entire business introduction in every reply.
 - Distinguish confirmed account facts from general app guidance. Never claim to have checked a balance, status, document or approval unless that value is present in verified account context.
 - Write in polished, natural, professional English. Use short paragraphs and clear headings or numbered steps for longer answers. Avoid unfinished sentences and vague filler.
+- OUTPUT MUST BE PLAIN TEXT because the support chat displays message text without Markdown rendering. Never use Markdown syntax: no **bold**, *italics*, backticks, hash headings, markdown bullets or markdown tables. Use simple labels and numbered lines instead.
+- For a normal question such as "Tell me about this app", answer directly without opening with "Hello", "Hi", "Good morning" or the user's name. Greetings are reserved for greeting-only messages handled by the application.
 
 RESPONSE STYLE:
 - Be warm, respectful and confident without sounding promotional in every answer. Give enough detail to resolve the question; concise answers are appropriate only for simple requests.
@@ -880,7 +882,7 @@ async function supportAiReply(env,context,history,message){
   const broadRequest=/\b(everything|full overview|tell me about (the )?(business|app)|explain.*(app|business)|how does .* work)\b/i.test(latestUserMessage);
   // Keep routine replies compact for faster generation while preserving room
   // for the structured explanations users request.
-  const maxTokens=broadRequest?850:latestUserMessage.length<90?320:560;
+  const maxTokens=broadRequest?600:latestUserMessage.length<90?240:400;
   const messages=[
     {role:"system",content:prolinkSupportSystemPrompt(context)},
     ...history.filter(item=>["user","ai","admin"].includes(item.sender_role)).slice(-8).map(item=>({role:item.sender_role==="ai"?"assistant":item.sender_role==="admin"?"assistant":"user",content:String(item.content||"").slice(0,1200)}))
@@ -888,7 +890,17 @@ async function supportAiReply(env,context,history,message){
   const result=await env.AI.run(PROLINK_SUPPORT_TEXT_MODEL,{messages,max_tokens:maxTokens,temperature:0.15});
   const generated=result?.response||result?.result||result?.output_text||result?.choices?.[0]?.message?.content||result?.message?.content||"";
   const text=Array.isArray(generated)?generated.map(part=>typeof part==="string"?part:part?.text||"").join("\n"):String(generated||"");
-  return text.trim().slice(0,7000)||"I’m here to help. Could you tell me a little more?";
+  // The chat renders plain text, so strip any accidental Markdown and
+  // remove an unnecessary greeting from substantive answers.
+  const plainText=text
+    .replace(/\*\*(.*?)\*\*/gs,"$1")
+    .replace(/\*(.*?)\*/gs,"$1")
+    .replace(/^#+\s*/gm,"")
+    .replace(/^\s*[-*]\s+/gm,"• ")
+    .replace(/^`{1,3}|\u0060{1,3}$/gm,"")
+    .trim()
+    .replace(/^(?:hello|hi|hey|good morning|good afternoon|good evening)(?:,\s*[^.!?]+)?[.!?]\s*/i,"");
+  return plainText.slice(0,5000)||"I’m here to help. Could you tell me a little more?";
 }
 async function supportMessages(request,env){
   const auth=await signedInProfileUser(request,env);if(auth.error)return auth.error;
