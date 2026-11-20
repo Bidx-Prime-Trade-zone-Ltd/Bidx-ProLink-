@@ -972,11 +972,29 @@ async function supportSend(request,env){
     if(!message)return json({error:"Write a message before sending."},400);
     if(message.length>4000)return json({error:"Your message is too long. Please keep it under 4,000 characters."},413);
     const conversation=await supportConversation(auth.config,auth.user.id);
+    // Read the preceding turn BEFORE saving this user message so short
+    // confirmations can be resolved against the actual assistant offer.
+    const priorHistory=await supabaseRest(auth.config,"/rest/v1/prolink_support_messages?select=sender_role,content&conversation_id=eq."+encodeURIComponent(conversation.id)+"&order=created_at.desc&limit=8");
+    const priorAssistant=[...(priorHistory||[])].reverse().find(item=>item.sender_role==="ai"||item.sender_role==="admin");
+    const affirmative=/^(?:go ahead|go-ahead|okay|ok|yes|yeah|yep|sure|certainly|please do|do it|proceed|i agree|that is fine|that's fine|alright|all right)[.!\s]*$/i.test(message);
+    const priorOfferedAdminHandover=!!priorAssistant&&/\b(?:send|submit|raise|make)\b.{0,55}\b(?:handover|hand[- ]?over|human admin|admin request)\b|\bhandover request\b/i.test(String(priorAssistant.content||""));
     if(conversation.status==="resolved"){
       await supabaseRest(auth.config,"/rest/v1/prolink_support_conversations?id=eq."+encodeURIComponent(conversation.id),{method:"PATCH",headers:{prefer:"return=minimal"},body:JSON.stringify({status:"ai_active",resolved_at:null,updated_at:new Date().toISOString()})});
     }
     await supportInsertMessage(auth.config,conversation.id,"user",message,{senderUserId:auth.user.id});
     if(conversation.status==="admin_attending")return json({conversation:{...conversation,last_message_at:new Date().toISOString()},messages:[],awaitingAdmin:true});
+    // "Go ahead" after the AI explicitly offers a human-Admin handover is
+    // consent to submit that handover. Do not send it back to the language
+    // model as an isolated phrase or ask the user to repeat their request.
+    if(affirmative&&priorOfferedAdminHandover){
+      if(conversation.status!=="admin_requested"){
+        await supabaseRest(auth.config,"/rest/v1/prolink_support_conversations?id=eq."+encodeURIComponent(conversation.id),{method:"PATCH",headers:{prefer:"return=minimal"},body:JSON.stringify({status:"admin_requested",admin_requested_at:new Date().toISOString(),updated_at:new Date().toISOString()})});
+        const saved=await supportInsertMessage(auth.config,conversation.id,"ai","Your request for human Admin assistance has been submitted successfully. It is now in the ProLink Admin support queue. I will remain available while you wait. Admin has not yet marked this conversation as attending.");
+        return json({conversation:{...conversation,status:"admin_requested",last_message_at:new Date().toISOString()},messages:saved?[saved]:[],awaitingAdmin:true});
+      }
+      const saved=await supportInsertMessage(auth.config,conversation.id,"ai","Your request for human Admin assistance is already in the support queue. I will remain available while you wait.");
+      return json({conversation,messages:saved?[saved]:[],awaitingAdmin:true});
+    }
     const greeting=supportGreetingReply(message,supportName(auth.user),timeZone);
     let reply=greeting;
     if(!reply){
