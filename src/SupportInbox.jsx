@@ -1,6 +1,6 @@
 import React,{useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import {supabase} from './lib/supabase.js';
-import {RefreshCw,Search,Headset,Send,CheckCircle2,Paperclip,Image as ImageIcon,FileText,LoaderCircle,ArrowLeft} from 'lucide-react';
+import {RefreshCw,Search,Headset,Send,CheckCircle2,Check,CheckCheck,Paperclip,Image as ImageIcon,FileText,LoaderCircle,ArrowLeft} from 'lucide-react';
 
 const fmt=value=>value?new Date(value).toLocaleString():'—';
 export default function SupportInbox(){
