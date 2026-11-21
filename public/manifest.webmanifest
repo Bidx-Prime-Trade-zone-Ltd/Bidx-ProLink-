@@ -1,15 +1,26 @@
 {
+  "id": "/",
   "name": "Bidx ProLink",
   "short_name": "ProLink",
   "description": "Discover skilled professionals and showcase your services across supported countries, with more countries and languages added over time.",
-  "start_url": "/",
+  "start_url": "/?source=pwa",
+  "scope": "/",
+  "lang": "en",
+  "dir": "ltr",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
   "background_color": "#ffffff",
   "theme_color": "#0757b7",
+  "categories": ["business", "productivity", "education"],
+  "prefer_related_applications": false,
+  "launch_handler": {
+    "client_mode": ["focus-existing", "navigate-new"]
+  },
   "icons": [
     {
       "src": "/icon.svg",
-      "sizes": "any",
+      "sizes": "512x512",
       "type": "image/svg+xml",
       "purpose": "any"
     }
