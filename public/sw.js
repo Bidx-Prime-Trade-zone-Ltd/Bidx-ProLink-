@@ -1,5 +1,12 @@
-const CACHE_NAME = 'bidx-prolink-static-v1';
-const APP_SHELL = ['/', '/manifest.webmanifest', '/icon.svg'];
+const CACHE_NAME = 'bidx-prolink-static-v2';
+const APP_SHELL = [
+  '/',
+  '/manifest.webmanifest',
+  '/icon.svg',
+  '/icon-192.png',
+  '/icon-512.png',
+  '/icon-maskable-512.png'
+];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -26,8 +33,6 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
-
-  // Never cache API responses, authentication, uploads, or other user data.
   if (url.pathname.startsWith('/api/')) return;
 
   if (request.mode === 'navigate') {
@@ -40,7 +45,6 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Cache only static assets; use the network first so new releases appear promptly.
   if (/\.(?:js|css|svg|png|webp|woff2?)$/i.test(url.pathname) ||
       url.pathname === '/manifest.webmanifest') {
     event.respondWith(
