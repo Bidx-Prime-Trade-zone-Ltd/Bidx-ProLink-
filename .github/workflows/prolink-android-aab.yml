@@ -52,8 +52,18 @@ jobs:
           cp public/icon-512.png android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
           cp public/icon-512.png android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Install Android SDK packages and accept required licenses
+        env:
+          ANDROID_HOME: /usr/local/lib/android/sdk
+          ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+        run: |
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKMANAGER" ]; then
+            SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | sort -V | tail -n 1)"
+          fi
+          test -x "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null
+          "$SDKMANAGER" "platform-tools" "platforms;android-36" "build-tools;36.0.0"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
