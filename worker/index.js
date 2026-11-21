@@ -784,7 +784,7 @@ function supportGreetingReply(message,name=""){
   if(/^(good afternoon|afternoon)( there)?$/.test(text))return "Good afternoon"+address+". How may I help you today?";
   if(/^(good evening|evening)( there)?$/.test(text))return "Good evening"+address+". How may I help you today?";
   if(/^(good day|day)$/.test(text))return "Good day"+address+". How may I help you today?";
-  if(/^(how far|how far o|what s up|whats up|wassup|what is up)$/.test(text))return "Hello"+address+". How may I help you today?";
+  if(/^(how far|how far o|what's up|what s up|whats up|wassup|what is up)$/.test(text))return "Hello"+address+". How may I help you today?";
   if(/^(h+i+|he+y+|hel+o+|hiya+|hey there|hello there)( there)?$/.test(text)){
     const greeting=text.startsWith("hello")?"Hello":text.startsWith("hey")?"Hey":"Hi";
     return greeting+address+". How may I help you today?";
