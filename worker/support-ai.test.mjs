@@ -85,3 +85,34 @@ test("AI response extraction handles Workers AI and OpenAI-compatible response s
   assert.equal(supportAiExtractText({ success: false, errors: [{ message: "Inference unavailable" }] }), "");
   assert.equal(supportAiExtractText({ response: "" }), "");
 });
+
+test("clear conversation endings are identified and do not become generic thanks", () => {
+  for (const message of ["bye", "goodbye", "that's all", "I'm done", "nothing else", "talk later", "see you", "thanks, bye", "I'm fine now", "all done"]) {
+    assert.equal(supportMessageIntent(message, []), "chat_ending", message);
+  }
+  assert.equal(supportMessageIntent("thank you", []), "thanks");
+  assert.equal(supportMessageIntent("thanks for explaining the membership", []), "general");
+});
+
+test("expanded informal and Nigerian-style greetings are handled deterministically", () => {
+  for (const message of ["How far", "How far o!", "What's up", "Wassup", "Good day", "GOOD DAY!", "Hi 👋", "Hello there 😊", "Heyyy"]) {
+    assert.notEqual(supportGreetingReply(message, "Ada"), "", message);
+  }
+  assert.equal(supportGreetingReply("How far", "Ada"), "Hello, Ada. How may I help you today?");
+  assert.equal(supportGreetingReply("Good day", "Ada"), "Good day, Ada. How may I help you today?");
+  assert.equal(supportGreetingReply("Hi 👋", "Ada"), "Hi, Ada. How may I help you today?");
+});
+
+test("expanded greeting prefixes acknowledge openers without replacing the request", () => {
+  assert.equal(supportGreetingPrefix("How far, how do I register?", "Ada"), "Hello, Ada.");
+  assert.equal(supportGreetingPrefix("What's up! How do I upload photos?", "Ada"), "Hello, Ada.");
+  assert.equal(supportGreetingPrefix("Good day, where is Professional Membership?", "Ada"), "Good day, Ada.");
+  assert.equal(supportGreetingPrefix("Hi 👋, can you help me?", "Ada"), "Hi, Ada.");
+  assert.equal(supportGreetingPrefix("Can you help me register?", "Ada"), "");
+});
+
+test("goodbye intent does not override direct Admin requests or account consent", () => {
+  const permission = [{ sender_role: "ai", content: "Would you like me to check your membership status securely?" }];
+  assert.equal(supportMessageIntent("Yes, please", permission), "confirm_account_lookup");
+  assert.equal(supportMessageIntent("I want to talk to a human Admin", []), "human_admin_request");
+});
