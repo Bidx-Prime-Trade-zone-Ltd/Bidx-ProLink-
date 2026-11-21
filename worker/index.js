@@ -771,10 +771,10 @@ function supportTimeGreeting(timeZone){
 }
 function supportGreetingNormalize(message){
   return String(message||"").toLowerCase()
-    .replace(/[\\p{Extended_Pictographic}\\uFE0F\\u200D]/gu," ")
-    .replace(/(.)\\1{2,}/g,"$1$1")
-    .replace(/[^\\p{L}\\p{N}' ]+/gu," ")
-    .replace(/\\s+/g," ").trim();
+    .replace(/[\p{Extended_Pictographic}\uFE0F\u200D]/gu," ")
+    .replace(/(.)\1{2,}/g,"$1$1")
+    .replace(/[^\p{L}\p{N}' ]+/gu," ")
+    .replace(/\s+/g," ").trim();
 }
 function supportGreetingReply(message,name=""){
   const text=supportGreetingNormalize(message);
@@ -792,15 +792,14 @@ function supportGreetingReply(message,name=""){
   return "";
 }
 function supportGreetingPrefix(message,name=""){
-  const raw=String(message||"").replace(/[\\p{Extended_Pictographic}\\uFE0F\\u200D]/gu," ").trim();
-  const match=raw.match(/^(good\\s+morning|morning|good\\s+afternoon|afternoon|good\\s+evening|evening|good\\s+day|day|how\\s+far(?:\\s+o)?|what(?:'|\\s)?s\\s+up|wassup|hello|hey|hi|hiya)(?:\\s+there)?[,\\s!?.]+(.+)$/i);
+  const raw=String(message||"").replace(/[\p{Extended_Pictographic}\uFE0F\u200D]/gu," ").trim();
+  const match=raw.match(/^(good\s+morning|morning|good\s+afternoon|afternoon|good\s+evening|evening|good\s+day|day|how\s+far(?:\s+o)?|what(?:'|\s)?s\s+up|wassup|hello|hey|hi|hiya)(?:\s+there)?[,\s!?.]+(.+)$/i);
   if(!match)return "";
   const phrase=match[1].toLowerCase();
   const greeting=phrase.includes("morning")?"Good morning":phrase.includes("afternoon")?"Good afternoon":phrase.includes("evening")?"Good evening":phrase.includes("day")?"Good day":phrase.startsWith("how")||phrase.startsWith("what")||phrase==="wassup"?"Hello":phrase.startsWith("hello")?"Hello":phrase.startsWith("hey")?"Hey":"Hi";
   const firstName=String(name||"").trim();
   return greeting+(firstName&&firstName.toLowerCase()!=="there"?", "+firstName:"")+".";
 }
-
 function supportAccountLookupChoice(message,history=[]){
   const text=String(message||"").toLowerCase().trim().replace(/[.!?,;:]+$/g,"").replace(/\s+/g," ");
   // The most recent AI/Admin turn is the only valid context for a short consent
