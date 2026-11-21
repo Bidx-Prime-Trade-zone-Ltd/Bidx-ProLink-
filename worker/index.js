@@ -1200,11 +1200,24 @@ async function supportMessages(request,env){
   const auth=await signedInProfileUser(request,env);if(auth.error)return auth.error;
   try{
     const conversation=await supportConversation(auth.config,auth.user.id);
-    let messages=await supabaseRest(auth.config,"/rest/v1/prolink_support_messages?select=id,sender_role,content,attachments,pinned_for_admin,created_at,read_at&conversation_id=eq."+encodeURIComponent(conversation.id)+"&order=created_at.asc&limit=150");
+    await supabaseRest(auth.config,"/rest/v1/prolink_support_messages?conversation_id=eq."+encodeURIComponent(conversation.id)+"&sender_role=eq.admin&delivered_at=is.null",{method:"PATCH",headers:{prefer:"return=minimal"},body:JSON.stringify({delivered_at:new Date().toISOString()})});
+    let messages=await supabaseRest(auth.config,"/rest/v1/prolink_support_messages?select=id,sender_role,content,attachments,pinned_for_admin,created_at,read_at,delivered_at,user_read_at&conversation_id=eq."+encodeURIComponent(conversation.id)+"&order=created_at.asc&limit=150");
     // Do not send unsolicited greetings when the support panel is opened.
     // The assistant greets only in response to an actual user greeting.
     return json({conversation,messages:messages||[]});
   }catch(error){console.error("[prolink-support] load_failed",{name:error?.name||"Error"});return json({error:"Your support conversation could not be loaded. Please try again."},502);}
+}
+async function supportMarkRead(request,env){
+  const auth=await signedInProfileUser(request,env);if(auth.error)return auth.error;
+  try{
+    const conversation=await supportConversation(auth.config,auth.user.id);
+    const readAt=new Date().toISOString();
+    await supabaseRest(auth.config,"/rest/v1/prolink_support_messages?conversation_id=eq."+encodeURIComponent(conversation.id)+"&sender_role=eq.admin&user_read_at=is.null",{method:"PATCH",headers:{prefer:"return=minimal"},body:JSON.stringify({delivered_at:readAt,user_read_at:readAt})});
+    return json({success:true,read_at:readAt});
+  }catch(error){
+    console.error("[prolink-support] read_receipt_failed",{name:error?.name||"Error"});
+    return json({error:"The message read receipt could not be updated."},502);
+  }
 }
 async function supportSend(request,env){
   const auth=await signedInProfileUser(request,env);if(auth.error)return auth.error;
@@ -1409,6 +1422,7 @@ export default {
     if (url.pathname === "/api/admin/profile-change" && request.method === "POST") return adminProfileChange(request, env);
     if (url.pathname === "/api/admin/dashboard" && request.method === "GET") return adminDashboard(request, env);
     if (url.pathname === "/api/support/messages" && request.method === "GET") return supportMessages(request, env);
+    if (url.pathname === "/api/support/read" && request.method === "POST") return supportMarkRead(request, env);
     if (url.pathname === "/api/support/message" && request.method === "POST") return supportSend(request, env);
     if (url.pathname === "/api/support/request-admin" && request.method === "POST") return supportRequestAdmin(request, env);
     if (url.pathname === "/api/support/attachment" && request.method === "POST") return supportAttachment(request, env);
