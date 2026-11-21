@@ -10,6 +10,7 @@ export default function SupportInbox(){
  const [query,setQuery]=useState('');
  const [reply,setReply]=useState('');
  const [busy,setBusy]=useState(false);
+ const [sendingReply,setSendingReply]=useState(false);
  const [loadingMessages,setLoadingMessages]=useState(false);
  const [notice,setNotice]=useState('');
  const [files,setFiles]=useState({});
@@ -63,7 +64,7 @@ export default function SupportInbox(){
   if(!selected?.id)return;
   selectedIdRef.current=selected.id;
   loadMessages(selected.id);
-  const timer=setInterval(()=>loadMessages(selected.id,true),7000);
+  const timer=setInterval(()=>loadMessages(selected.id,true),2000);
   return()=>clearInterval(timer);
  },[selected?.id,loadMessages]);
  useEffect(()=>{
@@ -95,18 +96,35 @@ export default function SupportInbox(){
   if(!selected||busyRef.current)return;
   const message=action==='reply'?reply.trim():'';
   if(action==='reply'&&!message)return;
-  busyRef.current=true;setBusy(true);setNotice('');
+  busyRef.current=true;setNotice('');
+  const optimisticId='admin-pending-'+Date.now();
+  if(action==='reply'){
+   // Put the Admin reply into the thread immediately; replace it when the server confirms it.
+   setReply('');
+   setMessages(current=>[...current,{id:optimisticId,sender_role:'admin',content:message,created_at:new Date().toISOString(),local_status:'sending'}]);
+   setSendingReply(true);
+  }else setBusy(true);
   try{
    const access=await token();
    const response=await fetch('/api/admin/support/action',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+access},body:JSON.stringify({conversationId:selected.id,action,message:action==='reply'?message:undefined})});
    const payload=await response.json();
    if(!response.ok)throw new Error(payload.error||'Support action failed.');
-   if(action==='reply')setReply('');
-   setNotice(action==='reply'?'Reply sent to the user.':payload.message||'Support updated.');
+   if(action==='reply'){
+    setMessages(current=>current.map(item=>item.id===optimisticId?{...payload.message,local_status:'sent'}:item));
+    setNotice('Reply sent to the user.');
+   }else setNotice(payload.message||'Support updated.');
    await loadMessages(selected.id,true);
    await loadInbox(true);
-  }catch(error){setNotice(error.message||'Support action failed.');}
-  finally{busyRef.current=false;setBusy(false);}
+  }catch(error){
+   if(action==='reply'){
+    setMessages(current=>current.filter(item=>item.id!==optimisticId));
+    setReply(message);
+   }
+   setNotice(error.message||'Support action failed.');
+  }finally{
+   busyRef.current=false;
+   if(action==='reply')setSendingReply(false);else setBusy(false);
+  }
  };
 
  const filtered=useMemo(()=>items.filter(item=>(item.display_name+' '+item.profession+' '+item.location+' '+item.user_id+' '+item.status).toLowerCase().includes(query.toLowerCase())),[items,query]);
@@ -128,12 +146,12 @@ export default function SupportInbox(){
     </div>
     <div className="admin-support-thread" aria-live="polite">
      {loadingMessages&&!messages.length&&<p className="admin-empty">Loading the complete conversation…</p>}
-     {messages.map(message=><article key={message.id} className={'admin-support-message '+message.sender_role}><div className="admin-support-message-meta"><b>{message.sender_role==='user'?'User':message.sender_role==='admin'?'You · Admin':message.sender_role==='ai'?'AI Assistant':'System'}</b><time>{fmt(message.created_at)}</time></div><p>{message.content}</p>{(message.attachments||[]).map((file,index)=><div className="admin-support-file" key={file.path||index}>{file.kind==='image'?<ImageIcon size={16}/>:<FileText size={16}/>}<span>{file.name}</span>{files[file.path]&&<a href={files[file.path]} target="_blank" rel="noreferrer">Open file</a>}{file.ai_summary&&<small>AI visual notes: {file.ai_summary}</small>}{message.pinned_for_admin&&<em><Paperclip size={12}/> Pinned for review</em>}</div>)}</article>)}
+     {messages.map(message=><article key={message.id} className={'admin-support-message '+message.sender_role}><div className="admin-support-message-meta"><b>{message.sender_role==='user'?'User':message.sender_role==='admin'?'You · Admin':message.sender_role==='ai'?'AI Assistant':'System'}</b><span className="admin-support-message-time"><time>{fmt(message.created_at)}</time>{message.sender_role==='admin'&&<span className={'admin-support-delivery'+(message.user_read_at?' is-read':'')} title={message.user_read_at?'Read by user':message.delivered_at?'Delivered to user':message.local_status==='sending'?'Sending':'Sent to server'} aria-label={message.user_read_at?'Read by user':message.delivered_at?'Delivered to user':message.local_status==='sending'?'Sending':'Sent to server'}>{message.local_status==='sending'?'Sending':message.user_read_at?<CheckCheck size={14}/>:message.delivered_at?<CheckCheck size={14}/>:<Check size={14}/>}</span>}</span></div><p>{message.content}</p>{(message.attachments||[]).map((file,index)=><div className="admin-support-file" key={file.path||index}>{file.kind==='image'?<ImageIcon size={16}/>:<FileText size={16}/>}<span>{file.name}</span>{files[file.path]&&<a href={files[file.path]} target="_blank" rel="noreferrer">Open file</a>}{file.ai_summary&&<small>AI visual notes: {file.ai_summary}</small>}{message.pinned_for_admin&&<em><Paperclip size={12}/> Pinned for review</em>}</div>)}</article>)}
      {!loadingMessages&&!messages.length&&<p className="admin-empty">No messages are available in this conversation yet.</p>}
     </div>
     <form className="admin-support-reply" onSubmit={event=>{event.preventDefault();act('reply');}}>
-     <textarea rows="2" value={reply} onChange={event=>setReply(event.target.value)} placeholder="Write a reply to this user. Your message will appear in the same ProLink Support conversation…" disabled={busy}/>
-     <button type="submit" disabled={busy||!reply.trim()}>{busy?<LoaderCircle size={15} className="spin"/>:<Send size={15}/>} Send reply</button>
+     <textarea rows="2" value={reply} onChange={event=>setReply(event.target.value)} placeholder="Write a reply to this user. Your message will appear in the same ProLink Support conversation…" disabled={busy||sendingReply}/>
+     <button type="submit" disabled={busy||sendingReply||!reply.trim()}><Send size={15}/> Send reply</button>
     </form>
     {selected.status==='admin_attending'&&<small className="admin-support-ai-paused"><CheckCircle2 size={13}/> You are attending this case. AI replies are paused; your replies appear in the user's existing support chat.</small>}
    </>}
