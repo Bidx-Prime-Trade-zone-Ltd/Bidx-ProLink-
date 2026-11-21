@@ -819,8 +819,8 @@ function supportAccountLookupChoice(message,history=[]){
 function supportMessageIntent(message,history=[]){
   const text=String(message||"").toLowerCase().trim();
   // Explicit conversation closers take precedence over generic thanks/acknowledgements.
-  const endingText=text.replace(/[.,!?;:]+/g," ").replace(/\\s+/g," ").trim();
-  if(/^(?:bye|goodbye|good bye|see you(?: later)?|talk later|catch you later|that(?:'| i)s all|i am done|i'm done|nothing else|no more questions|i am fine now|i'm fine now|all done|thanks bye|thank you bye|thanks goodbye|thank you goodbye|okay bye|ok bye|alright bye|that is all|i have finished)(?:\\s*)$/i.test(endingText))return "chat_ending";
+  const endingText=text.replace(/[.,!?;:]+/g," ").replace(/\s+/g," ").trim();
+  if(/^(?:bye|goodbye|good bye|see you(?: later)?|talk later|catch you later|that(?:'| i)s all|i am done|i'm done|nothing else|no more questions|i am fine now|i'm fine now|all done|thanks bye|thank you bye|thanks goodbye|thank you goodbye|okay bye|ok bye|alright bye|that is all|i have finished)\s*$/i.test(endingText))return "chat_ending";
   const accountChoice=supportAccountLookupChoice(message,history);
   if(accountChoice==="accept")return "confirm_account_lookup";
   if(accountChoice==="decline")return "decline_account_lookup";
