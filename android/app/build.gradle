@@ -1,0 +1,40 @@
+plugins {
+    id 'com.android.application'
+}
+
+def releaseStoreFile = System.getenv("ANDROID_KEYSTORE_FILE")
+def releaseStorePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+def releaseKeyAlias = System.getenv("ANDROID_KEY_ALIAS")
+def releaseKeyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+
+android {
+    namespace 'online.bidxpro.prolink'
+    compileSdk 36
+
+    defaultConfig {
+        applicationId 'online.bidxpro.prolink'
+        minSdk 23
+        targetSdk 36
+        versionCode (project.findProperty("VERSION_CODE") ?: "1").toInteger()
+        versionName (project.findProperty("VERSION_NAME") ?: "1.0").toString()
+    }
+
+    signingConfigs {
+        release {
+            if (releaseStoreFile && releaseStorePassword && releaseKeyAlias && releaseKeyPassword) {
+                storeFile file(releaseStoreFile)
+                storeType "PKCS12"
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            if (releaseStoreFile) signingConfig signingConfigs.release
+        }
+    }
+}
