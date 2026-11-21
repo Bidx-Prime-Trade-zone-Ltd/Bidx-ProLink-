@@ -1,5 +1,5 @@
 const CACHE_NAME = 'bidx-prolink-static-v1';
-const APP_SHELL = ['/manifest.webmanifest', '/icon.svg'];
+const APP_SHELL = ['/', '/manifest.webmanifest', '/icon.svg'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -40,8 +40,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Cache only versioned/static assets; always try the network first so new
-  // application releases are picked up promptly.
+  // Cache only static assets; use the network first so new releases appear promptly.
   if (/\.(?:js|css|svg|png|webp|woff2?)$/i.test(url.pathname) ||
       url.pathname === '/manifest.webmanifest') {
     event.respondWith(
