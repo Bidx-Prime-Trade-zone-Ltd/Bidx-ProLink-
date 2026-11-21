@@ -78,7 +78,7 @@ jobs:
           test -n "$ANDROID_KEY_ALIAS" || (echo "Missing ANDROID_KEY_ALIAS repository secret" && exit 1)
           test -n "$ANDROID_KEY_PASSWORD" || (echo "Missing ANDROID_KEY_PASSWORD repository secret" && exit 1)
           ./gradlew --version 2>/dev/null || true
-          gradle --no-daemon :app:bundleRelease -PVERSION_CODE="${{ inputs.version_code || '1' }}" -PVERSION_NAME="${{ inputs.version_name || '1.0' }}" 
+          gradle --no-daemon -p android :app:bundleRelease -PVERSION_CODE="${{ inputs.version_code || '1' }}" -PVERSION_NAME="${{ inputs.version_name || '1.0' }}" 
 
       - name: Verify AAB output
         run: |
