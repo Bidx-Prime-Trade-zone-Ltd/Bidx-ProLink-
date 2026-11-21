@@ -121,3 +121,9 @@
 }
 
 .admin-metric b.admin-metric-unavailable{font-size:12px;line-height:1.25;color:#9a6a25}.admin-warning{background:#fff8e9;border:1px solid #f1dfb7;color:#76551c}
+
+/* Human Admin outbound message receipts: sent, delivered, and read. */
+.admin-support-message-time{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.admin-support-delivery{display:inline-flex;align-items:center;color:#8292a2}
+.admin-support-delivery.is-read{color:#16a34a}
+.admin-support-delivery svg{stroke-width:2.5}
