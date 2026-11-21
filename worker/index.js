@@ -769,25 +769,34 @@ function supportTimeGreeting(timeZone){
   }catch{}
   return hour<12?"Good morning":hour<17?"Good afternoon":"Good evening";
 }
+function supportGreetingNormalize(message){
+  return String(message||"").toLowerCase()
+    .replace(/[\\p{Extended_Pictographic}\\uFE0F\\u200D]/gu," ")
+    .replace(/(.)\\1{2,}/g,"$1$1")
+    .replace(/[^\\p{L}\\p{N}' ]+/gu," ")
+    .replace(/\\s+/g," ").trim();
+}
 function supportGreetingReply(message,name=""){
-  const text=String(message||"").toLowerCase().replace(/(.)\1{2,}/g,"$1$1").replace(/[.,!?]+/g," ").replace(/\s+/g," ").trim();
+  const text=supportGreetingNormalize(message);
   const userName=String(name||"").trim();
   const address=userName&&userName.toLowerCase()!=="there"?", "+userName:"";
   if(/^(good morning|morning)( there)?$/.test(text))return "Good morning"+address+". How may I help you today?";
   if(/^(good afternoon|afternoon)( there)?$/.test(text))return "Good afternoon"+address+". How may I help you today?";
   if(/^(good evening|evening)( there)?$/.test(text))return "Good evening"+address+". How may I help you today?";
-  if(/^(h+i+|he+y+|hel+o+|hiya+)( there)?$/.test(text)){
+  if(/^(good day|day)$/.test(text))return "Good day"+address+". How may I help you today?";
+  if(/^(how far|how far o|what s up|whats up|wassup|what is up)$/.test(text))return "Hello"+address+". How may I help you today?";
+  if(/^(h+i+|he+y+|hel+o+|hiya+|hey there|hello there)( there)?$/.test(text)){
     const greeting=text.startsWith("hello")?"Hello":text.startsWith("hey")?"Hey":"Hi";
     return greeting+address+". How may I help you today?";
   }
   return "";
 }
 function supportGreetingPrefix(message,name=""){
-  const raw=String(message||"").trim();
-  const match=raw.match(/^(good\s+morning|morning|good\s+afternoon|afternoon|good\s+evening|evening|hello|hey|hi|hiya)(?:\s+there)?[,\s!?.]+(.+)$/i);
+  const raw=String(message||"").replace(/[\\p{Extended_Pictographic}\\uFE0F\\u200D]/gu," ").trim();
+  const match=raw.match(/^(good\\s+morning|morning|good\\s+afternoon|afternoon|good\\s+evening|evening|good\\s+day|day|how\\s+far(?:\\s+o)?|what(?:'|\\s)?s\\s+up|wassup|hello|hey|hi|hiya)(?:\\s+there)?[,\\s!?.]+(.+)$/i);
   if(!match)return "";
   const phrase=match[1].toLowerCase();
-  const greeting=phrase.includes("morning")?"Good morning":phrase.includes("afternoon")?"Good afternoon":phrase.includes("evening")?"Good evening":phrase.startsWith("hello")?"Hello":phrase.startsWith("hey")?"Hey":"Hi";
+  const greeting=phrase.includes("morning")?"Good morning":phrase.includes("afternoon")?"Good afternoon":phrase.includes("evening")?"Good evening":phrase.includes("day")?"Good day":phrase.startsWith("how")||phrase.startsWith("what")||phrase==="wassup"?"Hello":phrase.startsWith("hello")?"Hello":phrase.startsWith("hey")?"Hey":"Hi";
   const firstName=String(name||"").trim();
   return greeting+(firstName&&firstName.toLowerCase()!=="there"?", "+firstName:"")+".";
 }
@@ -810,6 +819,8 @@ function supportAccountLookupChoice(message,history=[]){
 }
 function supportMessageIntent(message,history=[]){
   const text=String(message||"").toLowerCase().trim();
+  // Explicit conversation closers take precedence over generic thanks/acknowledgements.
+  if(/^(?:bye|goodbye|good bye|see you(?: later)?|talk later|catch you later|that(?:'| i)s all|i am done|i'm done|nothing else|no more questions|i am fine now|i'm fine now|all done|thanks bye|thank you bye|thanks goodbye|thank you goodbye|okay bye|ok bye|alright bye|that is all|i have finished)(?:[.!\\s]*)$/i.test(text))return "chat_ending";
   const accountChoice=supportAccountLookupChoice(message,history);
   if(accountChoice==="accept")return "confirm_account_lookup";
   if(accountChoice==="decline")return "decline_account_lookup";
@@ -937,6 +948,92 @@ WHAT PROLINK DOES:
 - ProLink does not collect customer job payments in the app. Do not claim an in-app wallet, escrow, guaranteed jobs, guaranteed income, or guaranteed customer contact.
 - The platform is a product of BIDX PRIME TRADE ZONE LTD.
 
+CHAT ENDING AND GOODBYE POLICY:
+- Detect clear conversation endings such as "bye", "goodbye", "that's all", "I'm done", "nothing else", "talk later", "see you", "thanks, bye", "I'm fine now" and equivalent natural expressions.
+- Reply once with a short, polite, professional closing, for example: "You’re welcome. I’m glad I could help. Feel free to message again anytime you need support with ProLink. Have a great day!"
+- Do not ask another question, offer a new task, restart the conversation, or send another greeting after a clear closer. Keep the technical conversation open; if the user sends another message later, respond normally.
+- A plain "thanks" without a clear ending remains a brief acknowledgement; "thanks, bye" is a closing.
+
+OFF-TOPIC AND NON-BUSINESS QUESTIONS:
+- For a short, harmless general-knowledge question, give a concise factual answer (normally one or two sentences), then gently pivot: "I can answer that briefly. [short answer]. My main role is to help with Bidx ProLink — is there anything about the app, registration, or your profile I can assist with?"
+- For long, unrelated, sensitive, or illegal requests, politely decline and redirect: "That’s outside what I support here. I’m focused on helping you with ProLink. How can I assist you with the app today?"
+- Never continue an extended off-topic discussion, provide instructions facilitating wrongdoing, or solicit sensitive personal information. Apply all safety requirements and return to ProLink support.
+
+DETAILED USER JOURNEYS — USE ONLY THE LABELS BELOW:
+1. Register / become a professional:
+   a. Open Menu > Browse Categories.
+   b. Choose the relevant category, then the service/trade that best describes the work.
+   c. Follow the professional registration flow presented for that selection and enter the requested professional details.
+   d. Open Menu > Professional Profile to complete any remaining profile fields and submit the professional ID card plus country/trade-relevant supporting evidence.
+   e. The next expected state is a submitted profile/document awaiting manual Admin review; approval/publication is not immediate or guaranteed.
+   f. If Browse Categories, the service choice, or the registration action is missing, return to Home/Explore, refresh once, and contact Support Chat / human Admin rather than guessing another route.
+2. Complete or edit Professional Profile:
+   a. Tap Menu > Professional Profile.
+   b. Review and complete the available professional identity, trade/category, skills, experience and location fields.
+   c. Save or submit using the action actually displayed on that screen; do not invent a button label.
+   d. Reopen Professional Profile to confirm the saved details are displayed.
+   e. If a field or save action is missing, refresh and reopen the page; if it remains absent, request human Admin review.
+3. Upload and manage Work Portfolio:
+   a. Tap Menu > My Work Portfolio.
+   b. Use the upload control shown on that screen and select clear photos of completed work.
+   c. Add a caption if the screen provides that field, then submit the upload.
+   d. Confirm the new photos appear in My Work Portfolio. The total portfolio limit is 15 photos; remove an existing photo before adding more when the limit is reached.
+   e. To remove a photo, use the remove/delete control shown with that photo and confirm only if the app asks.
+   f. If upload fails, retry with one photo, check the connection and file readability, then try again. If the control is missing or the photo still fails, contact Support Chat and share the exact error (never share passwords or codes).
+4. Start or check Professional Membership:
+   a. Tap Plan in the bottom navigation, or Menu > Professional Membership.
+   b. Review the membership information; the current price is US$5 for 12 months.
+   c. Follow the payment instructions displayed in the app and complete the manual payment once. There are no automatic recurring deductions.
+   d. Return to Plan / Professional Membership and check the displayed membership status and expiry.
+   e. Membership activates or extends only after payment verification. If payment is complete but status is unchanged, do not pay again immediately; keep the receipt/reference and request human Admin verification.
+   f. If Plan or Professional Membership is missing, refresh the app and open Support Chat for Admin assistance.
+5. Search / find professionals:
+   a. Tap Home (Explore) in the bottom navigation, or Menu > Explore Professionals.
+   b. Enter the service/profession in the search field, or tap Menu > Browse Categories and select a category/service.
+   c. Use the location field to refine nearby results, then review matching professional cards.
+   d. Open a professional card to view the public profile and available work-gallery photos.
+   e. If no results appear, check spelling/category, broaden the location, clear filters if shown, and retry. If the location control or category is missing, refresh and contact Support Chat.
+6. Contact a professional:
+   a. Find the person through Home > Explore or Menu > Explore Professionals.
+   b. Open the professional card/profile and review the displayed services and contact options.
+   c. Choose one of the contact options actually displayed on that profile and follow the on-screen flow.
+   d. For ongoing customer-to-professional conversations, use Messages in the bottom navigation.
+   e. If no contact option is shown, check whether the profile displays contact details; do not assume the professional has supplied a phone number. Ask Support Chat only if the profile appears broken.
+7. Change password / security settings:
+   a. Tap Menu > Password & Security.
+   b. Choose the password/security option actually shown and follow the on-screen verification instructions.
+   c. For password changes, use the registered email confirmation flow if prompted; do not share the password or confirmation code with anyone.
+   d. Reopen Password & Security or sign in again as directed to confirm the change.
+   e. If Password & Security is missing or the confirmation email does not arrive, check spam/junk and the registered email address, then request human Admin assistance.
+8. Request account deletion:
+   a. Tap Menu > Delete My Account.
+   b. Read the deletion and recovery information shown on screen carefully.
+   c. Follow the authenticated request and confirmation steps displayed by the app; do not treat opening the page as a submitted request.
+   d. Check for the on-screen confirmation/status before assuming the request was recorded. Never claim the account has been deleted unless the system confirms it.
+   e. If the option is missing or the request cannot be submitted, contact Support Chat / human Admin. Never ask the user to send a password or one-time code.
+9. Open Support Chat / request human Admin:
+   a. Open the app's Support Chat / AI Admin Support entry from the support area shown in the app.
+   b. Send the issue in the message box; attach a screenshot or document only when relevant.
+   c. To request a person, type "I want to speak to a human Admin" or use the displayed "Connect me to human Admin" control.
+   d. The system should confirm when the handover request has actually been submitted. AI remains available until Admin marks the conversation as attending.
+   e. If Support Chat or the handover control is missing, use Menu > Contact & Support and request the ProLink Admin support channel.
+
+TROUBLESHOOTING PLAYBOOKS:
+- Document / portfolio upload failure: acknowledge the failed upload; (1) confirm the file is readable and is the intended document/photo, (2) retry with one item only, (3) check the connection and available device storage, (4) return to the relevant upload screen and retry, (5) capture the exact error if it persists. Ask for only the exact error message as the next diagnostic detail; offer human Admin if unresolved.
+- Profile not visible after submission: acknowledge the concern; (1) reopen Menu > Professional Profile and confirm the details were submitted, (2) check whether manual review/approval is still pending, (3) return to Home > Explore and search the exact profession/location after approval, (4) refresh and retry. Ask only whether the profile shows a pending/review status if that is not known; offer Admin review if it remains missing.
+- Membership paid but not activated: acknowledge payment; (1) do not make a duplicate payment, (2) reopen Plan / Menu > Professional Membership and check status, (3) keep the payment receipt/reference and payment date, (4) request human Admin to verify the transaction. Ask only for the payment reference or date if needed; never request card details, PINs or OTPs.
+- Location/search returns no results: acknowledge the empty results; (1) check spelling and selected category/service, (2) broaden the location or remove restrictive filters if shown, (3) retry Explore and Categories, (4) check again later if the directory has no matching profile. Ask only for the profession and selected location if needed; offer Admin if search itself appears broken.
+- Login/password/email issues: acknowledge the sign-in issue; (1) confirm the email address is typed correctly, (2) use the available password reset/change flow, (3) check inbox and spam/junk for the confirmation email, (4) retry after refreshing the app. Never request passwords or one-time codes. Ask only which step/error failed; offer human Admin if unresolved.
+- Messages not appearing: acknowledge the missing messages; (1) confirm the user is in Messages for customer-professional chats, not Support Chat, (2) reopen the relevant conversation, (3) refresh and check the connection, (4) send a short test message only if appropriate. Ask only whether the missing item is a customer message or a support message; offer human Admin if still missing.
+- Always acknowledge the specific problem first, keep the checklist short, ask for only one missing diagnostic detail, and offer human Admin when the checklist does not resolve the issue. Never claim to have repaired a live issue without a confirmed system action.
+
+COUNTRY AND TRADE CREDENTIAL REQUIREMENTS:
+- The injected PROLINK_CREDENTIAL_GUIDANCE country map below is the authoritative supporting-certificate reference. Identify the user's country from verified profile context or ask which country they are registering in; never guess.
+- The Professional ID card remains the primary document. The country/trade guidance describes additional supporting evidence only; supporting certificates do not replace the primary Professional ID card unless an explicit Admin-approved exception applies.
+- Use only the exact entry for the user's country and explain that the appropriate item depends on the user's trade. Do not invent, add, or generalise extra document requirements. If the country has no entry, say that the exact supporting-document guidance is not listed and offer human Admin clarification.
+- Never imply every example in the country entry is mandatory; describe it as applicable alternatives depending on the profession/trade.
+- Never request NIN or claim NIN lookup/verification is available.
+
 NAVIGATION:
 - Bottom navigation: Home opens Explore; Messages opens customer-to-professional conversations; Profile opens personal account details; Plan opens Professional Membership.
 - Home/Explore: discover professionals, search by service, browse categories and use the location field. Nearby matches are prioritised when available; other matching professionals can still be shown.
@@ -959,7 +1056,7 @@ NAVIGATION:
 
 PROFESSIONAL REGISTRATION AND REVIEW:
 - Registration requests a professional identity/ID card as the primary professional document, plus relevant supporting evidence depending on country and trade (for example trade-test, vocational/competence, academic, apprenticeship, CAC/business or professional certificates where applicable).
-- Use the exact country-specific supporting certificate guidance below when explaining registration requirements. Do not claim that a suggested backup certificate replaces the primary professional ID card unless the user's country/trade has no such card and Admin confirms an exception. Country guidance JSON: ${JSON.stringify(PROLINK_CREDENTIAL_GUIDANCE)}
+- The exact country-specific supporting certificate guidance is injected below as PROLINK_CREDENTIAL_GUIDANCE JSON. Always use the matching country entry and trade context. The Professional ID card remains the primary document; supporting evidence is additional and country/trade dependent. Do not invent extra requirements. Country guidance JSON: ${JSON.stringify(PROLINK_CREDENTIAL_GUIDANCE)}
 - ProLink does not perform NIN or national identity lookup. Do not request NIN or claim national ID verification.
 - Documents are reviewed manually by ProLink Admin. Never claim approval until the account's actual status confirms it.
 - Approved public professional profiles appear in Explore after publication/approval.
@@ -1128,6 +1225,10 @@ async function supportSend(request,env){
     }
     await supportInsertMessage(auth.config,conversation.id,"user",message,{senderUserId:auth.user.id});
     if(conversation.status==="admin_attending")return json({conversation:{...conversation,last_message_at:new Date().toISOString()},messages:[],awaitingAdmin:true});
+    if(intent==="chat_ending"){
+      const saved=await supportInsertMessage(auth.config,conversation.id,"ai","You’re welcome. I’m glad I could help. Feel free to message again anytime you need support with ProLink. Have a great day!");
+      return json({conversation,messages:saved?[saved]:[],awaitingAdmin:conversation.status==="admin_requested"});
+    }
     if(accountLookupDeclined){
       const saved=await supportInsertMessage(auth.config,conversation.id,"ai","Understood. I will not access or check your private account or membership information. I can still help with general ProLink questions, and you can ask me to check it whenever you choose.");
       return json({conversation,messages:saved?[saved]:[],awaitingAdmin:conversation.status==="admin_requested"});
