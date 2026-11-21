@@ -21,6 +21,7 @@ export default function SupportChat({session,profile}){
  const panelRef=useRef(null);
  const fileRef=useRef(null);
  const stickToBottom=useRef(true);
+ const readReceiptInFlight=useRef(false);
  const token=session?.access_token;
 
  // Lock the page behind the support window while keeping the chat's own message
@@ -68,7 +69,7 @@ export default function SupportChat({session,profile}){
  useEffect(()=>{if(open){stickToBottom.current=true;load();}},[open,load]);
  useEffect(()=>{
   if(!open||!token)return;
-  const timer=setInterval(()=>load(true),7000);
+  const timer=setInterval(()=>load(true),2000);
   return()=>clearInterval(timer);
  },[open,token,load]);
  useEffect(()=>{
@@ -78,6 +79,19 @@ export default function SupportChat({session,profile}){
   }
  },[open,messages,aiTyping]);
 
+ // Mark human Admin replies read after they have appeared in the open support thread.
+ useEffect(()=>{
+  if(!open||!token||!messages.some(message=>message.sender_role==='admin'&&!message.user_read_at)||readReceiptInFlight.current)return;
+  readReceiptInFlight.current=true;
+  fetch('/api/support/read',{method:'POST',headers:{authorization:'Bearer '+token}})
+   .then(response=>response.ok?response.json():null)
+   .then(payload=>{
+    if(!payload?.read_at)return;
+    setMessages(current=>current.map(message=>message.sender_role==='admin'&&!message.user_read_at?{...message,user_read_at:payload.read_at}:message));
+   })
+   .catch(()=>{})
+   .finally(()=>{readReceiptInFlight.current=false;});
+ },[open,token,messages]);
  const onMessagesScroll=()=>{
   const node=listRef.current;if(!node)return;
   stickToBottom.current=node.scrollHeight-node.scrollTop-node.clientHeight<44;
