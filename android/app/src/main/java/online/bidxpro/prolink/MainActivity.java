@@ -25,6 +25,20 @@ public class MainActivity extends Activity {
     private ValueCallback<Uri[]> filePathCallback;
     private PermissionRequest pendingWebPermission;
 
+    private boolean isProLinkAppLink(Uri uri) {
+        return uri != null
+            && "https".equalsIgnoreCase(uri.getScheme())
+            && "app.bidxpro.online".equalsIgnoreCase(uri.getHost());
+    }
+
+    private void openIncomingAppLink(Intent intent) {
+        Uri data = intent == null ? null : intent.getData();
+        if (webView != null && isProLinkAppLink(data)) {
+            // Load the complete callback URL so Supabase can exchange its PKCE code.
+            webView.loadUrl(data.toString());
+        }
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -92,8 +106,21 @@ public class MainActivity extends Activity {
             }
         });
 
-        if (savedInstanceState != null) webView.restoreState(savedInstanceState);
-        else webView.loadUrl(HOME_URL);
+        if (savedInstanceState != null) {
+            webView.restoreState(savedInstanceState);
+            openIncomingAppLink(getIntent());
+        } else if (isProLinkAppLink(getIntent() == null ? null : getIntent().getData())) {
+            openIncomingAppLink(getIntent());
+        } else {
+            webView.loadUrl(HOME_URL);
+        }
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        openIncomingAppLink(intent);
     }
 
     @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
