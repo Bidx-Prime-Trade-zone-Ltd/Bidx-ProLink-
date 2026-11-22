@@ -95,7 +95,7 @@ export default function AuthModal({ onClose }) {
       try{bridge.postMessage(JSON.stringify({type:'googleSignIn',id,nonce:hashedNonce}));}
       catch(e){clearTimeout(timer);reject(e);}
     });
-    if(reply.status==='cancelled')return;
+    if(reply.status==='cancelled')throw new Error('Google sign-in was cancelled.');
     if(reply.status!=='success'||!reply.idToken){
       const messages={
         no_account:'No Google account is available on this phone. Add a Google account in Android Settings, or use email and password.',
@@ -126,7 +126,6 @@ export default function AuthModal({ onClose }) {
         if(e)throw e;
       }
     }catch(e){
-      if(e?.message==='Google sign-in was cancelled')return;
       console.error('[BidxGoogleAuth] Google sign-in failed:',e);
       setError(e?.message||'Google sign-in could not start. Please try again.');
       setBusy(false);setBusyLabel('');
