@@ -6,11 +6,11 @@ on:
       version_code:
         description: "Google Play version code (must be higher than the last uploaded version)"
         required: true
-        default: "3"
+        default: "4"
       version_name:
         description: "Android version name"
         required: true
-        default: "3.0"
+        default: "4.0"
   push:
     branches: [main, feat/native-android-webview-aab]
     paths:
@@ -90,7 +90,7 @@ jobs:
           ./gradlew --version 2>/dev/null || true
           for attempt in 1 2 3; do
             echo "Gradle build attempt $attempt of 3"
-            if gradle --no-daemon --max-workers=2 -p android :app:bundleRelease -PVERSION_CODE="${{ inputs.version_code || '3' }}" -PVERSION_NAME="${{ inputs.version_name || '3.0' }}" --stacktrace; then
+            if gradle --no-daemon --max-workers=2 -p android :app:bundleRelease -PVERSION_CODE="${{ inputs.version_code || '4' }}" -PVERSION_NAME="${{ inputs.version_name || '4.0' }}" --stacktrace; then
               exit 0
             fi
             if [ "$attempt" -lt 3 ]; then
