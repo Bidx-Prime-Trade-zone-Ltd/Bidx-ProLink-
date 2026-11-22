@@ -58,12 +58,41 @@ export default function AuthModal({ onClose }) {
       }
     });
   };
-  const google=()=>run('Connecting to Google…',async()=>{
-    if(!supabase)throw new Error(supabaseConfigError);
-    const {error:e}=await supabase.auth.signInWithOAuth({provider:'google',options:{redirectTo:'com.bidxpro.prolink://auth/callback',queryParams:{prompt:'select_account'}}});
-    if(e)throw e;
-    // OAuth redirects the browser. Do not clear the progress state before navigation.
-  });
+  const google=async()=>{
+    if(!supabase){setError(supabaseConfigError);return;}
+    setBusy(true);setBusyLabel('Opening Google sign-in…');setError('');setMessage('');
+    if(window.BidxNativeGoogle?.signIn){
+      try{
+        const random=new Uint8Array(32);
+        window.crypto.getRandomValues(random);
+        const nonce=Array.from(random,b=>b.toString(16).padStart(2,'0')).join('');
+        const digest=await window.crypto.subtle.digest('SHA-256',new TextEncoder().encode(nonce));
+        const hashedNonce=Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');
+        window.__bidxGoogleSignInResult=async raw=>{
+          try{
+            const result=typeof raw==='string'?JSON.parse(raw):raw;
+            if(result?.error)throw new Error(result.error);
+            if(!result?.idToken)throw new Error('Google did not return an ID token. Please try again.');
+            setBusyLabel('Verifying your Google account…');
+            const {error:e}=await supabase.auth.signInWithIdToken({provider:'google',token:result.idToken,nonce});
+            if(e)throw e;
+            setBusy(false);setBusyLabel('');
+          }catch(e){
+            setError(e?.message||'Google sign-in failed. Please try again.');
+            setBusy(false);setBusyLabel('');
+          }finally{
+            window.__bidxGoogleSignInResult=null;
+          }
+        };
+        window.BidxNativeGoogle.signIn(nonce,hashedNonce);
+      }catch(e){setError(e?.message||'Unable to start Google sign-in.');setBusy(false);setBusyLabel('');}
+      return;
+    }
+    try{
+      const {error:e}=await supabase.auth.signInWithOAuth({provider:'google',options:{redirectTo:window.location.origin,queryParams:{prompt:'select_account'}}});
+      if(e)throw e;
+    }catch(e){setError(e?.message||'Google sign-in failed.');setBusy(false);setBusyLabel('');}
+  };
   const signedIn=Boolean(session?.user);
   return <div className="modal-backdrop auth-progress-backdrop">
     <div className="modal auth-modal" onClick={e=>e.stopPropagation()}>
