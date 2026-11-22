@@ -8,6 +8,7 @@ export default function AuthModal({ onClose }) {
   const [password,setPassword]=useState('');
   const [confirmPassword,setConfirmPassword]=useState('');
   const [showPassword,setShowPassword]=useState(false);
+  const [showConfirmPassword,setShowConfirmPassword]=useState(false);
   const [acceptedTerms,setAcceptedTerms]=useState(false);
   const [busy,setBusy]=useState(false);
   const [busyLabel,setBusyLabel]=useState('');
@@ -115,7 +116,7 @@ export default function AuthModal({ onClose }) {
         <form onSubmit={submit}>
           <label className="form-label">Email address<input type="email" autoComplete="email" required value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com"/></label>
           {mode!=='Forgot password'&&<label className="form-label">Password<div className="password-input-wrap"><input type={showPassword?'text':'password'} required minLength={8} autoComplete={mode==='Sign in'?'current-password':'new-password'} value={password} onChange={e=>setPassword(e.target.value)} placeholder="At least 8 characters"/><button className="password-visibility" type="button" onClick={()=>setShowPassword(v=>!v)} aria-label={showPassword?'Hide password':'Show password'}>{showPassword?<EyeOff size={16}/>:<Eye size={16}/>}</button></div></label>}
-          {mode==='Reset password'&&<label className="form-label">Confirm new password<input type="password" required minLength={8} value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)}/></label>}
+          {mode==='Reset password'&&<label className="form-label">Confirm new password<div className="password-input-wrap"><input type={showConfirmPassword?'text':'password'} required minLength={8} autoComplete="new-password" value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} placeholder="Enter your new password again"/><button className="password-visibility" type="button" onClick={()=>setShowConfirmPassword(v=>!v)} aria-label={showConfirmPassword?'Hide password':'Show password'} title={showConfirmPassword?'Hide password':'Show password'}>{showConfirmPassword?<EyeOff size={16}/>:<Eye size={16}/>}</button></div></label>}
           {mode==='Create account'&&<label className="auth-terms-check"><input type="checkbox" checked={acceptedTerms} onChange={e=>setAcceptedTerms(e.target.checked)}/><span>I confirm I am at least 18 and agree to the <a href="/terms" target="_blank" rel="noreferrer">Terms</a> and <a href="/privacy" target="_blank" rel="noreferrer">Privacy Policy</a>.</span></label>}
           {mode==='Sign in'&&<p className="auth-switch"><button type="button" onClick={()=>{setMode('Forgot password');setError('');setMessage('');}}>Forgot password?</button></p>}
           {error&&<p className="auth-feedback error" role="alert">{error}</p>}
