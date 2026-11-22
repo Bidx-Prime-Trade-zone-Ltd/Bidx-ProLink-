@@ -161,10 +161,6 @@ public class MainActivity extends Activity {
                 String scheme = uri.getScheme() == null ? "" : uri.getScheme();
                 String host = uri.getHost() == null ? "" : uri.getHost();
                 if (scheme.equals("https") && (host.equals("app.bidxpro.online") || host.equals("bidxpro.online") || host.endsWith(".bidxpro.online"))) return false;
-                if (isOAuthAuthorization(uri)) {
-                    openOAuthInAppBrowser(uri);
-                    return true;
-                }
                 if (scheme.equals("http") || scheme.equals("https") || scheme.equals("tel") || scheme.equals("mailto") || scheme.equals("whatsapp")) {
                     try { startActivity(new Intent(Intent.ACTION_VIEW, uri)); }
                     catch (ActivityNotFoundException ignored) { Toast.makeText(MainActivity.this, "No app available to open this link", Toast.LENGTH_SHORT).show(); }
