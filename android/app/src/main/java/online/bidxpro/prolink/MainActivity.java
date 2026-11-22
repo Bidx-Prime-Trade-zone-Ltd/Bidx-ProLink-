@@ -15,6 +15,10 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.util.Log;
+import androidx.core.content.ContextCompat;
+import androidx.webkit.WebViewCompat;
+import androidx.webkit.WebViewFeature;
 import android.widget.Toast;
 
 public class MainActivity extends Activity {
@@ -22,6 +26,8 @@ public class MainActivity extends Activity {
     private static final int CAMERA_PERMISSION_REQUEST = 4102;
     private static final String HOME_URL = "https://app.bidxpro.online";
     private WebView webView;
+    private GoogleSignInBridge googleSignIn;
+    private static final String PROLINK_ORIGIN = "https://app.bidxpro.online";
     private ValueCallback<Uri[]> filePathCallback;
     private PermissionRequest pendingWebPermission;
 
@@ -72,6 +78,12 @@ public class MainActivity extends Activity {
         settings.setMediaPlaybackRequiresUserGesture(true);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         settings.setUserAgentString(settings.getUserAgentString() + " BidxProLinkAndroid");
+
+        // Install the same native Credential Manager bridge used by Marketplace02.
+        // It is restricted to the ProLink origin and returns the Google ID token
+        // directly to the WebView without launching Chrome.
+        googleSignIn = GoogleSignInBridge.install(this, webView, PROLINK_ORIGIN,
+                BuildConfig.GOOGLE_WEB_CLIENT_ID);
 
         webView.setWebViewClient(new WebViewClient() {
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
@@ -167,6 +179,7 @@ public class MainActivity extends Activity {
     }
 
     @Override protected void onDestroy() {
+        if (googleSignIn != null) googleSignIn.cancel();
         if (filePathCallback != null) filePathCallback.onReceiveValue(null);
         if (webView != null) { webView.destroy(); webView = null; }
         super.onDestroy();
