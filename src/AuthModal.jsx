@@ -62,23 +62,72 @@ export default function AuthModal({ onClose }) {
       }
     });
   };
-  // Use Supabase's hosted Google OAuth flow for both web and Android.
-  // On Android, MainActivity routes the registered deep-link callback back into
-  // this same WebView so Supabase can complete its PKCE exchange.
+  const isNativeAndroid=()=>/BidxProLinkAndroid/.test(navigator.userAgent||'');
+  const randomNonce=()=>{
+    const bytes=new Uint8Array(32);
+    window.crypto.getRandomValues(bytes);
+    return Array.from(bytes).map(b=>b.toString(16).padStart(2,'0')).join('');
+  };
+  const sha256Hex=async value=>{
+    const digest=await window.crypto.subtle.digest('SHA-256',new TextEncoder().encode(value));
+    return Array.from(new Uint8Array(digest)).map(b=>b.toString(16).padStart(2,'0')).join('');
+  };
+  const nativeGoogleSignIn=async()=>{
+    const bridge=window.BidxNativeGoogle;
+    if(!bridge||typeof bridge.postMessage!=='function'){
+      throw new Error('The native Google sign-in service is unavailable. Please update ProLink and try again, or use email and password.');
+    }
+    if(!window.crypto?.subtle||!window.crypto?.getRandomValues){
+      throw new Error('Secure Google sign-in is unavailable on this device. Please use email and password.');
+    }
+    const rawNonce=randomNonce();
+    const id=randomNonce().slice(0,16);
+    const hashedNonce=await sha256Hex(rawNonce);
+    const reply=await new Promise((resolve,reject)=>{
+      const timer=setTimeout(()=>reject(new Error('Google sign-in timed out. Please try again.')),5*60*1000);
+      bridge.onmessage=event=>{
+        let result;
+        try{result=JSON.parse(event?.data||'{}');}catch(_){return;}
+        if(result?.id!==id)return;
+        clearTimeout(timer);
+        resolve(result);
+      };
+      try{bridge.postMessage(JSON.stringify({type:'googleSignIn',id,nonce:hashedNonce}));}
+      catch(e){clearTimeout(timer);reject(e);}
+    });
+    if(reply.status==='cancelled')return;
+    if(reply.status!=='success'||!reply.idToken){
+      const messages={
+        no_account:'No Google account is available on this phone. Add a Google account in Android Settings, or use email and password.',
+        network:'Check your internet connection and try again.',
+        config:'Google sign-in configuration needs attention. Please use email and password for now.',
+        no_token:'Google did not return a sign-in token. Please try again.',
+        busy:'Google sign-in is already open. Finish or close it, then try again.'
+      };
+      throw new Error(messages[reply.code]||'Google sign-in could not be completed. Please try again.');
+    }
+    const {error:e}=await supabase.auth.signInWithIdToken({provider:'google',token:reply.idToken,nonce:rawNonce});
+    if(e)throw e;
+  };
+  // Android uses the same native Credential Manager flow as Marketplace02.
+  // The account picker appears over ProLink; no Chrome/browser OAuth redirect.
+  // Ordinary web users retain Supabase's hosted OAuth flow.
   const google=async()=>{
     if(!supabase){setError(supabaseConfigError);return;}
     setBusy(true);setBusyLabel('Connecting to Google…');setError('');setMessage('');
     try{
-      const {error:e}=await supabase.auth.signInWithOAuth({
-        provider:'google',
-        options:{
-          redirectTo:authRedirectUrl(),
-          queryParams:{prompt:'select_account'}
-        }
-      });
-      if(e)throw e;
+      if(isNativeAndroid()){
+        await nativeGoogleSignIn();
+      }else{
+        const {error:e}=await supabase.auth.signInWithOAuth({
+          provider:'google',
+          options:{redirectTo:window.location.origin,queryParams:{prompt:'select_account'}}
+        });
+        if(e)throw e;
+      }
     }catch(e){
-      console.error('[BidxGoogleAuth] Supabase Google OAuth could not start:',e);
+      if(e?.message==='Google sign-in was cancelled')return;
+      console.error('[BidxGoogleAuth] Google sign-in failed:',e);
       setError(e?.message||'Google sign-in could not start. Please try again.');
       setBusy(false);setBusyLabel('');
     }
