@@ -97,7 +97,7 @@ export default function AuthModal({ onClose }) {
     if(reply.status==='cancelled')throw new Error('Google sign-in was cancelled.');
     if(reply.status!=='success'||!reply.idToken){
       const messages={
-        no_account:'No Google account is available on this phone. Add a Google account in Android Settings, or use email and password.',
+        no_credential:'Google could not find an eligible sign-in credential. This can happen when the Android app signing certificate or Google OAuth configuration does not match. Please try email and password while we verify the configuration.',
         network:'Check your internet connection and try again.',
         config:'Google sign-in configuration needs attention. Please use email and password for now.',
         no_token:'Google did not return a sign-in token. Please try again.',
