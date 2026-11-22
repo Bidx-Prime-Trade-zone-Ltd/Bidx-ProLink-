@@ -42,7 +42,7 @@ import java.util.regex.Pattern;
  * Request:  {"type":"googleSignIn","id":"<hex>","nonce":"<sha256 hex of the page's raw nonce>"}
  * Reply:    {"id":"<hex>","status":"success","idToken":"..."}
  *           {"id":"<hex>","status":"cancelled"}
- *           {"id":"<hex>","status":"error","code":"no_account|no_token|network|config|busy|bad_request|unknown"}
+ *           {"id":"<hex>","status":"error","code":"no_credential|no_token|network|config|busy|bad_request|unknown"}
  */
 final class GoogleSignInBridge implements WebViewCompat.WebMessageListener {
     static final String JS_OBJECT = "BidxNativeGoogle";
@@ -104,6 +104,14 @@ final class GoogleSignInBridge implements WebViewCompat.WebMessageListener {
         }
         if (pending != null) {
             reply(replyProxy, id, "error", "busy", null);
+            return;
+        }
+
+        // A missing Web client ID is a build/configuration problem, not a
+        // missing Google account. Return a precise error before calling Google.
+        if (webClientId == null || webClientId.trim().isEmpty()) {
+            Log.e(TAG, "GOOGLE_WEB_CLIENT_ID is empty in this Android build");
+            reply(replyProxy, id, "error", "config", null);
             return;
         }
 
