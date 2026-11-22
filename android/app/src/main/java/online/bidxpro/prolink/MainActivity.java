@@ -69,34 +69,12 @@ public class MainActivity extends Activity {
             sendGoogleResult(null, "Google Sign-In is not configured in this Android build.");
             return;
         }
+
+        // This is an explicit "Continue with Google" button. Use Google's
+        // dedicated button flow directly instead of first attempting the
+        // authorized-account bottom sheet, which can fail during account reauth.
         CredentialManager manager = CredentialManager.create(this);
-        GetGoogleIdOption accountOption = new GetGoogleIdOption.Builder()
-            .setFilterByAuthorizedAccounts(false)
-            .setServerClientId(BuildConfig.GOOGLE_WEB_CLIENT_ID)
-            .setNonce(hashedNonce)
-            .setAutoSelectEnabled(false)
-            .build();
-        GetCredentialRequest accountRequest = new GetCredentialRequest.Builder()
-            .addCredentialOption(accountOption)
-            .build();
-        manager.getCredentialAsync(this, accountRequest, null, getMainExecutor(),
-            new androidx.credentials.CredentialManagerCallback<GetCredentialResponse, GetCredentialException>() {
-                @Override public void onResult(GetCredentialResponse response) {
-                    handleGoogleCredential(response);
-                }
-                @Override public void onError(GetCredentialException error) {
-                    if (error instanceof NoCredentialException) {
-                        // No previously authorized credential is available. Offer
-                        // the explicit Google account picker as the supported fallback.
-                        launchGoogleAccountPicker(manager, nonce, hashedNonce);
-                    } else {
-                        String message = error.getMessage();
-                        sendGoogleResult(null, message == null
-                            ? "Google sign-in was cancelled or could not be completed."
-                            : message);
-                    }
-                }
-            });
+        launchGoogleAccountPicker(manager, nonce, hashedNonce);
     }
 
     private void launchGoogleAccountPicker(CredentialManager manager, String nonce, String hashedNonce) {
