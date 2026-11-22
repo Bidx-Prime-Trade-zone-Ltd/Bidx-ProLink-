@@ -31,10 +31,24 @@ public class MainActivity extends Activity {
             && "app.bidxpro.online".equalsIgnoreCase(uri.getHost());
     }
 
+    private boolean isOAuthCallback(Uri uri) {
+        return uri != null
+            && "com.bidxpro.prolink".equalsIgnoreCase(uri.getScheme())
+            && "auth".equalsIgnoreCase(uri.getHost())
+            && "/callback".equals(uri.getPath());
+    }
+
     private void openIncomingAppLink(Intent intent) {
         Uri data = intent == null ? null : intent.getData();
-        if (webView != null && isProLinkAppLink(data)) {
-            // Load the complete callback URL so Supabase can exchange its PKCE code.
+        if (webView == null || data == null) return;
+        if (isOAuthCallback(data)) {
+            // The callback is moved onto the app's own origin so Supabase JS can
+            // exchange the PKCE code using the verifier stored in this WebView.
+            Uri.Builder callback = Uri.parse(HOME_URL).buildUpon().appendPath("auth").appendPath("callback");
+            if (data.getQuery() != null) callback.encodedQuery(data.getEncodedQuery());
+            if (data.getFragment() != null) callback.encodedFragment(data.getEncodedFragment());
+            webView.loadUrl(callback.build().toString());
+        } else if (isProLinkAppLink(data)) {
             webView.loadUrl(data.toString());
         }
     }
@@ -109,7 +123,7 @@ public class MainActivity extends Activity {
         if (savedInstanceState != null) {
             webView.restoreState(savedInstanceState);
             openIncomingAppLink(getIntent());
-        } else if (isProLinkAppLink(getIntent() == null ? null : getIntent().getData())) {
+        } else if (isProLinkAppLink(getIntent() == null ? null : getIntent().getData()) || isOAuthCallback(getIntent() == null ? null : getIntent().getData())) {
             openIncomingAppLink(getIntent());
         } else {
             webView.loadUrl(HOME_URL);
