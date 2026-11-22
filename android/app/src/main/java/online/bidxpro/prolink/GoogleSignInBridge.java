@@ -22,7 +22,7 @@ import androidx.webkit.WebMessageCompat;
 import androidx.webkit.WebViewCompat;
 import androidx.webkit.WebViewFeature;
 
-import com.google.android.libraries.identity.googleid.GetGoogleIdOption;
+import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption;
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential;
 
 import org.json.JSONException;
@@ -107,12 +107,11 @@ final class GoogleSignInBridge implements WebViewCompat.WebMessageListener {
             return;
         }
 
-        // Use the standard Google ID-token credential request recommended for
-        // Supabase native Android sign-in. Disabling the authorized-account
-        // filter allows both existing and first-time Google accounts to be
-        // selected from the device account picker.
-        GetGoogleIdOption option = new GetGoogleIdOption.Builder()
-                .setFilterByAuthorizedAccounts(false)
+        // Use Credential Manager's dedicated Sign in with Google option. This is
+        // distinct from the generic GetGoogleIdOption credential picker and is
+        // intended for an explicit Google sign-in button. It still requests an
+        // ID token for the Supabase Web OAuth client and binds it to the nonce.
+        GetSignInWithGoogleOption option = new GetSignInWithGoogleOption.Builder()
                 .setServerClientId(webClientId)
                 .setNonce(nonce)
                 .build();
