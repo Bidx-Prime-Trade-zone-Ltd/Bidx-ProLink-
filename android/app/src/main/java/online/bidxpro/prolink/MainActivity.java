@@ -21,7 +21,9 @@ import androidx.credentials.CustomCredential;
 import androidx.credentials.GetCredentialRequest;
 import androidx.credentials.GetCredentialResponse;
 import androidx.credentials.exceptions.GetCredentialException;
+import androidx.credentials.exceptions.NoCredentialException;
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption;
+import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption;
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential;
 import org.json.JSONObject;
 import android.widget.Toast;
@@ -67,48 +69,77 @@ public class MainActivity extends Activity {
             sendGoogleResult(null, "Google Sign-In is not configured in this Android build.");
             return;
         }
-        try {
-            GetGoogleIdOption googleOption = new GetGoogleIdOption.Builder()
-                .setFilterByAuthorizedAccounts(false)
-                .setServerClientId(BuildConfig.GOOGLE_WEB_CLIENT_ID)
-                .setNonce(hashedNonce)
-                .setAutoSelectEnabled(false)
-                .build();
-
-            GetCredentialRequest request = new GetCredentialRequest.Builder()
-                .addCredentialOption(googleOption)
-                .build();
-
-            CredentialManager.create(this).getCredentialAsync(
-                this,
-                request,
-                null,
-                getMainExecutor(),
-                new androidx.credentials.CredentialManagerCallback<GetCredentialResponse, GetCredentialException>() {
-                    @Override public void onResult(GetCredentialResponse response) {
-                        Credential credential = response.getCredential();
-                        if (credential instanceof CustomCredential &&
-                            GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL.equals(credential.getType())) {
-                            try {
-                                GoogleIdTokenCredential googleCredential =
-                                    GoogleIdTokenCredential.createFrom(((CustomCredential) credential).getData());
-                                sendGoogleResult(googleCredential.getIdToken(), null);
-                            } catch (Exception e) {
-                                sendGoogleResult(null, "Google returned an invalid sign-in credential. Please try again.");
-                            }
-                        } else {
-                            sendGoogleResult(null, "Google sign-in returned an unsupported credential.");
-                        }
-                    }
-
-                    @Override public void onError(GetCredentialException e) {
-                        String message = e.getMessage();
-                        sendGoogleResult(null, message == null ? "Google sign-in was cancelled or could not be completed." : message);
+        CredentialManager manager = CredentialManager.create(this);
+        GetGoogleIdOption accountOption = new GetGoogleIdOption.Builder()
+            .setFilterByAuthorizedAccounts(false)
+            .setServerClientId(BuildConfig.GOOGLE_WEB_CLIENT_ID)
+            .setNonce(hashedNonce)
+            .setAutoSelectEnabled(false)
+            .build();
+        GetCredentialRequest accountRequest = new GetCredentialRequest.Builder()
+            .addCredentialOption(accountOption)
+            .build();
+        manager.getCredentialAsync(this, accountRequest, null, getMainExecutor(),
+            new androidx.credentials.CredentialManagerCallback<GetCredentialResponse, GetCredentialException>() {
+                @Override public void onResult(GetCredentialResponse response) {
+                    handleGoogleCredential(response);
+                }
+                @Override public void onError(GetCredentialException error) {
+                    if (error instanceof NoCredentialException) {
+                        // No previously authorized credential is available. Offer
+                        // the explicit Google account picker as the supported fallback.
+                        launchGoogleAccountPicker(manager, nonce, hashedNonce);
+                    } else {
+                        String message = error.getMessage();
+                        sendGoogleResult(null, message == null
+                            ? "Google sign-in was cancelled or could not be completed."
+                            : message);
                     }
                 }
-            );
-        } catch (Exception e) {
-            sendGoogleResult(null, e.getMessage() == null ? "Unable to start Google sign-in." : e.getMessage());
+            });
+    }
+
+    private void launchGoogleAccountPicker(CredentialManager manager, String nonce, String hashedNonce) {
+        try {
+            GetSignInWithGoogleOption signInOption =
+                new GetSignInWithGoogleOption.Builder(BuildConfig.GOOGLE_WEB_CLIENT_ID)
+                    .setNonce(hashedNonce)
+                    .build();
+            GetCredentialRequest request = new GetCredentialRequest.Builder()
+                .addCredentialOption(signInOption)
+                .build();
+            manager.getCredentialAsync(this, request, null, getMainExecutor(),
+                new androidx.credentials.CredentialManagerCallback<GetCredentialResponse, GetCredentialException>() {
+                    @Override public void onResult(GetCredentialResponse response) {
+                        handleGoogleCredential(response);
+                    }
+                    @Override public void onError(GetCredentialException error) {
+                        String message = error.getMessage();
+                        sendGoogleResult(null, message == null
+                            ? "Google account selection was cancelled or unavailable."
+                            : message);
+                    }
+                });
+        } catch (Exception error) {
+            sendGoogleResult(null, error.getMessage() == null
+                ? "Unable to open the Google account picker."
+                : error.getMessage());
+        }
+    }
+
+    private void handleGoogleCredential(GetCredentialResponse response) {
+        Credential credential = response.getCredential();
+        if (credential instanceof CustomCredential &&
+            GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL.equals(credential.getType())) {
+            try {
+                GoogleIdTokenCredential googleCredential =
+                    GoogleIdTokenCredential.createFrom(((CustomCredential) credential).getData());
+                sendGoogleResult(googleCredential.getIdToken(), null);
+            } catch (Exception error) {
+                sendGoogleResult(null, "Google returned an invalid sign-in credential. Please try again.");
+            }
+        } else {
+            sendGoogleResult(null, "Google sign-in returned an unsupported credential.");
         }
     }
 
