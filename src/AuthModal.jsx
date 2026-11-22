@@ -84,7 +84,7 @@ export default function AuthModal({ onClose }) {
             if(!result?.idToken)throw new Error('Google did not return an ID token. Please try again.');
             setBusyLabel('Verifying your Google account…');
             console.info('[BidxGoogleAuth] ID token received; starting Supabase token exchange.');
-            const {data,error:e}=await supabase.auth.signInWithIdToken({provider:'google',token:result.idToken,nonce});
+            const {data,error:e}=await supabase.auth.signInWithIdToken({provider:'google',token:result.idToken,...(result.nonceIncluded===false?{}:{nonce})});
             if(e){
               console.error('[BidxGoogleAuth] Supabase token exchange failed:',{name:e.name,code:e.code,status:e.status,message:e.message});
               throw e;
