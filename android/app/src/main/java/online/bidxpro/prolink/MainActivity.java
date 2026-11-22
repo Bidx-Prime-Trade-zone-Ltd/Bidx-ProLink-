@@ -56,10 +56,15 @@ public class MainActivity extends Activity {
     }
 
     private void sendGoogleResult(String idToken, String error) {
+        sendGoogleResult(idToken, error, true);
+    }
+
+    private void sendGoogleResult(String idToken, String error, boolean nonceIncluded) {
         try {
             JSONObject payload = new JSONObject();
             if (idToken != null) payload.put("idToken", idToken);
             if (error != null) payload.put("error", error);
+            payload.put("nonceIncluded", nonceIncluded);
             String json = payload.toString();
             webView.post(() -> webView.evaluateJavascript(
                 "window.__bidxGoogleSignInResult && window.__bidxGoogleSignInResult(" +
@@ -312,7 +317,7 @@ public class MainActivity extends Activity {
                     sendGoogleResult(null, "Google did not return an ID token. Check the Web OAuth client configuration.");
                 } else {
                     Log.i(GOOGLE_AUTH_TAG, "Google Play services returned an ID token; token not logged.");
-                    sendGoogleResult(idToken, null);
+                    sendGoogleResult(idToken, null, false);
                 }
             } catch (Exception error) {
                 Log.e(GOOGLE_AUTH_TAG, "Google Play services sign-in failed", error);
