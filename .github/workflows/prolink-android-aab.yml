@@ -84,16 +84,14 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-          GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID }}
         run: |
           test -n "$ANDROID_KEYSTORE_PASSWORD" || (echo "Missing ANDROID_KEYSTORE_PASSWORD repository secret" && exit 1)
           test -n "$ANDROID_KEY_ALIAS" || (echo "Missing ANDROID_KEY_ALIAS repository secret" && exit 1)
           test -n "$ANDROID_KEY_PASSWORD" || (echo "Missing ANDROID_KEY_PASSWORD repository secret" && exit 1)
-          test -n "$GOOGLE_WEB_CLIENT_ID" || (echo "Missing GOOGLE_WEB_CLIENT_ID repository secret" && exit 1)
           ./gradlew --version 2>/dev/null || true
           for attempt in 1 2 3; do
             echo "Gradle build attempt $attempt of 3"
-            if gradle --no-daemon --max-workers=2 -p android :app:bundleRelease -PVERSION_CODE="${{ inputs.version_code || '10' }}" -PVERSION_NAME="${{ inputs.version_name || '6.0' }}" -PGOOGLE_WEB_CLIENT_ID="$GOOGLE_WEB_CLIENT_ID" --stacktrace; then
+            if gradle --no-daemon --max-workers=2 -p android :app:bundleRelease -PVERSION_CODE="${{ inputs.version_code || '10' }}" -PVERSION_NAME="${{ inputs.version_name || '6.0' }}" --stacktrace; then
               exit 0
             fi
             if [ "$attempt" -lt 3 ]; then
