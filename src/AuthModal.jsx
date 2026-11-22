@@ -109,22 +109,22 @@ export default function AuthModal({ onClose }) {
     const {error:e}=await supabase.auth.signInWithIdToken({provider:'google',token:reply.idToken,nonce:rawNonce});
     if(e)throw e;
   };
-  // Android uses the same native Credential Manager flow as Marketplace02.
-  // The account picker appears over ProLink; no Chrome/browser OAuth redirect.
-  // Ordinary web users retain Supabase's hosted OAuth flow.
+  // Android must use Credential Manager so Google can show accounts already
+  // available on the device and return an ID token directly to Supabase.
+  // Hosted OAuth is retained for ordinary browsers only.
   const google=async()=>{
     if(!supabase){setError(supabaseConfigError);return;}
     setBusy(true);setBusyLabel('Connecting to Google…');setError('');setMessage('');
     try{
-      // Use the same Supabase Google OAuth flow that is already proven
-      // to work in the PWABuilder release. Do not force the GitHub Android
-      // package through the separate Credential Manager native authorization
-      // path, which was failing after account selection.
-      const {error:e}=await supabase.auth.signInWithOAuth({
-        provider:'google',
-        options:{redirectTo:window.location.origin,queryParams:{prompt:'select_account'}}
-      });
-      if(e)throw e;
+      if(isNativeAndroid()){
+        await nativeGoogleSignIn();
+      }else{
+        const {error:e}=await supabase.auth.signInWithOAuth({
+          provider:'google',
+          options:{redirectTo:window.location.origin,queryParams:{prompt:'select_account'}}
+        });
+        if(e)throw e;
+      }
     }catch(e){
       console.error('[BidxGoogleAuth] Google sign-in failed:',e);
       setError(e?.message||'Google sign-in could not start. Please try again.');
