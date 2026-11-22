@@ -61,6 +61,12 @@ export default function AuthModal({ onClose }) {
   const google=async()=>{
     if(!supabase){setError(supabaseConfigError);return;}
     setBusy(true);setBusyLabel('Opening Google sign-in…');setError('');setMessage('');
+    const isNativeAndroidApp=/BidxProLinkAndroid/.test(navigator.userAgent);
+    if(isNativeAndroidApp&&!window.BidxNativeGoogle?.signIn){
+      setError('Native Google sign-in is unavailable in this app build. Please update ProLink or contact support. No external browser will be opened.');
+      setBusy(false);setBusyLabel('');
+      return;
+    }
     if(window.BidxNativeGoogle?.signIn){
       try{
         const random=new Uint8Array(32);
