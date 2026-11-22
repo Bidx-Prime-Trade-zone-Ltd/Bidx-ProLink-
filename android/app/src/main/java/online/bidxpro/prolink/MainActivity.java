@@ -15,7 +15,15 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
-import androidx.browser.customtabs.CustomTabsIntent;
+import androidx.credentials.Credential;
+import androidx.credentials.CredentialManager;
+import androidx.credentials.CustomCredential;
+import androidx.credentials.GetCredentialRequest;
+import androidx.credentials.GetCredentialResponse;
+import androidx.credentials.exceptions.GetCredentialException;
+import com.google.android.libraries.identity.googleid.GetGoogleIdOption;
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential;
+import org.json.JSONObject;
 import android.widget.Toast;
 
 public class MainActivity extends Activity {
@@ -32,26 +40,75 @@ public class MainActivity extends Activity {
             && "app.bidxpro.online".equalsIgnoreCase(uri.getHost());
     }
 
-    private boolean isOAuthAuthorization(Uri uri) {
-        return uri != null
-            && "https".equalsIgnoreCase(uri.getScheme())
-            && uri.getPath() != null
-            && uri.getPath().contains("/auth/v1/authorize");
+    private final class NativeGoogleBridge {
+        @android.webkit.JavascriptInterface
+        public void signIn(String nonce, String hashedNonce) {
+            runOnUiThread(() -> startNativeGoogleSignIn(nonce, hashedNonce));
+        }
     }
 
-    private void openOAuthInAppBrowser(Uri uri) {
+    private void sendGoogleResult(String idToken, String error) {
         try {
-            // Chrome Custom Tabs keep the Google sign-in flow in an in-app
-            // browser surface while using a secure browser context (Google
-            // does not permit OAuth sign-in inside an embedded WebView).
-            CustomTabsIntent customTabs = new CustomTabsIntent.Builder().build();
-            customTabs.launchUrl(this, uri);
+            JSONObject payload = new JSONObject();
+            if (idToken != null) payload.put("idToken", idToken);
+            if (error != null) payload.put("error", error);
+            String json = payload.toString();
+            webView.post(() -> webView.evaluateJavascript(
+                "window.__bidxGoogleSignInResult && window.__bidxGoogleSignInResult(" +
+                JSONObject.quote(json) + ")", null));
+        } catch (Exception ignored) {
+            // Keep authentication errors inside the app without crashing the WebView.
+        }
+    }
+
+    private void startNativeGoogleSignIn(String nonce, String hashedNonce) {
+        if (BuildConfig.GOOGLE_WEB_CLIENT_ID == null ||
+            BuildConfig.GOOGLE_WEB_CLIENT_ID.trim().isEmpty()) {
+            sendGoogleResult(null, "Google Sign-In is not configured in this Android build.");
+            return;
+        }
+        try {
+            GetGoogleIdOption googleOption = new GetGoogleIdOption.Builder()
+                .setFilterByAuthorizedAccounts(false)
+                .setServerClientId(BuildConfig.GOOGLE_WEB_CLIENT_ID)
+                .setNonce(hashedNonce)
+                .setAutoSelectEnabled(false)
+                .build();
+
+            GetCredentialRequest request = new GetCredentialRequest.Builder()
+                .addCredentialOption(googleOption)
+                .build();
+
+            CredentialManager.create(this).getCredentialAsync(
+                this,
+                request,
+                null,
+                getMainExecutor(),
+                new androidx.credentials.CredentialManagerCallback<GetCredentialResponse, GetCredentialException>() {
+                    @Override public void onResult(GetCredentialResponse response) {
+                        Credential credential = response.getCredential();
+                        if (credential instanceof CustomCredential &&
+                            GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL.equals(credential.getType())) {
+                            try {
+                                GoogleIdTokenCredential googleCredential =
+                                    GoogleIdTokenCredential.createFrom(((CustomCredential) credential).getData());
+                                sendGoogleResult(googleCredential.getIdToken(), null);
+                            } catch (Exception e) {
+                                sendGoogleResult(null, "Google returned an invalid sign-in credential. Please try again.");
+                            }
+                        } else {
+                            sendGoogleResult(null, "Google sign-in returned an unsupported credential.");
+                        }
+                    }
+
+                    @Override public void onError(GetCredentialException e) {
+                        String message = e.getMessage();
+                        sendGoogleResult(null, message == null ? "Google sign-in was cancelled or could not be completed." : message);
+                    }
+                }
+            );
         } catch (Exception e) {
-            // Fallback only if Custom Tabs cannot be launched on this device.
-            try { startActivity(new Intent(Intent.ACTION_VIEW, uri)); }
-            catch (ActivityNotFoundException ignored) {
-                Toast.makeText(this, "No browser available to complete Google sign-in", Toast.LENGTH_LONG).show();
-            }
+            sendGoogleResult(null, e.getMessage() == null ? "Unable to start Google sign-in." : e.getMessage());
         }
     }
 
@@ -85,6 +142,7 @@ public class MainActivity extends Activity {
 
         webView = new WebView(this);
         setContentView(webView);
+        webView.addJavascriptInterface(new NativeGoogleBridge(), "BidxNativeGoogle");
 
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
