@@ -22,7 +22,7 @@ import androidx.webkit.WebMessageCompat;
 import androidx.webkit.WebViewCompat;
 import androidx.webkit.WebViewFeature;
 
-import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption;
+import com.google.android.libraries.identity.googleid.GetGoogleIdOption;
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential;
 
 import org.json.JSONException;
@@ -107,7 +107,13 @@ final class GoogleSignInBridge implements WebViewCompat.WebMessageListener {
             return;
         }
 
-        GetSignInWithGoogleOption option = new GetSignInWithGoogleOption.Builder(webClientId)
+        // Use the standard Google ID-token credential request recommended for
+        // Supabase native Android sign-in. Disabling the authorized-account
+        // filter allows both existing and first-time Google accounts to be
+        // selected from the device account picker.
+        GetGoogleIdOption option = new GetGoogleIdOption.Builder()
+                .setFilterByAuthorizedAccounts(false)
+                .setServerClientId(webClientId)
                 .setNonce(nonce)
                 .build();
         GetCredentialRequest request = new GetCredentialRequest.Builder()
@@ -129,11 +135,23 @@ final class GoogleSignInBridge implements WebViewCompat.WebMessageListener {
                     public void onError(@NonNull GetCredentialException e) {
                         if (pending == signal) pending = null;
                         if (e instanceof GetCredentialCancellationException) {
-                            reply(replyProxy, id, "cancelled", null, null);
+                            // Credential Manager also uses this exception when a
+                            // request cannot obtain authorization for technical
+                            // reasons. Do not tell the user they cancelled when
+                            // they selected an account; retain the real cause in
+                            // Android logs for diagnosis.
+                            Log.w(TAG, "Google credential authorization did not complete"
+                                    + "; exception=" + e.getClass().getSimpleName()
+                                    + "; type=" + e.getType()
+                                    + "; message=" + e.getMessage(), e);
+                            reply(replyProxy, id, "error", "authorization", null);
                             return;
                         }
                         String code = errorCode(e);
-                        Log.w(TAG, "Sign in with Google failed (" + code + "): " + e.getType());
+                        Log.w(TAG, "Sign in with Google failed (" + code + ")"
+                                + "; exception=" + e.getClass().getSimpleName()
+                                + "; type=" + e.getType()
+                                + "; message=" + e.getMessage(), e);
                         reply(replyProxy, id, "error", code, null);
                     }
                 });
