@@ -6,6 +6,7 @@ def releaseStoreFile = System.getenv("ANDROID_KEYSTORE_FILE")
 def releaseStorePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
 def releaseKeyAlias = System.getenv("ANDROID_KEY_ALIAS")
 def releaseKeyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+def googleWebClientId = (project.findProperty("GOOGLE_WEB_CLIENT_ID") ?: System.getenv("GOOGLE_WEB_CLIENT_ID") ?: "").toString()
 
 android {
     namespace 'online.bidxpro.prolink'
@@ -21,6 +22,7 @@ android {
         targetSdk 36
         versionCode = (project.findProperty("VERSION_CODE") ?: "5").toString().toInteger()
         versionName = (project.findProperty("VERSION_NAME") ?: "5.0").toString()
+        buildConfigField "String", "GOOGLE_WEB_CLIENT_ID", '"' + googleWebClientId.replace("\\", "\\\\").replace('"', '\\\"') + '"'
     }
 
     signingConfigs {
@@ -44,4 +46,9 @@ android {
 }
 
 dependencies {
+    implementation 'androidx.credentials:credentials:1.5.0'
+    implementation 'androidx.credentials:credentials-play-services-auth:1.5.0'
+    implementation 'com.google.android.libraries.identity.googleid:googleid:1.1.1'
+    implementation 'androidx.webkit:webkit:1.13.0'
+    implementation 'androidx.core:core:1.16.0'
 }
