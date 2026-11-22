@@ -101,7 +101,8 @@ export default function AuthModal({ onClose }) {
         network:'Check your internet connection and try again.',
         config:'Google sign-in configuration needs attention. Please use email and password for now.',
         no_token:'Google did not return a sign-in token. Please try again.',
-        busy:'Google sign-in is already open. Finish or close it, then try again.'
+        busy:'Google sign-in is already open. Finish or close it, then try again.',
+        authorization:'Google could not complete authorization after you selected your account. Please try again. If the problem continues, contact ProLink support.'
       };
       throw new Error(messages[reply.code]||'Google sign-in could not be completed. Please try again.');
     }
