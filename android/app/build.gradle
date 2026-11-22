@@ -15,8 +15,8 @@ android {
         applicationId 'online.bidxpro.prolink'
         minSdk 23
         targetSdk 36
-        versionCode = (project.findProperty("VERSION_CODE") ?: "3").toString().toInteger()
-        versionName = (project.findProperty("VERSION_NAME") ?: "3.0").toString()
+        versionCode = (project.findProperty("VERSION_CODE") ?: "4").toString().toInteger()
+        versionName = (project.findProperty("VERSION_NAME") ?: "4.0").toString()
     }
 
     signingConfigs {
