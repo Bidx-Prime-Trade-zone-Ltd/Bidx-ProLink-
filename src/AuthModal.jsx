@@ -62,7 +62,6 @@ export default function AuthModal({ onClose }) {
       }
     });
   };
-  const isNativeAndroid=()=>/BidxProLinkAndroid/.test(navigator.userAgent||'');
   const randomNonce=()=>{
     const bytes=new Uint8Array(32);
     window.crypto.getRandomValues(bytes);
