@@ -70,7 +70,7 @@ final class GoogleSignInBridge implements WebViewCompat.WebMessageListener {
         try {
             if (!WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) return null;
             GoogleSignInBridge bridge = new GoogleSignInBridge(activity, webClientId);
-            WebViewCompat.addWebMessageListener(webView, JS_OBJECT, Collections.singleton(marketplaceOrigin), bridge);
+            WebViewCompat.addWebMessageListener(webView, JS_OBJECT, Collections.singleton(prolinkOrigin), bridge);
             return bridge;
         } catch (RuntimeException e) {
             Log.w(TAG, "Native Google sign-in bridge unavailable", e);
