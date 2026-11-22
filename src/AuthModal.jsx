@@ -116,15 +116,15 @@ export default function AuthModal({ onClose }) {
     if(!supabase){setError(supabaseConfigError);return;}
     setBusy(true);setBusyLabel('Connecting to Google…');setError('');setMessage('');
     try{
-      if(isNativeAndroid()){
-        await nativeGoogleSignIn();
-      }else{
-        const {error:e}=await supabase.auth.signInWithOAuth({
-          provider:'google',
-          options:{redirectTo:window.location.origin,queryParams:{prompt:'select_account'}}
-        });
-        if(e)throw e;
-      }
+      // Use the same Supabase Google OAuth flow that is already proven
+      // to work in the PWABuilder release. Do not force the GitHub Android
+      // package through the separate Credential Manager native authorization
+      // path, which was failing after account selection.
+      const {error:e}=await supabase.auth.signInWithOAuth({
+        provider:'google',
+        options:{redirectTo:window.location.origin,queryParams:{prompt:'select_account'}}
+      });
+      if(e)throw e;
     }catch(e){
       console.error('[BidxGoogleAuth] Google sign-in failed:',e);
       setError(e?.message||'Google sign-in could not start. Please try again.');
