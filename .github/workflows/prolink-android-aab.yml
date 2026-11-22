@@ -11,14 +11,6 @@ on:
         description: "Android version name"
         required: true
         default: "6.0"
-  push:
-    branches: [main, feat/native-android-webview-aab]
-    paths:
-      - "android/**"
-      - "src/AuthModal.jsx"
-      - ".github/workflows/prolink-android-aab.yml"
-      - "public/icon.svg"
-      - "scripts/generate-pwa-icons.mjs"
 
 permissions:
   contents: read
