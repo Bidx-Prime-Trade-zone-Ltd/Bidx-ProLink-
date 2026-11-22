@@ -90,10 +90,17 @@ public class MainActivity extends Activity {
                 Uri uri = request.getUrl();
                 String scheme = uri.getScheme() == null ? "" : uri.getScheme();
                 String host = uri.getHost() == null ? "" : uri.getHost();
-                if (scheme.equals("https") && (host.equals("app.bidxpro.online") || host.equals("bidxpro.online") || host.endsWith(".bidxpro.online"))) return false;
-                if (scheme.equals("http") || scheme.equals("https") || scheme.equals("tel") || scheme.equals("mailto") || scheme.equals("whatsapp")) {
+                // Keep every normal web link inside this WebView, including
+                // links to other domains. Only non-web schemes (tel:, mailto:,
+                // whatsapp:, and the OAuth app callback) are handed to Android.
+                if (scheme.equals("http") || scheme.equals("https")) return false;
+                if (isOAuthCallback(uri)) {
+                    openIncomingAppLink(new Intent(Intent.ACTION_VIEW, uri));
+                    return true;
+                }
+                if (scheme.equals("tel") || scheme.equals("mailto") || scheme.equals("whatsapp")) {
                     try { startActivity(new Intent(Intent.ACTION_VIEW, uri)); }
-                    catch (ActivityNotFoundException ignored) { Toast.makeText(MainActivity.this, "No app available to open this link", Toast.LENGTH_SHORT).show(); }
+                    catch (ActivityNotFoundException ignored) { Toast.makeText(MainActivity.this, "No compatible app is available for this link", Toast.LENGTH_SHORT).show(); }
                     return true;
                 }
                 return true;
