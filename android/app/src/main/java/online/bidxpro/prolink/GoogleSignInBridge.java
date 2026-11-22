@@ -171,7 +171,7 @@ final class GoogleSignInBridge implements WebViewCompat.WebMessageListener {
     }
 
     private static String errorCode(GetCredentialException e) {
-        if (e instanceof NoCredentialException) return "no_account";
+        if (e instanceof NoCredentialException) return "no_credential";
         String detail = String.valueOf(e.getMessage());
         // [28444] / [10] Developer console is not set up correctly: no Android OAuth
         // client for this package name + signing SHA-1 in the Web client's Cloud project.
