@@ -119,8 +119,7 @@ final class GoogleSignInBridge implements WebViewCompat.WebMessageListener {
         // distinct from the generic GetGoogleIdOption credential picker and is
         // intended for an explicit Google sign-in button. It still requests an
         // ID token for the Supabase Web OAuth client and binds it to the nonce.
-        GetSignInWithGoogleOption option = new GetSignInWithGoogleOption.Builder()
-                .setServerClientId(webClientId)
+        GetSignInWithGoogleOption option = new GetSignInWithGoogleOption.Builder(webClientId)
                 .setNonce(nonce)
                 .build();
         GetCredentialRequest request = new GetCredentialRequest.Builder()
