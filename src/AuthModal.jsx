@@ -29,6 +29,9 @@ export default function AuthModal({ onClose }) {
     return ()=>{alive=false;subscription.unsubscribe();};
   },[]);
 
+  const isNativeAndroid=()=>/BidxProLinkAndroid/.test(navigator.userAgent);
+  const authRedirectUrl=()=>isNativeAndroid()?'com.bidxpro.prolink://auth/callback':window.location.origin;
+
   const run=async(label,operation)=>{setBusy(true);setBusyLabel(label);setError('');setMessage('');
     try{await operation();}catch(e){setError(e?.message||'Authentication failed. Please try again.');setBusy(false);setBusyLabel('');}
   };
@@ -41,7 +44,7 @@ export default function AuthModal({ onClose }) {
     if(mode!=='Forgot password'&&password.length<8){setError('Use a password with at least 8 characters.');return;}
     await run(mode==='Sign in'?'Signing in…':mode==='Create account'?'Creating account…':mode==='Forgot password'?'Sending reset link…':'Updating password…',async()=>{
       if(mode==='Create account'){
-        const {data,error:e}=await supabase.auth.signUp({email:email.trim(),password,options:{emailRedirectTo:window.location.origin,data:{preferred_language:'en'}}});
+        const {data,error:e}=await supabase.auth.signUp({email:email.trim(),password,options:{emailRedirectTo:authRedirectUrl(),data:{preferred_language:'en'}}});
         if(e)throw e;
         if(data.session){setMessage('Account created. Opening ProLink…');}
         else{setMessage('Confirmation email sent. Confirm your email, then return here to sign in.');setBusy(false);setBusyLabel('');}
@@ -49,7 +52,7 @@ export default function AuthModal({ onClose }) {
         const {error:e}=await supabase.auth.signInWithPassword({email:email.trim(),password});if(e)throw e;
         // Parent app listens for SIGNED_IN and replaces this screen with the app.
       }else if(mode==='Forgot password'){
-        const {error:e}=await supabase.auth.resetPasswordForEmail(email.trim(),{redirectTo:window.location.origin});if(e)throw e;
+        const {error:e}=await supabase.auth.resetPasswordForEmail(email.trim(),{redirectTo:authRedirectUrl()});if(e)throw e;
         setMessage('If this email is registered, a reset link has been sent.');setBusy(false);setBusyLabel('');
       }else{
         const {error:e}=await supabase.auth.updateUser({password});if(e)throw e;
@@ -61,8 +64,7 @@ export default function AuthModal({ onClose }) {
   const google=async()=>{
     if(!supabase){setError(supabaseConfigError);return;}
     setBusy(true);setBusyLabel('Opening Google sign-in…');setError('');setMessage('');
-    const isNativeAndroidApp=/BidxProLinkAndroid/.test(navigator.userAgent);
-    if(isNativeAndroidApp&&!window.BidxNativeGoogle?.signIn){
+    if(isNativeAndroid()&&!window.BidxNativeGoogle?.signIn){
       setError('Native Google sign-in is unavailable in this app build. Please update ProLink or contact support. No external browser will be opened.');
       setBusy(false);setBusyLabel('');
       return;
