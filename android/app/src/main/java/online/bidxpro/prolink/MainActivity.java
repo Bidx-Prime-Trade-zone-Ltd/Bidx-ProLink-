@@ -15,6 +15,7 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import androidx.browser.customtabs.CustomTabsIntent;
 import android.widget.Toast;
 
 public class MainActivity extends Activity {
@@ -29,6 +30,29 @@ public class MainActivity extends Activity {
         return uri != null
             && "https".equalsIgnoreCase(uri.getScheme())
             && "app.bidxpro.online".equalsIgnoreCase(uri.getHost());
+    }
+
+    private boolean isOAuthAuthorization(Uri uri) {
+        return uri != null
+            && "https".equalsIgnoreCase(uri.getScheme())
+            && uri.getPath() != null
+            && uri.getPath().contains("/auth/v1/authorize");
+    }
+
+    private void openOAuthInAppBrowser(Uri uri) {
+        try {
+            // Chrome Custom Tabs keep the Google sign-in flow in an in-app
+            // browser surface while using a secure browser context (Google
+            // does not permit OAuth sign-in inside an embedded WebView).
+            CustomTabsIntent customTabs = new CustomTabsIntent.Builder().build();
+            customTabs.launchUrl(this, uri);
+        } catch (Exception e) {
+            // Fallback only if Custom Tabs cannot be launched on this device.
+            try { startActivity(new Intent(Intent.ACTION_VIEW, uri)); }
+            catch (ActivityNotFoundException ignored) {
+                Toast.makeText(this, "No browser available to complete Google sign-in", Toast.LENGTH_LONG).show();
+            }
+        }
     }
 
     private boolean isOAuthCallback(Uri uri) {
@@ -79,6 +103,10 @@ public class MainActivity extends Activity {
                 String scheme = uri.getScheme() == null ? "" : uri.getScheme();
                 String host = uri.getHost() == null ? "" : uri.getHost();
                 if (scheme.equals("https") && (host.equals("app.bidxpro.online") || host.equals("bidxpro.online") || host.endsWith(".bidxpro.online"))) return false;
+                if (isOAuthAuthorization(uri)) {
+                    openOAuthInAppBrowser(uri);
+                    return true;
+                }
                 if (scheme.equals("http") || scheme.equals("https") || scheme.equals("tel") || scheme.equals("mailto") || scheme.equals("whatsapp")) {
                     try { startActivity(new Intent(Intent.ACTION_VIEW, uri)); }
                     catch (ActivityNotFoundException ignored) { Toast.makeText(MainActivity.this, "No app available to open this link", Toast.LENGTH_SHORT).show(); }
