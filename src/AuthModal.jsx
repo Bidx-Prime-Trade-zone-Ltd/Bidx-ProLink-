@@ -80,11 +80,17 @@ export default function AuthModal({ onClose }) {
         window.__bidxGoogleSignInResult=async raw=>{
           try{
             const result=typeof raw==='string'?JSON.parse(raw):raw;
-            if(result?.error)throw new Error(result.error);
+            if(result?.error){console.error('[BidxGoogleAuth] Native Android credential stage failed:',result.error);throw new Error(result.error);}
             if(!result?.idToken)throw new Error('Google did not return an ID token. Please try again.');
             setBusyLabel('Verifying your Google account…');
-            const {error:e}=await supabase.auth.signInWithIdToken({provider:'google',token:result.idToken,nonce});
-            if(e)throw e;
+            console.info('[BidxGoogleAuth] ID token received; starting Supabase token exchange.');
+            const {data,error:e}=await supabase.auth.signInWithIdToken({provider:'google',token:result.idToken,nonce});
+            if(e){
+              console.error('[BidxGoogleAuth] Supabase token exchange failed:',{name:e.name,code:e.code,status:e.status,message:e.message});
+              throw e;
+            }
+            console.info('[BidxGoogleAuth] Supabase token exchange completed; session returned:',Boolean(data?.session));
+            if(data?.session)setSession(data.session);
             setBusy(false);setBusyLabel('');
           }catch(e){
             setError(e?.message||'Google sign-in failed. Please try again.');
@@ -93,6 +99,7 @@ export default function AuthModal({ onClose }) {
             window.__bidxGoogleSignInResult=null;
           }
         };
+        console.info('[BidxGoogleAuth] Calling native Android credential bridge.');
         window.BidxNativeGoogle.signIn(nonce,hashedNonce);
       }catch(e){setError(e?.message||'Unable to start Google sign-in.');setBusy(false);setBusyLabel('');}
       return;
