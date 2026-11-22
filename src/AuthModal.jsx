@@ -60,7 +60,7 @@ export default function AuthModal({ onClose }) {
   };
   const google=()=>run('Connecting to Google…',async()=>{
     if(!supabase)throw new Error(supabaseConfigError);
-    const {error:e}=await supabase.auth.signInWithOAuth({provider:'google',options:{redirectTo:window.location.origin,queryParams:{prompt:'select_account'}}});
+    const {error:e}=await supabase.auth.signInWithOAuth({provider:'google',options:{redirectTo:'com.bidxpro.prolink://auth/callback',queryParams:{prompt:'select_account'}}});
     if(e)throw e;
     // OAuth redirects the browser. Do not clear the progress state before navigation.
   });
