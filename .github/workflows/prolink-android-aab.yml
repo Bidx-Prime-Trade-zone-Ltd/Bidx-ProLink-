@@ -6,15 +6,16 @@ on:
       version_code:
         description: "Google Play version code (must be higher than the last uploaded version)"
         required: true
-        default: "5"
+        default: "6"
       version_name:
         description: "Android version name"
         required: true
-        default: "5.0"
+        default: "6.0"
   push:
     branches: [main, feat/native-android-webview-aab]
     paths:
       - "android/**"
+      - "src/AuthModal.jsx"
       - ".github/workflows/prolink-android-aab.yml"
       - "public/icon.svg"
       - "scripts/generate-pwa-icons.mjs"
@@ -92,7 +93,7 @@ jobs:
           ./gradlew --version 2>/dev/null || true
           for attempt in 1 2 3; do
             echo "Gradle build attempt $attempt of 3"
-            if gradle --no-daemon --max-workers=2 -p android :app:bundleRelease -PVERSION_CODE="${{ inputs.version_code || '5' }}" -PVERSION_NAME="${{ inputs.version_name || '5.0' }}" -PGOOGLE_WEB_CLIENT_ID="$GOOGLE_WEB_CLIENT_ID" --stacktrace; then
+            if gradle --no-daemon --max-workers=2 -p android :app:bundleRelease -PVERSION_CODE="${{ inputs.version_code || '6' }}" -PVERSION_NAME="${{ inputs.version_name || '6.0' }}" -PGOOGLE_WEB_CLIENT_ID="$GOOGLE_WEB_CLIENT_ID" --stacktrace; then
               exit 0
             fi
             if [ "$attempt" -lt 3 ]; then
