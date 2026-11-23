@@ -20,16 +20,21 @@ import androidx.core.content.ContextCompat;
 import androidx.webkit.WebViewCompat;
 import androidx.webkit.WebViewFeature;
 import android.widget.Toast;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 public class MainActivity extends Activity {
     private static final int FILE_CHOOSER_REQUEST = 4101;
     private static final int CAMERA_PERMISSION_REQUEST = 4102;
+    private static final int LOCATION_PERMISSION_REQUEST = 4103;
     private static final String HOME_URL = "https://app.bidxpro.online";
     private WebView webView;
+    private SwipeRefreshLayout swipeRefreshLayout;
     private GoogleSignInBridge googleSignIn;
     private static final String PROLINK_ORIGIN = "https://app.bidxpro.online";
     private ValueCallback<Uri[]> filePathCallback;
     private PermissionRequest pendingWebPermission;
+    private GeolocationPermissions.Callback pendingGeoCallback;
+    private String pendingGeoOrigin;
 
     private boolean isProLinkAppLink(Uri uri) {
         return uri != null
@@ -65,8 +70,13 @@ public class MainActivity extends Activity {
         getWindow().setStatusBarColor(android.graphics.Color.rgb(7, 87, 183));
         getWindow().setNavigationBarColor(android.graphics.Color.BLACK);
 
+        swipeRefreshLayout = new SwipeRefreshLayout(this);
         webView = new WebView(this);
-        setContentView(webView);
+        swipeRefreshLayout.addView(webView, new SwipeRefreshLayout.LayoutParams(
+                SwipeRefreshLayout.LayoutParams.MATCH_PARENT,
+                SwipeRefreshLayout.LayoutParams.MATCH_PARENT));
+        setContentView(swipeRefreshLayout);
+        swipeRefreshLayout.setOnRefreshListener(() -> webView.reload());
 
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
@@ -86,6 +96,13 @@ public class MainActivity extends Activity {
                 BuildConfig.GOOGLE_WEB_CLIENT_ID);
 
         webView.setWebViewClient(new WebViewClient() {
+            @Override public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
+                super.onPageStarted(view, url, favicon);
+            }
+            @Override public void onPageFinished(WebView view, String url) {
+                super.onPageFinished(view, url);
+                if (swipeRefreshLayout != null) swipeRefreshLayout.setRefreshing(false);
+            }
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 Uri uri = request.getUrl();
                 String scheme = uri.getScheme() == null ? "" : uri.getScheme();
@@ -118,24 +135,55 @@ public class MainActivity extends Activity {
             }
 
             @Override public void onGeolocationPermissionsShowPrompt(String origin, GeolocationPermissions.Callback callback) {
-                if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
-                    checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+                Uri requestedOrigin = Uri.parse(origin);
+                if (!"https".equalsIgnoreCase(requestedOrigin.getScheme()) ||
+                    !"app.bidxpro.online".equalsIgnoreCase(requestedOrigin.getHost())) {
+                    callback.invoke(origin, false, false);
+                    return;
+                }
+                boolean fine = checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+                boolean coarse = checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+                if (fine || coarse) {
                     callback.invoke(origin, true, false);
                 } else {
-                    callback.invoke(origin, false, false);
+                    if (pendingGeoCallback != null) pendingGeoCallback.invoke(pendingGeoOrigin, false, false);
+                    pendingGeoOrigin = origin;
+                    pendingGeoCallback = callback;
+                    requestPermissions(new String[]{
+                        Manifest.permission.ACCESS_FINE_LOCATION,
+                        Manifest.permission.ACCESS_COARSE_LOCATION
+                    }, LOCATION_PERMISSION_REQUEST);
                 }
             }
 
             @Override public void onPermissionRequest(PermissionRequest request) {
                 runOnUiThread(() -> {
-                    if (request.getResources().length > 0 &&
-                        checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
-                        request.grant(request.getResources());
+                    Uri requestedOrigin = request.getOrigin();
+                    if (!"https".equalsIgnoreCase(requestedOrigin.getScheme()) ||
+                        !"app.bidxpro.online".equalsIgnoreCase(requestedOrigin.getHost())) {
+                        request.deny();
+                        return;
+                    }
+                    boolean asksForCamera = false;
+                    for (String resource : request.getResources()) {
+                        if (PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(resource)) asksForCamera = true;
+                    }
+                    // Grant only camera capture. Audio and any unrecognized WebView
+                    // resources are deliberately not granted by this app.
+                    if (!asksForCamera) {
+                        request.deny();
+                    } else if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+                        request.grant(new String[]{PermissionRequest.RESOURCE_VIDEO_CAPTURE});
                     } else {
+                        if (pendingWebPermission != null) pendingWebPermission.deny();
                         pendingWebPermission = request;
                         requestPermissions(new String[]{Manifest.permission.CAMERA}, CAMERA_PERMISSION_REQUEST);
                     }
                 });
+            }
+
+            @Override public void onPermissionRequestCanceled(PermissionRequest request) {
+                if (pendingWebPermission == request) pendingWebPermission = null;
             }
         });
 
@@ -168,10 +216,17 @@ public class MainActivity extends Activity {
     @Override public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == CAMERA_PERMISSION_REQUEST && pendingWebPermission != null) {
-            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED)
-                pendingWebPermission.grant(pendingWebPermission.getResources());
-            else pendingWebPermission.deny();
+            PermissionRequest request = pendingWebPermission;
             pendingWebPermission = null;
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED)
+                request.grant(new String[]{PermissionRequest.RESOURCE_VIDEO_CAPTURE});
+            else request.deny();
+        } else if (requestCode == LOCATION_PERMISSION_REQUEST && pendingGeoCallback != null) {
+            boolean granted = checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+                              checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+            pendingGeoCallback.invoke(pendingGeoOrigin, granted, false);
+            pendingGeoCallback = null;
+            pendingGeoOrigin = null;
         }
     }
 
