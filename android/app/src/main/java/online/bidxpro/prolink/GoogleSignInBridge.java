@@ -25,6 +25,7 @@ import androidx.webkit.WebViewCompat;
 import androidx.webkit.WebViewFeature;
 
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption;
+import com.google.android.libraries.identity.googleid.GetGoogleIdOption;
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential;
 
 import org.json.JSONException;
@@ -154,9 +155,84 @@ final class GoogleSignInBridge implements WebViewCompat.WebMessageListener {
                                 + "; exception=" + error.getClass().getSimpleName()
                                 + "; type=" + error.getType()
                                 + "; message=" + error.getMessage(), error);
-                        replyDiagnostic(replyProxy, id, code, error);
+                        if (isAccountReauthFailure(error)) {
+                            // Google Play services can fail while reauthenticating a previously
+                            // selected account and report it as [16] USER_CANCELED. Recover once:
+                            // clear provider selection state, then show the full account chooser
+                            // with authorized-account filtering disabled.
+                            retryAfterReauthFailure(replyProxy, id, nonce);
+                        } else {
+                            replyDiagnostic(replyProxy, id, code, error);
+                        }
                     }
                 });
+    }
+
+    private static boolean isAccountReauthFailure(GetCredentialException error) {
+        String detail = String.valueOf(error.getMessage()).toLowerCase();
+        return detail.contains("[16]") || detail.contains("account reauth failed");
+    }
+
+    private void retryAfterReauthFailure(JavaScriptReplyProxy replyProxy, String id, String nonce) {
+        try {
+            credentialManager.clearCredentialStateAsync(
+                    new ClearCredentialStateRequest(),
+                    null,
+                    ContextCompat.getMainExecutor(activity),
+                    new CredentialManagerCallback<Void, ClearCredentialException>() {
+                        @Override
+                        public void onResult(Void result) {
+                            Log.i(TAG, "Recovered from Google account reauth error; retrying with all device accounts");
+                            try {
+                                GetGoogleIdOption fallbackOption = new GetGoogleIdOption.Builder()
+                                        .setServerClientId(webClientId)
+                                        .setNonce(nonce)
+                                        .setFilterByAuthorizedAccounts(false)
+                                        .setAutoSelectEnabled(false)
+                                        .build();
+                                GetCredentialRequest fallbackRequest = new GetCredentialRequest.Builder()
+                                        .addCredentialOption(fallbackOption)
+                                        .build();
+                                CancellationSignal retrySignal = new CancellationSignal();
+                                pending = retrySignal;
+                                credentialManager.getCredentialAsync(activity, fallbackRequest, retrySignal,
+                                        ContextCompat.getMainExecutor(activity),
+                                        new CredentialManagerCallback<GetCredentialResponse, GetCredentialException>() {
+                                            @Override
+                                            public void onResult(GetCredentialResponse response) {
+                                                if (pending == retrySignal) pending = null;
+                                                String token = idTokenFrom(response.getCredential());
+                                                if (token != null) reply(replyProxy, id, "success", null, token);
+                                                else reply(replyProxy, id, "error", "no_token", null);
+                                            }
+
+                                            @Override
+                                            public void onError(@NonNull GetCredentialException retryError) {
+                                                if (pending == retrySignal) pending = null;
+                                                Log.w(TAG, "Google account chooser recovery failed: "
+                                                        + retryError.getClass().getSimpleName()
+                                                        + " | type=" + retryError.getType()
+                                                        + " | message=" + retryError.getMessage(), retryError);
+                                                replyDiagnostic(replyProxy, id, errorCode(retryError), retryError);
+                                            }
+                                        });
+                            } catch (RuntimeException retryStartError) {
+                                Log.e(TAG, "Could not start Google account chooser recovery", retryStartError);
+                                reply(replyProxy, id, "error", "unknown", null);
+                            }
+                        }
+
+                        @Override
+                        public void onError(@NonNull ClearCredentialException clearError) {
+                            Log.w(TAG, "Could not reset Google credential provider state before recovery: "
+                                    + clearError.getMessage(), clearError);
+                            reply(replyProxy, id, "error", "authorization", null);
+                        }
+                    });
+        } catch (RuntimeException clearStartError) {
+            Log.w(TAG, "Could not start Google credential recovery", clearStartError);
+            reply(replyProxy, id, "error", "authorization", null);
+        }
     }
 
     /**
