@@ -26,11 +26,6 @@ export default function AuthModal({ onClose }) {
       setSession(next);
       if(event==='PASSWORD_RECOVERY'){setRecovery(true);setMode('Reset password');setMessage('Choose a new password.');}
       if(event==='SIGNED_IN'){setBusy(false);setBusyLabel('');setMessage('Sign-in complete. Opening ProLink…');}
-      if(event==='SIGNED_OUT'&&/BidxProLinkAndroid/.test(navigator.userAgent)){
-        // Clear Google provider state only after an actual app sign-out.
-        try{window.BidxNativeGoogle?.postMessage?.(JSON.stringify({type:'googleSignOut',id:'signout'}));}
-        catch(e){console.warn('[BidxGoogleAuth] Could not notify Credential Manager of sign-out:',e);}
-      }
     });
     return ()=>{alive=false;subscription.unsubscribe();};
   },[]);
