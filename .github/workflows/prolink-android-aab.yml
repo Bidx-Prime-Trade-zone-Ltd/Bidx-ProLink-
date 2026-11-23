@@ -76,41 +76,8 @@ jobs:
           RAW_GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID }}
         run: |
           test -n "$RAW_GOOGLE_WEB_CLIENT_ID" || (echo "Missing GOOGLE_WEB_CLIENT_ID repository secret" && exit 1)
-          GOOGLE_WEB_CLIENT_ID="$(printf '%s' "$RAW_GOOGLE_WEB_CLIENT_ID" | tr -d '\\r\\n' | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//; s/^["'\\'']+//; s/["'\\'']+$//')"
-          if ! printf '%s' "$GOOGLE_WEB_CLIENT_ID" | grep -Eq '^[0-9]+-[A-Za-z0-9_-]+\\.apps\\.googleusercontent\\.com
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: |
-          test -n "$ANDROID_KEYSTORE_PASSWORD" || (echo "Missing ANDROID_KEYSTORE_PASSWORD repository secret" && exit 1)
-          test -n "$ANDROID_KEY_ALIAS" || (echo "Missing ANDROID_KEY_ALIAS repository secret" && exit 1)
-          test -n "$ANDROID_KEY_PASSWORD" || (echo "Missing ANDROID_KEY_PASSWORD repository secret" && exit 1)
-          test -n "$GOOGLE_WEB_CLIENT_ID" || (echo "Missing GOOGLE_WEB_CLIENT_ID repository secret" && exit 1)
-          ./gradlew --version 2>/dev/null || true
-          for attempt in 1 2 3; do
-            echo "Gradle build attempt $attempt of 3"
-            if gradle --no-daemon --max-workers=2 -p android :app:bundleRelease -PVERSION_CODE="${{ inputs.version_code || '17' }}" -PVERSION_NAME="${{ inputs.version_name || '6.0' }}" -PGOOGLE_WEB_CLIENT_ID="$GOOGLE_WEB_CLIENT_ID" --stacktrace; then
-              exit 0
-            fi
-            if [ "$attempt" -lt 3 ]; then
-              sleep $((attempt * 30))
-            fi
-          done
-          exit 1
-          
-
-      - name: Verify AAB output
-        run: |
-          test -s android/app/build/outputs/bundle/release/app-release.aab
-          ls -lh android/app/build/outputs/bundle/release/app-release.aab
-
-      - name: Upload signed AAB
-        uses: actions/upload-artifact@v4
-        with:
-          name: pedes-prolink-android-aab
-          path: android/app/build/outputs/bundle/release/app-release.aab
-          if-no-files-found: error
-          retention-days: 30
-; then
+          GOOGLE_WEB_CLIENT_ID="$(printf '%s' "$RAW_GOOGLE_WEB_CLIENT_ID" | tr -d '\r\n' | sed -E "s/^[[:space:]\"']+//; s/[[:space:]\"']+$//")"
+          if ! printf '%s' "$GOOGLE_WEB_CLIENT_ID" | grep -Eq '^[0-9]+-[A-Za-z0-9_-]+\.apps\.googleusercontent\.com$'; then
             echo "GOOGLE_WEB_CLIENT_ID is not a valid Google Web application OAuth client ID."
             echo "Use the Web application client ID from the same Google Cloud project as the Android OAuth client."
             exit 1
@@ -139,7 +106,6 @@ jobs:
             fi
           done
           exit 1
-          
 
       - name: Verify AAB output
         run: |
