@@ -67,6 +67,26 @@ export default function AuthModal({ onClose }) {
     window.crypto.getRandomValues(bytes);
     return Array.from(bytes).map(b=>b.toString(16).padStart(2,'0')).join('');
   };
+  // Clear any stale Google Credential Manager provider session before
+  // starting a fresh account-selection attempt. This does not remove the
+  // Google account from the phone; it resets this app's provider-side session.
+  const clearNativeGoogleSession=async()=>{
+    const bridge=window.BidxNativeGoogle;
+    if(!bridge||typeof bridge.postMessage!=='function')return;
+    const id=randomNonce().slice(0,16);
+    await new Promise(resolve=>{
+      const timer=setTimeout(()=>resolve(false),5000);
+      bridge.onmessage=event=>{
+        let result;
+        try{result=JSON.parse(event?.data||'{}');}catch(_){return;}
+        if(result?.id!==id)return;
+        clearTimeout(timer);
+        resolve(result.status==='success');
+      };
+      try{bridge.postMessage(JSON.stringify({type:'googleSignOut',id}));}
+      catch(_){clearTimeout(timer);resolve(false);}
+    });
+  };
   const sha256Hex=async value=>{
     const digest=await window.crypto.subtle.digest('SHA-256',new TextEncoder().encode(value));
     return Array.from(new Uint8Array(digest)).map(b=>b.toString(16).padStart(2,'0')).join('');
@@ -118,6 +138,9 @@ export default function AuthModal({ onClose }) {
     setBusy(true);setBusyLabel('Connecting to Google…');setError('');setMessage('');
     try{
       if(isNativeAndroid()){
+        // Reset stale provider state first; this addresses Google [16]
+        // Account reauth failures after a prior ProLink sign-in/sign-out.
+        await clearNativeGoogleSession();
         await nativeGoogleSignIn();
       }else{
         const {error:e}=await supabase.auth.signInWithOAuth({
