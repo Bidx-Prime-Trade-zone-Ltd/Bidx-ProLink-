@@ -24,7 +24,6 @@ import androidx.webkit.WebMessageCompat;
 import androidx.webkit.WebViewCompat;
 import androidx.webkit.WebViewFeature;
 
-import com.google.android.libraries.identity.googleid.GetGoogleIdOption;
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption;
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential;
 
@@ -125,13 +124,11 @@ final class GoogleSignInBridge implements WebViewCompat.WebMessageListener {
             return;
         }
 
-        // Use the standard Google ID credential option documented for native
-        // Supabase sign-in. Request both previously authorized and new accounts;
-        // filtering to authorized accounts can incorrectly reject first-time users.
+        // This is an explicit "Continue with Google" button. Use Google's
+        // dedicated button flow directly rather than first attempting the
+        // account-picker flow, which can fail during AccountReauth with [16].
         // The server client ID MUST be the Web OAuth client ID, not the Android ID.
-        GetGoogleIdOption option = new GetGoogleIdOption.Builder()
-                .setFilterByAuthorizedAccounts(false)
-                .setServerClientId(webClientId)
+        GetSignInWithGoogleOption option = new GetSignInWithGoogleOption.Builder(webClientId)
                 .setNonce(nonce)
                 .build();
         GetCredentialRequest request = new GetCredentialRequest.Builder()
@@ -150,67 +147,14 @@ final class GoogleSignInBridge implements WebViewCompat.WebMessageListener {
                     }
 
                     @Override
-                    public void onError(@NonNull GetCredentialException e) {
+                    public void onError(@NonNull GetCredentialException error) {
                         if (pending == signal) pending = null;
-                        // Google documents a separate button flow for cases where
-                        // the Credential Manager bottom sheet has no eligible
-                        // credential, including accounts that need reauthentication.
-                        // Retry once with GetSignInWithGoogleOption; do not route this
-                        // through Supabase until Google actually returns an ID token.
-                        if (e instanceof NoCredentialException) {
-                            Log.i(TAG, "No credential from bottom-sheet flow; trying Google button flow");
-                            GetSignInWithGoogleOption buttonOption =
-                                    new GetSignInWithGoogleOption.Builder(webClientId)
-                                            .setNonce(nonce)
-                                            .build();
-                            GetCredentialRequest buttonRequest = new GetCredentialRequest.Builder()
-                                    .addCredentialOption(buttonOption)
-                                    .build();
-                            CancellationSignal buttonSignal = new CancellationSignal();
-                            pending = buttonSignal;
-                            credentialManager.getCredentialAsync(activity, buttonRequest, buttonSignal,
-                                    ContextCompat.getMainExecutor(activity),
-                                    new CredentialManagerCallback<GetCredentialResponse, GetCredentialException>() {
-                                        @Override
-                                        public void onResult(GetCredentialResponse buttonResponse) {
-                                            if (pending == buttonSignal) pending = null;
-                                            String idToken = idTokenFrom(buttonResponse.getCredential());
-                                            if (idToken != null) reply(replyProxy, id, "success", null, idToken);
-                                            else reply(replyProxy, id, "error", "no_token", null);
-                                        }
-
-                                        @Override
-                                        public void onError(@NonNull GetCredentialException buttonError) {
-                                            if (pending == buttonSignal) pending = null;
-                                            String buttonCode = errorCode(buttonError);
-                                            Log.w(TAG, "Google button flow failed (" + buttonCode + ")"
-                                                    + "; exception=" + buttonError.getClass().getSimpleName()
-                                                    + "; type=" + buttonError.getType()
-                                                    + "; message=" + buttonError.getMessage(), buttonError);
-                                            replyDiagnostic(replyProxy, id, buttonCode, buttonError);
-                                        }
-                                    });
-                            return;
-                        }
-                        if (e instanceof GetCredentialCancellationException) {
-                            // Credential Manager also uses this exception when a
-                            // request cannot obtain authorization for technical
-                            // reasons. Do not tell the user they cancelled when
-                            // they selected an account; retain the real cause in
-                            // Android logs for diagnosis.
-                            Log.w(TAG, "Google credential authorization did not complete"
-                                    + "; exception=" + e.getClass().getSimpleName()
-                                    + "; type=" + e.getType()
-                                    + "; message=" + e.getMessage(), e);
-                            replyDiagnostic(replyProxy, id, "authorization", e);
-                            return;
-                        }
-                        String code = errorCode(e);
-                        Log.w(TAG, "Sign in with Google failed (" + code + ")"
-                                + "; exception=" + e.getClass().getSimpleName()
-                                + "; type=" + e.getType()
-                                + "; message=" + e.getMessage(), e);
-                        replyDiagnostic(replyProxy, id, code, e);
+                        String code = errorCode(error);
+                        Log.w(TAG, "Sign in with Google button flow failed (" + code + ")"
+                                + "; exception=" + error.getClass().getSimpleName()
+                                + "; type=" + error.getType()
+                                + "; message=" + error.getMessage(), error);
+                        replyDiagnostic(replyProxy, id, code, error);
                     }
                 });
     }
