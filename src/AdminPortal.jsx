@@ -2,9 +2,10 @@ import React,{useEffect,useMemo,useState} from 'react';
 import {supabase} from './lib/supabase.js';
 import {ShieldCheck,Users,Clock3,CheckCircle2,FileCheck,Search,LogOut,RefreshCw,Check,X,Eye,Globe2,UserRound,CalendarDays,LockKeyhole} from 'lucide-react';
 import SupportInbox from './SupportInbox.jsx';
+import BroadcastManager from './BroadcastManager.jsx';
 
 const ADMIN_EMAIL='ojepaamedu@gmail.com';
-const tabs=['Overview','Users','Professional profiles','Document review','Profile Change Requests','Review history','Support Inbox'];
+const tabs=['Overview','Users','Professional profiles','Document review','Profile Change Requests','Review history','Support Inbox','Email broadcasts'];
 const fmt=value=>value?new Date(value).toLocaleString():'—';
 const label=value=>String(value||'').replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase());
 
@@ -131,6 +132,7 @@ export default function AdminPortal(){
    <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Document</th><th>Applicant ID</th><th>Decision</th><th>Submitted</th><th>Reviewed</th><th>Reason</th></tr></thead><tbody>{reviews.filter(r=>r.status!=='pending').map(r=><tr key={r.id}><td>{label(r.submitted_data?.document_type||r.section)}</td><td className="admin-id">{r.user_id}</td><td><span className={'admin-status '+r.status}>{label(r.status)}</span></td><td>{fmt(r.submitted_at)}</td><td>{fmt(r.reviewed_at)}</td><td>{r.review_reason||'—'}</td></tr>)}</tbody></table></div>
   </section>}
   {tab==='Support Inbox'&&<SupportInbox/>}
+  {tab==='Email broadcasts'&&<BroadcastManager/>}
   <footer className="admin-footer"><ShieldCheck size={15}/> Bidx ProLink · Internal document review and customer support · User records remain read-only</footer>
  </div>;
 }
