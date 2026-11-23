@@ -1425,6 +1425,79 @@ async function adminSupportAction(request,env){
     return json({success:true,message:saved});
   }catch(error){console.error("[prolink-support-admin] action_failed",{name:error?.name||"Error"});return json({error:"The support action could not be completed."},502);}
 }
+function escapeBroadcastHtml(value){
+  return String(value||"").replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
+}
+function broadcastEmailHtml(subject,body){
+  return '<!doctype html><html><body style="margin:0;padding:24px;background:#f3f6fb;font-family:Arial,sans-serif;color:#17345d"><main style="max-width:620px;margin:0 auto;background:#fff;border:1px solid #e3eaf3;border-radius:12px;padding:28px"><p style="font-size:12px;font-weight:bold;letter-spacing:1px;color:#41658f">BIDX PROLINK · OFFICIAL ANNOUNCEMENT</p><h2 style="font-size:22px;margin:12px 0 20px">'+escapeBroadcastHtml(subject)+'</h2><div style="font-size:15px;line-height:1.7;overflow-wrap:anywhere">'+escapeBroadcastHtml(body).replace(/\r?\n/g,"<br>")+'</div><hr style="border:0;border-top:1px solid #e7edf5;margin:28px 0 16px"><p style="font-size:12px;color:#64748b">This is an official service announcement for your Bidx ProLink account. For assistance, use Contact &amp; Support in the ProLink app.</p><p style="font-size:12px;color:#64748b">Bidx ProLink · Bidx Prime Trade Zone LTD</p></main></body></html>';
+}
+async function adminBroadcasts(request,env){
+  const auth=await requireProlinkAdmin(request,env);if(auth.error)return auth.error;
+  const config=auth.config;
+  if(request.method==="GET"){
+    try{
+      const rows=await supabaseRest(config,"/rest/v1/prolink_admin_broadcasts?select=id,subject,recipient_count,sent_count,next_index,status,created_at,updated_at,sent_at,last_error&order=created_at.desc&limit=50");
+      return json({campaigns:rows||[]});
+    }catch(error){console.error("[prolink-broadcast] list_failed",{name:error?.name||"Error"});return json({error:"Broadcast history could not be loaded. Apply the ProLink broadcast database migration and try again."},503);}
+  }
+  if(request.method!=="POST")return json({error:"Method not allowed."},405);
+  let body;try{body=await request.json();}catch{return json({error:"Invalid request."},400);}
+  const action=String(body.action||"");
+  if(action==="create"){
+    const subject=String(body.subject||"").trim(),message=String(body.message||"").trim();
+    if(!subject||subject.length>180)return json({error:"Enter a subject of up to 180 characters."},400);
+    if(!message||message.length>10000)return json({error:"Enter a message of up to 10,000 characters."},400);
+    if(!env.RESEND_API_KEY||!env.BIDX_PROLINK_EMAIL_FROM)return json({error:"The ProLink email sender is not configured. Check RESEND_API_KEY and BIDX_PROLINK_EMAIL_FROM Worker secrets."},503);
+    try{
+      const recipients=[],seen=new Set();let complete=false;
+      for(let page=1;page<=100;page++){
+        const response=await fetch(config.url+"/auth/v1/admin/users?page="+page+"&per_page=1000",{headers:{apikey:config.serviceKey,authorization:"Bearer "+config.serviceKey}});
+        if(!response.ok)throw new Error("Registered account list could not be retrieved.");
+        const data=await response.json(),batch=data?.users||[];
+        for(const user of batch){
+          const email=String(user.email||"").trim(),key=email.toLowerCase();
+          if(!user.email_confirmed_at||user.deleted_at||!/^\S+@\S+\.\S+$/.test(email)||key===PROLINK_ADMIN_EMAIL||seen.has(key))continue;
+          seen.add(key);recipients.push(email);
+        }
+        if(batch.length<1000){complete=true;break;}
+      }
+      if(!complete)throw new Error("The account list exceeded the safe scan limit. No broadcast was created.");
+      if(!recipients.length)return json({error:"There are no eligible confirmed email addresses to receive this broadcast."},409);
+      const inserted=await supabaseRest(config,"/rest/v1/prolink_admin_broadcasts",{method:"POST",headers:{prefer:"return=representation"},body:JSON.stringify({subject,body:message,recipient_emails:recipients,recipient_count:recipients.length,sent_count:0,next_index:0,status:"queued",created_by:auth.user.id})});
+      const campaign=Array.isArray(inserted)?inserted[0]:null;
+      if(!campaign?.id)throw new Error("The broadcast campaign could not be saved.");
+      return json({success:true,campaign:{id:campaign.id,subject,recipient_count:recipients.length,sent_count:0,next_index:0,status:"queued",created_at:campaign.created_at},message:"Broadcast prepared. Review the recipient count, then start sending."});
+    }catch(error){
+      console.error("[prolink-broadcast] create_failed",{name:error?.name||"Error",message:String(error?.message||"").slice(0,180)});
+      return json({error:error?.message||"The broadcast could not be prepared."},502);
+    }
+  }
+  if(action==="send"){
+    const campaignId=String(body.campaignId||"");
+    if(!/^[0-9a-f-]{36}$/i.test(campaignId))return json({error:"Select a valid broadcast campaign."},400);
+    if(!env.RESEND_API_KEY||!env.BIDX_PROLINK_EMAIL_FROM)return json({error:"The ProLink email sender is not configured."},503);
+    try{
+      const rows=await supabaseRest(config,"/rest/v1/prolink_admin_broadcasts?select=id,subject,body,recipient_emails,recipient_count,sent_count,next_index,status&id=eq."+encodeURIComponent(campaignId)+"&limit=1");
+      const campaign=rows?.[0];if(!campaign)return json({error:"Broadcast campaign not found."},404);
+      if(campaign.status==="sent"||campaign.next_index>=campaign.recipient_count)return json({success:true,done:true,campaign:{id:campaign.id,sent_count:campaign.sent_count,recipient_count:campaign.recipient_count,status:"sent"},message:"This broadcast has already been completed."});
+      const recipients=Array.isArray(campaign.recipient_emails)?campaign.recipient_emails:[];
+      const start=Number(campaign.next_index)||0,chunk=recipients.slice(start,start+100);
+      if(!chunk.length)throw new Error("No recipient records remain, but the campaign is incomplete.");
+      const response=await fetch("https://api.resend.com/emails/batch",{method:"POST",headers:{authorization:"Bearer "+env.RESEND_API_KEY,"content-type":"application/json","Idempotency-Key":"prolink-broadcast-"+campaign.id+"-chunk-"+start},body:JSON.stringify(chunk.map(to=>({from:env.BIDX_PROLINK_EMAIL_FROM,to:[to],subject:campaign.subject,html:broadcastEmailHtml(campaign.subject,campaign.body),text:campaign.body+"\n\nBidx ProLink · Bidx Prime Trade Zone LTD"})))});
+      const result=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(String(result?.message||result?.error||"Email batch was rejected.").slice(0,220));
+      const nextIndex=start+chunk.length,sentCount=(Number(campaign.sent_count)||0)+chunk.length,done=nextIndex>=recipients.length;
+      await supabaseRest(config,"/rest/v1/prolink_admin_broadcasts?id=eq."+encodeURIComponent(campaign.id),{method:"PATCH",headers:{prefer:"return=minimal"},body:JSON.stringify({next_index:nextIndex,sent_count:sentCount,status:done?"sent":"queued",updated_at:new Date().toISOString(),sent_at:done?new Date().toISOString():null,last_error:null})});
+      return json({success:true,done,campaign:{id:campaign.id,sent_count:sentCount,recipient_count:campaign.recipient_count,next_index:nextIndex,status:done?"sent":"queued"},message:done?"Broadcast sending completed.":"Email batch accepted. Continue with the next batch."});
+    }catch(error){
+      console.error("[prolink-broadcast] send_failed",{campaignId,name:error?.name||"Error",message:String(error?.message||"").slice(0,180)});
+      try{await supabaseRest(config,"/rest/v1/prolink_admin_broadcasts?id=eq."+encodeURIComponent(campaignId),{method:"PATCH",headers:{prefer:"return=minimal"},body:JSON.stringify({status:"paused",last_error:String(error?.message||"Email batch failed.").slice(0,300),updated_at:new Date().toISOString()})});}catch{}
+      return json({error:error?.message||"This email batch could not be sent. You can retry it safely."},502);
+    }
+  }
+  return json({error:"Choose a valid broadcast action."},400);
+}
+
 async function adminSupportAttachment(request,env){
   const auth=await requireProlinkAdmin(request,env);if(auth.error)return auth.error;
   if(!env.R2)return json({error:"R2 file storage is unavailable."},503);
@@ -1452,6 +1525,7 @@ export default {
     if (url.pathname === "/api/profile/change-request" && request.method === "POST") return profileChangeRequest(request, env);
     if (url.pathname === "/api/admin/profile-change" && request.method === "POST") return adminProfileChange(request, env);
     if (url.pathname === "/api/admin/dashboard" && request.method === "GET") return adminDashboard(request, env);
+    if (url.pathname === "/api/admin/broadcasts" && (request.method === "GET" || request.method === "POST")) return adminBroadcasts(request, env);
     if (url.pathname === "/api/support/messages" && request.method === "GET") return supportMessages(request, env);
     if (url.pathname === "/api/support/read" && request.method === "POST") return supportMarkRead(request, env);
     if (url.pathname === "/api/support/message" && request.method === "POST") return supportSend(request, env);
@@ -1496,4 +1570,4 @@ export default {
   }
 };
 
-export { supportGreetingReply, supportGreetingPrefix, supportMessageIntent, supportAttachmentCategory, supportAccountLookupChoice, supportAiExtractText, adminDashboard };
+export { supportGreetingReply, supportGreetingPrefix, supportMessageIntent, supportAttachmentCategory, supportAccountLookupChoice, supportAiExtractText, adminDashboard, adminBroadcasts, broadcastEmailHtml };
