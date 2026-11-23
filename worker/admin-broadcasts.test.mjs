@@ -36,7 +36,7 @@ test("only the authorised ProLink administrator can create a broadcast",async()=
 
 test("broadcast creation snapshots only unique, confirmed, valid, non-deleted user emails",async()=>{
   const users=[
-    {email:"admin@example.test",email_confirmed_at:"2026-01-01",id:"1"},
+    {email:"ojepaamedu@gmail.com",email_confirmed_at:"2026-01-01",id:"1"},
     {email:"ojepaamedu@gmail.com",email_confirmed_at:"2026-01-01",id:"2"},
     {email:"confirmed@example.test",email_confirmed_at:"2026-01-01",id:"3"},
     {email:"CONFIRMED@example.test",email_confirmed_at:"2026-01-01",id:"4"},
