@@ -152,7 +152,7 @@ final class GoogleSignInBridge implements WebViewCompat.WebMessageListener {
                                     + "; exception=" + e.getClass().getSimpleName()
                                     + "; type=" + e.getType()
                                     + "; message=" + e.getMessage(), e);
-                            reply(replyProxy, id, "error", "authorization", null);
+                            replyDiagnostic(replyProxy, id, "authorization", e);
                             return;
                         }
                         String code = errorCode(e);
@@ -160,7 +160,7 @@ final class GoogleSignInBridge implements WebViewCompat.WebMessageListener {
                                 + "; exception=" + e.getClass().getSimpleName()
                                 + "; type=" + e.getType()
                                 + "; message=" + e.getMessage(), e);
-                        reply(replyProxy, id, "error", code, null);
+                        replyDiagnostic(replyProxy, id, code, e);
                     }
                 });
     }
@@ -187,6 +187,27 @@ final class GoogleSignInBridge implements WebViewCompat.WebMessageListener {
                 || detail.contains("DEVELOPER_ERROR")) return "config";
         if (detail.toLowerCase().contains("network")) return "network";
         return "unknown";
+    }
+
+    // Include the underlying Credential Manager exception in the bridge response.
+    // The page previously replaced every authorization failure with one generic
+    // message, hiding whether the cause was a missing OAuth client, account state,
+    // Play Services, cancellation, or a device/network problem.
+    private static void replyDiagnostic(JavaScriptReplyProxy replyProxy, String id, String code, GetCredentialException error) {
+        try {
+            String detail = error.getClass().getSimpleName()
+                    + " | type=" + error.getType()
+                    + " | message=" + String.valueOf(error.getMessage());
+            if (detail.length() > 240) detail = detail.substring(0, 240);
+            JSONObject reply = new JSONObject()
+                    .put("id", id)
+                    .put("status", "error")
+                    .put("code", code)
+                    .put("detail", detail);
+            replyProxy.postMessage(reply.toString());
+        } catch (JSONException | IllegalStateException ex) {
+            Log.w(TAG, "Could not send Google sign-in diagnostic", ex);
+        }
     }
 
     private static void reply(JavaScriptReplyProxy replyProxy, String id, String status, String code, String idToken) {
