@@ -1456,7 +1456,7 @@ async function adminBroadcasts(request,env){
         const data=await response.json(),batch=data?.users||[];
         for(const user of batch){
           const email=String(user.email||"").trim(),key=email.toLowerCase();
-          if(!user.email_confirmed_at||user.deleted_at||!/^\\S+@\\S+\\.\\S+$/.test(email)||key===PROLINK_ADMIN_EMAIL||seen.has(key))continue;
+          if(!user.email_confirmed_at||user.deleted_at||!/^\S+@\S+\.\S+$/.test(email)||key===PROLINK_ADMIN_EMAIL||seen.has(key))continue;
           seen.add(key);recipients.push(email);
         }
         if(batch.length<1000){complete=true;break;}
