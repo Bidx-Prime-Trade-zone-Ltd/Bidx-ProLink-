@@ -24,9 +24,9 @@ android {
 
     defaultConfig {
         applicationId 'online.bidxpro.prolink'
-        minSdk 23
+        minSdk 24
         targetSdk 36
-        versionCode = (project.findProperty("VERSION_CODE") ?: "22").toString().toInteger()
+        versionCode = (project.findProperty("VERSION_CODE") ?: "25").toString().toInteger()
         versionName = (project.findProperty("VERSION_NAME") ?: "6.0").toString()
         buildConfigField "String", "GOOGLE_WEB_CLIENT_ID", '"' + googleWebClientId.replace("\\", "\\\\").replace('"', '\\\"') + '"'
     }
