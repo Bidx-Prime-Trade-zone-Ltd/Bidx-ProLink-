@@ -10,7 +10,7 @@ def googleWebClientId = (project.findProperty("GOOGLE_WEB_CLIENT_ID") ?: System.
 // Credential Manager must receive the Web application OAuth client ID as the
 // ID-token audience. Reject Android client IDs, copied quotes, and malformed
 // values at build time instead of producing an AAB that fails after account pick.
-if (!googleWebClientId.matches(/^[0-9]+-[A-Za-z0-9_-]+\\.apps\\.googleusercontent\\.com$/)) {
+if (!googleWebClientId.matches(/^[0-9]+-[A-Za-z0-9_-]+\.apps\.googleusercontent\.com$/)) {
     throw new GradleException("GOOGLE_WEB_CLIENT_ID is missing or invalid. Set the Google Cloud OAuth 2.0 Client ID whose application type is Web application (not Android).")
 }
 
