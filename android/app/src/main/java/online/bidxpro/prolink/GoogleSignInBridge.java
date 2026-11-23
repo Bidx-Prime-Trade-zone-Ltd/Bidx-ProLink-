@@ -210,7 +210,14 @@ final class GoogleSignInBridge implements WebViewCompat.WebMessageListener {
         // client for this package name + signing SHA-1 in the Web client's Cloud project.
         if (detail.contains("28444") || detail.contains("[10]") || detail.contains("Developer console")
                 || detail.contains("DEVELOPER_ERROR")) return "config";
-        if (detail.toLowerCase().contains("network")) return "network";
+        String lowerDetail = detail.toLowerCase();
+        // Credential Manager can wrap Google's [16] Account reauth failure as
+        // TYPE_USER_CANCELED even when the person selected an account. Do not
+        // mislabel this as a user cancellation; surface it as an authorization
+        // failure and preserve the underlying diagnostic for investigation.
+        if (detail.contains("[16]") || lowerDetail.contains("account reauth failed")
+                || lowerDetail.contains("reauth")) return "authorization";
+        if (lowerDetail.contains("network")) return "network";
         return "unknown";
     }
 
