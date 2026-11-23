@@ -6,7 +6,13 @@ def releaseStoreFile = System.getenv("ANDROID_KEYSTORE_FILE")
 def releaseStorePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
 def releaseKeyAlias = System.getenv("ANDROID_KEY_ALIAS")
 def releaseKeyPassword = System.getenv("ANDROID_KEY_PASSWORD")
-def googleWebClientId = (project.findProperty("GOOGLE_WEB_CLIENT_ID") ?: System.getenv("GOOGLE_WEB_CLIENT_ID") ?: "").toString()
+def googleWebClientId = (project.findProperty("GOOGLE_WEB_CLIENT_ID") ?: System.getenv("GOOGLE_WEB_CLIENT_ID") ?: "").toString().trim()
+// Credential Manager must receive the Web application OAuth client ID as the
+// ID-token audience. Reject Android client IDs, copied quotes, and malformed
+// values at build time instead of producing an AAB that fails after account pick.
+if (!googleWebClientId.matches(/^[0-9]+-[A-Za-z0-9_-]+\\.apps\\.googleusercontent\\.com$/)) {
+    throw new GradleException("GOOGLE_WEB_CLIENT_ID is missing or invalid. Set the Google Cloud OAuth 2.0 Client ID whose application type is Web application (not Android).")
+}
 
 android {
     namespace 'online.bidxpro.prolink'
