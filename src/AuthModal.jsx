@@ -104,7 +104,8 @@ export default function AuthModal({ onClose }) {
         busy:'Google sign-in is already open. Finish or close it, then try again.',
         authorization:'Google could not complete authorization after you selected your account. Please try again. If the problem continues, contact ProLink support.'
       };
-      throw new Error(messages[reply.code]||'Google sign-in could not be completed. Please try again.');
+      const diagnostic=reply.detail?'\nDiagnostic: '+reply.detail:'';
+      throw new Error((messages[reply.code]||'Google sign-in could not be completed. Please try again.')+diagnostic);
     }
     const {error:e}=await supabase.auth.signInWithIdToken({provider:'google',token:reply.idToken,nonce:rawNonce});
     if(e)throw e;
