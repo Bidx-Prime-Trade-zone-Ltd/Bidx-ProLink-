@@ -6,7 +6,7 @@ function json(body, status = 200, cacheControl = "no-store") {
 }
 
 function normalizeAreaName(value) {
-  return String(value || "").normalize("NFKD").replace(/[\\u0300-\\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  return String(value || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
 function featureName(feature) {
@@ -66,16 +66,29 @@ function representativePoint(feature) {
   return null;
 }
 
+function boundaryFeatureId(feature, iso3, level, name) {
+  const p=feature?.properties||{};
+  return String(p.shapeID||p.shapeISO||p.GID_1||p.GID_2||p.GID_3||p.GID_4||p.GID_5||p.id||`${iso3}-ADM${level}-${normalizeAreaName(name).replace(/ /g,"-")}`);
+}
+
 async function loadBoundaryLayer(iso3, level) {
   const metadataResponse=await fetch(`https://www.geoboundaries.org/api/current/gbOpen/${iso3}/ADM${level}/`,{headers:{accept:"application/json"}});
   if(metadataResponse.status===404)return null;
   if(!metadataResponse.ok)throw new Error("Boundary metadata unavailable");
   const metadata=await metadataResponse.json();
+  if(String(metadata.boundaryISO||"").toUpperCase()!==iso3||String(metadata.boundaryType||"").toUpperCase()!==`ADM${level}`)
+    throw new Error("Boundary metadata does not match the requested country and level");
   const dataUrl=metadata.simplifiedGeometryGeoJSON||metadata.gjDownloadURL;
   if(!dataUrl)return null;
   const boundaryResponse=await fetch(dataUrl,{headers:{accept:"application/geo+json, application/json"}});
   if(!boundaryResponse.ok)throw new Error("Boundary geometry unavailable");
-  return {metadata,geo:await boundaryResponse.json()};
+  const geo=await boundaryResponse.json();
+  if(geo?.type!=="FeatureCollection"||!Array.isArray(geo.features))
+    throw new Error("Boundary geometry is not a valid FeatureCollection");
+  const expectedCount=Number(metadata.admUnitCount);
+  if(Number.isFinite(expectedCount)&&expectedCount>0&&geo.features.length!==expectedCount)
+    throw new Error(`Boundary feature count mismatch: metadata ${expectedCount}, file ${geo.features.length}`);
+  return {metadata,geo};
 }
 
 async function geography(request, ctx) {
@@ -95,39 +108,57 @@ async function geography(request, ctx) {
 
   try{
     const childLayer=await loadBoundaryLayer(iso3,level);
-    if(!childLayer)return json({country:iso3,level,areas:[],available:false},200,"public, max-age=21600");
+    if(!childLayer)return json({country:iso3,level,areas:[],available:false,qualityStatus:"no-source-layer"},200,"public, max-age=21600");
     let parentFeature=null;
     if(level>1){
       const parentLayer=await loadBoundaryLayer(iso3,level-1);
       const wanted=normalizeAreaName(parent);
-      parentFeature=(parentLayer?.geo?.features||[]).find(feature=>normalizeAreaName(featureName(feature))===wanted);
-      if(!parentFeature)return json({country:iso3,level,parent,areas:[],available:false,parentNotFound:true},200,"public, max-age=1800");
+      const matches=(parentLayer?.geo?.features||[]).filter(feature=>normalizeAreaName(featureName(feature))===wanted);
+      if(!matches.length)return json({country:iso3,level,parent,areas:[],available:false,parentNotFound:true,qualityStatus:"parent-not-found"},200,"public, max-age=1800");
+      if(matches.length>1)return json({country:iso3,level,parent,areas:[],available:false,parentAmbiguous:true,qualityStatus:"parent-ambiguous"},200,"public, max-age=1800");
+      parentFeature=matches[0];
     }
-    const areas=(childLayer.geo.features||[]).filter(feature=>{
+
+    const selected=(childLayer.geo.features||[]).filter(feature=>{
       if(!parentFeature)return true;
       const point=representativePoint(feature);
       return Boolean(point&&pointInGeometry(point,parentFeature.geometry));
-    }).map(feature=>{
-      const p=feature.properties||{};
-      const name=featureName(feature);
-      const id=p.shapeID||p.shapeISO||p.GID_1||p.GID_2||p.id||name;
-      return name?{id:String(id||name),name:String(name)}:null;
-    }).filter(Boolean).sort((a,b)=>a.name.localeCompare(b.name));
+    });
+    const areas=[],seenIds=new Set(),seenNames=new Set();
+    for(const feature of selected){
+      const name=String(featureName(feature)||"").trim();
+      if(!name)throw new Error("A boundary feature has no usable administrative name");
+      const id=boundaryFeatureId(feature,iso3,level,name);
+      const normalizedName=normalizeAreaName(name);
+      if(seenIds.has(id)||seenNames.has(normalizedName))
+        throw new Error("Duplicate administrative feature identifiers or names detected");
+      seenIds.add(id);seenNames.add(normalizedName);
+      areas.push({id,name});
+    }
+    areas.sort((a,b)=>a.name.localeCompare(b.name));
+    const metadata=childLayer.metadata;
     const response=json({
-      country:iso3,countryName:childLayer.metadata.boundaryName||iso3,level,
-      levelName:childLayer.metadata.boundaryCanonical||`Administrative level ${level}`,
-      parent:parent||null,source:"geoBoundaries",license:childLayer.metadata.boundaryLicense||"See source metadata",
-      attribution:"Administrative boundary data from geoBoundaries. Check each layer's licence before redistribution.",
+      country:iso3,countryName:metadata.boundaryName||iso3,level,
+      levelName:metadata.boundaryCanonical||`Administrative level ${level}`,
+      parent:parent||null,source:"geoBoundaries",boundaryId:metadata.boundaryID||null,
+      boundaryYear:metadata.boundaryYearRepresented||null,
+      boundarySource:metadata.boundarySource||null,
+      sourceUpdatedAt:metadata.sourceDataUpdateDate||null,
+      license:metadata.boundaryLicense||"See source metadata",
+      licenseSource:metadata.licenseSource||null,
+      attribution:"Administrative boundary data from geoBoundaries. Retain source attribution and verify the layer licence before redistribution.",
+      sourceFeatureCount:childLayer.geo.features.length,returnedFeatureCount:areas.length,
+      parentFilterMethod:level>1?"representative-point-in-parent-polygon":"country-layer",
+      qualityStatus:"structurally-checked",
       available:areas.length>0,areas
     },200,"public, max-age=21600");
     ctx.waitUntil(cache.put(cacheKey,response.clone()));
     return response;
   }catch(error){
-    console.error("[prolink-geography] lookup_failed",{country:iso3,level,name:error?.name||"Error"});
-    return json({error:"Geographical data is temporarily unavailable. Enter the area manually."},502);
+    console.error("[prolink-geography] lookup_failed",{country:iso3,level,name:error?.name||"Error",reason:String(error?.message||"").slice(0,180)});
+    return json({error:"Geographical data failed an integrity check or is temporarily unavailable. Enter the area manually until the source is verified.",qualityStatus:"integrity-check-failed"},502);
   }
 }
-
 
 function passwordChangeConfig(env) {
   return {url:env.VITE_SUPABASE_URL||env.SUPABASE_URL||"",anonKey:env.VITE_SUPABASE_ANON_KEY||env.SUPABASE_ANON_KEY||env.SUPABASE_PUBLISHABLE_KEY||"",serviceKey:env.SUPABASE_SERVICE_ROLE_KEY||"",resendKey:env.RESEND_API_KEY||""};
