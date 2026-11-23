@@ -422,7 +422,7 @@ async function supabaseRest(config,path,options={}) {
   return data;
 }
 
-const PROFILE_CHANGE_FIELDS = new Set(["title","full_name","date_of_birth","phone","whatsapp","country_code","country_iso3","country_name","region","district","city","local_area","professional_name","category","subcategory","experience","skills","about","business_phone","business_email","website","business_address"]);
+const PROFILE_CHANGE_FIELDS = new Set(["title","full_name","date_of_birth","phone","whatsapp","country_code","country_iso3","country_name","region","district","city","local_area","postal_code","address","professional_name","category","subcategory","experience","skills","about","business_phone","business_email","website","business_address"]);
 async function signedInProfileUser(request,env){
   const config=adminConfig(env),authorization=request.headers.get("authorization")||"";
   if(!config.url||!config.serviceKey||!config.anonKey)return {error:json({error:"Profile change service is not configured."},503)};
