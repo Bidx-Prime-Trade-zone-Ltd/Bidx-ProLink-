@@ -56,7 +56,7 @@ test("broadcast creation snapshots only unique, confirmed, valid, non-deleted us
   },async()=>{
     const response=await adminBroadcasts(adminRequest({action:"create",subject:"Service notice",message:"Important update"}),env);
     const body=await response.json();
-    assert.equal(response.status,200);
+    assert.equal(response.status,200,JSON.stringify(body));
     assert.equal(body.campaign.recipient_count,1);
     assert.deepEqual(saved.recipient_emails,["confirmed@example.test"]);
     assert.equal(saved.created_by,adminUser.id);
@@ -77,13 +77,13 @@ test("broadcast sends no more than 100 individual emails per batch and advances 
       batch=JSON.parse(options.body);idempotencyKey=options.headers["Idempotency-Key"];return jsonResponse({data:batch.map((_,i)=>({id:"email-"+i}))});
     }
     if(url.includes("/rest/v1/prolink_admin_broadcasts?id=eq.")){
-      patch=JSON.parse(options.body);return jsonResponse(null,204);
+      patch=JSON.parse(options.body);return new Response(null,{status:204});
     }
     throw new Error("Unexpected request: "+url);
   },async()=>{
     const response=await adminBroadcasts(adminRequest({action:"send",campaignId}),env);
     const body=await response.json();
-    assert.equal(response.status,200);
+    assert.equal(response.status,200,JSON.stringify(body));
     assert.equal(body.done,false);
     assert.equal(batch.length,100);
     assert.equal(batch[0].to[0],"user0@example.test");
