@@ -26,6 +26,7 @@ public class MainActivity extends Activity {
     private static final int FILE_CHOOSER_REQUEST = 4101;
     private static final int CAMERA_PERMISSION_REQUEST = 4102;
     private static final int LOCATION_PERMISSION_REQUEST = 4103;
+    private static final int STARTUP_PERMISSION_REQUEST = 4104;
     private static final String HOME_URL = "https://app.bidxpro.online";
     private WebView webView;
     private SwipeRefreshLayout swipeRefreshLayout;
@@ -213,6 +214,32 @@ public class MainActivity extends Activity {
             openIncomingAppLink(getIntent());
         } else {
             webView.loadUrl(HOME_URL);
+        }
+
+        // Ask once at app startup for the three capabilities ProLink uses:
+        // approximate/precise location, camera capture, and notifications.
+        requestStartupPermissions();
+    }
+
+    private void requestStartupPermissions() {
+        java.util.ArrayList<String> requested = new java.util.ArrayList<>();
+        requested.add(Manifest.permission.ACCESS_FINE_LOCATION);
+        requested.add(Manifest.permission.ACCESS_COARSE_LOCATION);
+        requested.add(Manifest.permission.CAMERA);
+        if (android.os.Build.VERSION.SDK_INT >= 33) {
+            requested.add(Manifest.permission.POST_NOTIFICATIONS);
+        }
+
+        java.util.ArrayList<String> missing = new java.util.ArrayList<>();
+        for (String permission : requested) {
+            if (android.os.Build.VERSION.SDK_INT < 33 &&
+                Manifest.permission.POST_NOTIFICATIONS.equals(permission)) continue;
+            if (checkSelfPermission(permission) != PackageManager.PERMISSION_GRANTED) {
+                missing.add(permission);
+            }
+        }
+        if (!missing.isEmpty()) {
+            requestPermissions(missing.toArray(new String[0]), STARTUP_PERMISSION_REQUEST);
         }
     }
 
