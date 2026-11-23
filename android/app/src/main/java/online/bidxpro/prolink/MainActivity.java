@@ -42,6 +42,14 @@ public class MainActivity extends Activity {
             && "app.bidxpro.online".equalsIgnoreCase(uri.getHost());
     }
 
+    // Pull-to-refresh is deliberately limited to the ProLink home page only.
+    private boolean isHomeScreen(String url) {
+        if (url == null) return false;
+        Uri uri = Uri.parse(url);
+        String path = uri.getPath();
+        return isProLinkAppLink(uri) && (path == null || path.isEmpty() || "/".equals(path));
+    }
+
     private boolean isOAuthCallback(Uri uri) {
         return uri != null
             && "com.bidxpro.prolink".equalsIgnoreCase(uri.getScheme())
@@ -76,7 +84,11 @@ public class MainActivity extends Activity {
                 SwipeRefreshLayout.LayoutParams.MATCH_PARENT,
                 SwipeRefreshLayout.LayoutParams.MATCH_PARENT));
         setContentView(swipeRefreshLayout);
-        swipeRefreshLayout.setOnRefreshListener(() -> webView.reload());
+        swipeRefreshLayout.setOnRefreshListener(() -> {
+            if (isHomeScreen(webView.getUrl())) webView.reload();
+            else swipeRefreshLayout.setRefreshing(false);
+        });
+        swipeRefreshLayout.setEnabled(false);
 
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
@@ -98,10 +110,17 @@ public class MainActivity extends Activity {
         webView.setWebViewClient(new WebViewClient() {
             @Override public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
                 super.onPageStarted(view, url, favicon);
+                if (swipeRefreshLayout != null) {
+                    swipeRefreshLayout.setRefreshing(false);
+                    swipeRefreshLayout.setEnabled(isHomeScreen(url));
+                }
             }
             @Override public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
-                if (swipeRefreshLayout != null) swipeRefreshLayout.setRefreshing(false);
+                if (swipeRefreshLayout != null) {
+                    swipeRefreshLayout.setRefreshing(false);
+                    swipeRefreshLayout.setEnabled(isHomeScreen(url));
+                }
             }
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 Uri uri = request.getUrl();
