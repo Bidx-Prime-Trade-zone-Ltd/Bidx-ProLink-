@@ -9,11 +9,13 @@ import android.webkit.WebView;
 import androidx.annotation.NonNull;
 import androidx.core.content.ContextCompat;
 import androidx.credentials.Credential;
+import androidx.credentials.ClearCredentialStateRequest;
 import androidx.credentials.CredentialManager;
 import androidx.credentials.CredentialManagerCallback;
 import androidx.credentials.CustomCredential;
 import androidx.credentials.GetCredentialRequest;
 import androidx.credentials.GetCredentialResponse;
+import androidx.credentials.exceptions.ClearCredentialException;
 import androidx.credentials.exceptions.GetCredentialCancellationException;
 import androidx.credentials.exceptions.GetCredentialException;
 import androidx.credentials.exceptions.NoCredentialException;
@@ -92,7 +94,14 @@ final class GoogleSignInBridge implements WebViewCompat.WebMessageListener {
         String nonce;
         try {
             JSONObject request = new JSONObject(String.valueOf(message.getData()));
-            if (!"googleSignIn".equals(request.optString("type"))) return;
+            String requestType = request.optString("type");
+            if ("googleSignOut".equals(requestType)) {
+                String signOutId = request.optString("id", "signout");
+                if (!REQUEST_ID.matcher(signOutId).matches()) signOutId = "signout";
+                clearCredentialProviderState(replyProxy, signOutId);
+                return;
+            }
+            if (!"googleSignIn".equals(requestType)) return;
             id = request.getString("id");
             nonce = request.getString("nonce");
         } catch (JSONException e) {
@@ -204,6 +213,37 @@ final class GoogleSignInBridge implements WebViewCompat.WebMessageListener {
                         replyDiagnostic(replyProxy, id, code, e);
                     }
                 });
+    }
+
+    /**
+     * Notify Google and every enabled credential provider when the user signs
+     * out of ProLink. Without this, Credential Manager may retain an active
+     * provider session and route the next sign-in through account reauthentication.
+     */
+    private void clearCredentialProviderState(JavaScriptReplyProxy replyProxy, String id) {
+        try {
+            credentialManager.clearCredentialStateAsync(
+                    new ClearCredentialStateRequest(),
+                    null,
+                    ContextCompat.getMainExecutor(activity),
+                    new CredentialManagerCallback<Void, ClearCredentialException>() {
+                        @Override
+                        public void onResult(Void result) {
+                            Log.i(TAG, "Credential provider state cleared after ProLink sign-out");
+                            reply(replyProxy, id, "success", null, null);
+                        }
+
+                        @Override
+                        public void onError(@NonNull ClearCredentialException error) {
+                            Log.w(TAG, "Could not clear credential provider state after sign-out: "
+                                    + error.getMessage(), error);
+                            reply(replyProxy, id, "error", "clear_failed", null);
+                        }
+                    });
+        } catch (RuntimeException error) {
+            Log.w(TAG, "Credential provider state clear could not start", error);
+            reply(replyProxy, id, "error", "clear_failed", null);
+        }
     }
 
     private static String idTokenFrom(Credential credential) {
