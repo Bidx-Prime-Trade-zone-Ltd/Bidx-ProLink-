@@ -26,7 +26,7 @@ android {
         applicationId 'online.bidxpro.prolink'
         minSdk 24
         targetSdk 36
-        versionCode = (project.findProperty("VERSION_CODE") ?: "27").toString().toInteger()
+        versionCode = (project.findProperty("VERSION_CODE") ?: "28").toString().toInteger()
         versionName = (project.findProperty("VERSION_NAME") ?: "6.0").toString()
         buildConfigField "String", "GOOGLE_WEB_CLIENT_ID", '"' + googleWebClientId.replace("\\", "\\\\").replace('"', '\\\"') + '"'
     }
@@ -52,6 +52,7 @@ android {
 }
 
 dependencies {
+    implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
     implementation 'androidx.credentials:credentials:1.6.0'
     implementation 'androidx.credentials:credentials-play-services-auth:1.6.0'
     implementation 'com.google.android.libraries.identity.googleid:googleid:1.2.1'
