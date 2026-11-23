@@ -269,9 +269,7 @@ function App() {
       setLocationBusy(false);
     }, { enableHighAccuracy: false, timeout: 12000, maximumAge: 300000 });
   };
-  useEffect(() => {
-    if (tab === "Explore" && !detectedLocation && !locationBusy && !locationStatus) detectMyLocation();
-  }, [tab]);
+  // GPS is opt-in: users can choose “Use my location” or enter an area manually.
 
   const [selected, setSelected] = useState(null);
   const [saved, setSaved] = useState([]);
