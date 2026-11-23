@@ -155,11 +155,10 @@ final class GoogleSignInBridge implements WebViewCompat.WebMessageListener {
                                 + "; exception=" + error.getClass().getSimpleName()
                                 + "; type=" + error.getType()
                                 + "; message=" + error.getMessage(), error);
-                        if (isAccountReauthFailure(error)) {
-                            // Google Play services can fail while reauthenticating a previously
-                            // selected account and report it as [16] USER_CANCELED. Recover once:
-                            // clear provider selection state, then show the full account chooser
-                            // with authorized-account filtering disabled.
+                        if (error instanceof NoCredentialException || isAccountReauthFailure(error)) {
+                            // Google recommends retrying with authorized-account filtering disabled
+                            // when no eligible/previously authorized account is available. The same
+                            // all-accounts retry also recovers the reported [16] account-reauth error.
                             retryAfterReauthFailure(replyProxy, id, nonce);
                         } else {
                             replyDiagnostic(replyProxy, id, code, error);
