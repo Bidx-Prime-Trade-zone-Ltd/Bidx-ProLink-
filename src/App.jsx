@@ -176,7 +176,21 @@ function App() {
   useEffect(() => {
     if (!supabase) { setAuthReady(true); return; }
     supabase.auth.getSession().then(({data}) => { setSession(data.session); setProfile(p=>({...p,...(data.session?.user?.user_metadata||{})})); setAuthReady(true); });
-    const {data:{subscription}} = supabase.auth.onAuthStateChange((_event,next) => { setSession(next); setProfile(p=>({...p,...(next?.user?.user_metadata||{})})); setAuthReady(true); });
+    const {data:{subscription}} = supabase.auth.onAuthStateChange((event,next) => {
+      // Supabase sign-out alone does not clear Android Credential Manager's
+      // provider-side Google session. Clear it on every local or remote sign-out
+      // so the next Google login does not get stuck in AccountReauth ([16]).
+      if (event === 'SIGNED_OUT' && window.BidxNativeGoogle?.postMessage) {
+        try {
+          window.BidxNativeGoogle.postMessage(JSON.stringify({type:'googleSignOut',id:'signout'}));
+        } catch (error) {
+          console.warn('[BidxGoogleAuth] Could not request native credential-state cleanup:', error);
+        }
+      }
+      setSession(next);
+      setProfile(p=>({...p,...(next?.user?.user_metadata||{})}));
+      setAuthReady(true);
+    });
     return () => subscription.unsubscribe();
   }, []);
   const loadProfessionals = async (append = false) => {
