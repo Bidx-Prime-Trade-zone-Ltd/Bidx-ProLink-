@@ -67,74 +67,22 @@ export default function AuthModal({ onClose }) {
       }
     });
   };
-  const randomNonce=()=>{
-    const bytes=new Uint8Array(32);
-    window.crypto.getRandomValues(bytes);
-    return Array.from(bytes).map(b=>b.toString(16).padStart(2,'0')).join('');
-  };
-  const sha256Hex=async value=>{
-    const digest=await window.crypto.subtle.digest('SHA-256',new TextEncoder().encode(value));
-    return Array.from(new Uint8Array(digest)).map(b=>b.toString(16).padStart(2,'0')).join('');
-  };
-  const nativeGoogleSignIn=async()=>{
-    const bridge=window.BidxNativeGoogle;
-    if(!bridge||typeof bridge.postMessage!=='function'){
-      throw new Error('The native Google sign-in service is unavailable. Please update ProLink and try again, or use email and password.');
-    }
-    if(!window.crypto?.subtle||!window.crypto?.getRandomValues){
-      throw new Error('Secure Google sign-in is unavailable on this device. Please use email and password.');
-    }
-    const rawNonce=randomNonce();
-    const id=randomNonce().slice(0,16);
-    const hashedNonce=await sha256Hex(rawNonce);
-    const reply=await new Promise((resolve,reject)=>{
-      const timer=setTimeout(()=>reject(new Error('Google sign-in timed out. Please try again.')),5*60*1000);
-      bridge.onmessage=event=>{
-        let result;
-        try{result=JSON.parse(event?.data||'{}');}catch(_){return;}
-        if(result?.id!==id)return;
-        clearTimeout(timer);
-        resolve(result);
-      };
-      try{bridge.postMessage(JSON.stringify({type:'googleSignIn',id,nonce:hashedNonce}));}
-      catch(e){clearTimeout(timer);reject(e);}
-    });
-    if(reply.status==='cancelled')throw new Error('Google sign-in was cancelled.');
-    if(reply.status!=='success'||!reply.idToken){
-      const messages={
-        no_credential:'Google could not find an eligible sign-in credential. This can happen when the Android app signing certificate or Google OAuth configuration does not match. Please try email and password while we verify the configuration.',
-        network:'Check your internet connection and try again.',
-        config:'Google sign-in configuration needs attention. Please use email and password for now.',
-        no_token:'Google did not return a sign-in token. Please try again.',
-        busy:'Google sign-in is already open. Finish or close it, then try again.',
-        authorization:'Google could not complete authorization after you selected your account. Please try again. If the problem continues, contact ProLink support.'
-      };
-      const diagnostic=reply.detail?'\nDiagnostic: '+reply.detail:'';
-      throw new Error((messages[reply.code]||'Google sign-in could not be completed. Please try again.')+diagnostic);
-    }
-    const {error:e}=await supabase.auth.signInWithIdToken({provider:'google',token:reply.idToken,nonce:rawNonce});
-    if(e)throw e;
-  };
-  // Android must use Credential Manager so Google can show accounts already
-  // available on the device and return an ID token directly to Supabase.
-  // Hosted OAuth is retained for ordinary browsers only.
+  // Use Supabase-hosted Google OAuth on every platform. This restores the
+  // original browser-based Supabase flow and avoids Android Credential Manager.
   const google=async()=>{
     if(!supabase){setError(supabaseConfigError);return;}
     setBusy(true);setBusyLabel('Connecting to Google…');setError('');setMessage('');
     try{
-      if(isNativeAndroid()){
-        // Do not clear Credential Manager state before sign-in.
-        // Provider state is cleared only by the explicit Google sign-out flow.
-        await nativeGoogleSignIn();
-      }else{
-        const {error:e}=await supabase.auth.signInWithOAuth({
-          provider:'google',
-          options:{redirectTo:window.location.origin,queryParams:{prompt:'select_account'}}
-        });
-        if(e)throw e;
-      }
+      const {error:e}=await supabase.auth.signInWithOAuth({
+        provider:'google',
+        options:{
+          redirectTo:window.location.origin,
+          queryParams:{prompt:'select_account'}
+        }
+      });
+      if(e)throw e;
     }catch(e){
-      console.error('[BidxGoogleAuth] Google sign-in failed:',e);
+      console.error('[BidxGoogleAuth] Supabase Google OAuth failed:',e);
       setError(e?.message||'Google sign-in could not start. Please try again.');
       setBusy(false);setBusyLabel('');
     }
