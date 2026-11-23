@@ -7,7 +7,7 @@ const env={
   SUPABASE_SERVICE_ROLE_KEY:"service-role-test",
   SUPABASE_ANON_KEY:"anon-test",
   RESEND_API_KEY:"re_test",
-  BIDX_PROLINK_EMAIL_FROM:"Bidx ProLink <updates@bidxpro.online>"
+  BIDX_PROLINK_EMAIL_FROM:"Bidx ProLink <no-reply@bidxpro.online>"
 };
 const adminUser={id:"admin-id",email:"ojepaamedu@gmail.com"};
 const campaignId="11111111-1111-4111-8111-111111111111";
