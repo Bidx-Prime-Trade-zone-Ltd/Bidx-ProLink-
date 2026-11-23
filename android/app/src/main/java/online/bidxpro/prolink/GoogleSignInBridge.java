@@ -23,6 +23,7 @@ import androidx.webkit.WebViewCompat;
 import androidx.webkit.WebViewFeature;
 
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption;
+import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption;
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential;
 
 import org.json.JSONException;
@@ -142,6 +143,46 @@ final class GoogleSignInBridge implements WebViewCompat.WebMessageListener {
                     @Override
                     public void onError(@NonNull GetCredentialException e) {
                         if (pending == signal) pending = null;
+                        // Google documents a separate button flow for cases where
+                        // the Credential Manager bottom sheet has no eligible
+                        // credential, including accounts that need reauthentication.
+                        // Retry once with GetSignInWithGoogleOption; do not route this
+                        // through Supabase until Google actually returns an ID token.
+                        if (e instanceof NoCredentialException) {
+                            Log.i(TAG, "No credential from bottom-sheet flow; trying Google button flow");
+                            GetSignInWithGoogleOption buttonOption =
+                                    new GetSignInWithGoogleOption.Builder(webClientId)
+                                            .setNonce(nonce)
+                                            .build();
+                            GetCredentialRequest buttonRequest = new GetCredentialRequest.Builder()
+                                    .addCredentialOption(buttonOption)
+                                    .build();
+                            CancellationSignal buttonSignal = new CancellationSignal();
+                            pending = buttonSignal;
+                            credentialManager.getCredentialAsync(activity, buttonRequest, buttonSignal,
+                                    ContextCompat.getMainExecutor(activity),
+                                    new CredentialManagerCallback<GetCredentialResponse, GetCredentialException>() {
+                                        @Override
+                                        public void onResult(GetCredentialResponse buttonResponse) {
+                                            if (pending == buttonSignal) pending = null;
+                                            String idToken = idTokenFrom(buttonResponse.getCredential());
+                                            if (idToken != null) reply(replyProxy, id, "success", null, idToken);
+                                            else reply(replyProxy, id, "error", "no_token", null);
+                                        }
+
+                                        @Override
+                                        public void onError(@NonNull GetCredentialException buttonError) {
+                                            if (pending == buttonSignal) pending = null;
+                                            String buttonCode = errorCode(buttonError);
+                                            Log.w(TAG, "Google button flow failed (" + buttonCode + ")"
+                                                    + "; exception=" + buttonError.getClass().getSimpleName()
+                                                    + "; type=" + buttonError.getType()
+                                                    + "; message=" + buttonError.getMessage(), buttonError);
+                                            replyDiagnostic(replyProxy, id, buttonCode, buttonError);
+                                        }
+                                    });
+                            return;
+                        }
                         if (e instanceof GetCredentialCancellationException) {
                             // Credential Manager also uses this exception when a
                             // request cannot obtain authorization for technical
