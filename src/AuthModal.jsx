@@ -24,6 +24,11 @@ export default function AuthModal({ onClose }) {
     const {data:{subscription}}=supabase.auth.onAuthStateChange((event,next)=>{
       if(!alive)return;
       setSession(next);
+      if(event==='SIGNED_OUT'&&/BidxProLinkAndroid/.test(navigator.userAgent)){
+        // Clear Google provider state only after the user actually signs out.
+        try{window.BidxNativeGoogle?.postMessage?.(JSON.stringify({type:'googleSignOut',id:'signout'}));}
+        catch(e){console.warn('[BidxGoogleAuth] Could not clear Google provider state:',e);}
+      }
       if(event==='PASSWORD_RECOVERY'){setRecovery(true);setMode('Reset password');setMessage('Choose a new password.');}
       if(event==='SIGNED_IN'){setBusy(false);setBusyLabel('');setMessage('Sign-in complete. Opening ProLink…');}
     });
