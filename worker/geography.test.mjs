@@ -75,8 +75,8 @@ test("geography rejects duplicate administrative names instead of returning ambi
 test("geography flags a parent name that matches multiple parent features",async()=>{
   const response=await requestWithMock(async input=>{
     const url=String(input);
-    if(url.includes("/api/current/NGA/ADM2/"))return Response.json(metadata("NGA",2,1,"https://data.test/child"));
-    if(url.includes("/api/current/NGA/ADM1/"))return Response.json(metadata("NGA",1,2,"https://data.test/parent"));
+    if(url.includes("/NGA/ADM2/"))return Response.json(metadata("NGA",2,1,"https://data.test/child"));
+    if(url.includes("/NGA/ADM1/"))return Response.json(metadata("NGA",1,2,"https://data.test/parent"));
     if(url==="https://data.test/child")return Response.json(layer("NGA",2,[polygonFeature("Child","NG-CH")]));
     if(url==="https://data.test/parent")return Response.json(layer("NGA",1,[
       polygonFeature("Central","NG-P1"),
