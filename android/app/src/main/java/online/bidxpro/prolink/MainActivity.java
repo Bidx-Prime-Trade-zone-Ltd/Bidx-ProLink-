@@ -112,6 +112,11 @@ public class MainActivity extends Activity {
 
         swipeRefreshLayout = new SwipeRefreshLayout(this);
         webView = new WebView(this);
+        // Keep the WebView visible to Android Autofill so Google Password Manager
+        // can offer to save and fill credentials in the embedded app experience.
+        if (android.os.Build.VERSION.SDK_INT >= 26) {
+            webView.setImportantForAutofill(android.view.View.IMPORTANT_FOR_AUTOFILL_YES);
+        }
         swipeRefreshLayout.addView(webView, new SwipeRefreshLayout.LayoutParams(
                 SwipeRefreshLayout.LayoutParams.MATCH_PARENT,
                 SwipeRefreshLayout.LayoutParams.MATCH_PARENT));
