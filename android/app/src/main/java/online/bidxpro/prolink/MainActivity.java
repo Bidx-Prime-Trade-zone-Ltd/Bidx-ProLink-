@@ -2,6 +2,7 @@ package online.bidxpro.prolink;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -21,6 +22,13 @@ import androidx.webkit.WebViewCompat;
 import androidx.webkit.WebViewFeature;
 import android.widget.Toast;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
+import com.google.android.play.core.appupdate.AppUpdateInfo;
+import com.google.android.play.core.appupdate.AppUpdateManager;
+import com.google.android.play.core.appupdate.AppUpdateManagerFactory;
+import com.google.android.play.core.install.InstallStateUpdatedListener;
+import com.google.android.play.core.install.model.AppUpdateType;
+import com.google.android.play.core.install.model.InstallStatus;
+import com.google.android.play.core.install.model.UpdateAvailability;
 
 public class MainActivity extends Activity {
     private static final int FILE_CHOOSER_REQUEST = 4101;
@@ -31,6 +39,14 @@ public class MainActivity extends Activity {
     private WebView webView;
     private SwipeRefreshLayout swipeRefreshLayout;
     private GoogleSignInBridge googleSignIn;
+    private static final int UPDATE_REQUEST_CODE = 4205;
+    private AppUpdateManager appUpdateManager;
+    private AlertDialog updateDialog;
+    private AlertDialog installDialog;
+    private boolean updateCheckInProgress = false;
+    private final InstallStateUpdatedListener updateListener = state -> {
+        if (state.installStatus() == InstallStatus.DOWNLOADED) runOnUiThread(this::showInstallUpdateDialog);
+    };
     private static final String PROLINK_ORIGIN = "https://app.bidxpro.online";
     private ValueCallback<Uri[]> filePathCallback;
     private PermissionRequest pendingWebPermission;
@@ -85,6 +101,8 @@ public class MainActivity extends Activity {
                 SwipeRefreshLayout.LayoutParams.MATCH_PARENT,
                 SwipeRefreshLayout.LayoutParams.MATCH_PARENT));
         setContentView(swipeRefreshLayout);
+        appUpdateManager = AppUpdateManagerFactory.create(this);
+        appUpdateManager.registerListener(updateListener);
         // Pull-to-refresh is enabled only on the home screen and only when the
         // WebView is already scrolled to the top. This prevents refresh gestures
         // from stealing normal vertical scrolling on any page.
@@ -229,6 +247,66 @@ public class MainActivity extends Activity {
         requestStartupPermissions();
     }
 
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        checkForPlayUpdate();
+    }
+
+    private void checkForPlayUpdate() {
+        if (appUpdateManager == null || updateCheckInProgress || isFinishing()) return;
+        updateCheckInProgress = true;
+        appUpdateManager.getAppUpdateInfo().addOnCompleteListener(task -> {
+            updateCheckInProgress = false;
+            if (!task.isSuccessful() || isFinishing()) return;
+            AppUpdateInfo info = task.getResult();
+            if (info.installStatus() == InstallStatus.DOWNLOADED) {
+                showInstallUpdateDialog();
+                return;
+            }
+            if (info.updateAvailability() == UpdateAvailability.UPDATE_AVAILABLE
+                    && info.isUpdateTypeAllowed(AppUpdateType.FLEXIBLE)) {
+                int availableVersion = info.availableVersionCode();
+                int skippedVersion = getPreferences(MODE_PRIVATE)
+                        .getInt("skipped_play_update_version", -1);
+                if (availableVersion == skippedVersion) return;
+                showAvailableUpdateDialog(info, availableVersion);
+            }
+        });
+    }
+
+    private void showAvailableUpdateDialog(AppUpdateInfo info, int availableVersion) {
+        if (isFinishing() || (updateDialog != null && updateDialog.isShowing())) return;
+        updateDialog = new AlertDialog.Builder(this)
+                .setTitle("A new ProLink update is available")
+                .setMessage("Version " + availableVersion
+                        + " is ready. Update now? You can keep using ProLink while it downloads.")
+                .setPositiveButton("Update", (dialog, which) ->
+                        appUpdateManager.startUpdateFlowForResult(
+                                info, AppUpdateType.FLEXIBLE, this, UPDATE_REQUEST_CODE))
+                .setNegativeButton("Not now", (dialog, which) ->
+                        getPreferences(MODE_PRIVATE).edit()
+                                .putInt("skipped_play_update_version", availableVersion).apply())
+                .create();
+        updateDialog.setOnCancelListener(dialog ->
+                getPreferences(MODE_PRIVATE).edit()
+                        .putInt("skipped_play_update_version", availableVersion).apply());
+        updateDialog.show();
+    }
+
+    private void showInstallUpdateDialog() {
+        if (isFinishing() || (installDialog != null && installDialog.isShowing())) return;
+        installDialog = new AlertDialog.Builder(this)
+                .setTitle("ProLink update downloaded")
+                .setMessage("The update is ready. Restart ProLink to install it now, or continue using the current version.")
+                .setPositiveButton("Restart and install",
+                        (dialog, which) -> appUpdateManager.completeUpdate())
+                .setNegativeButton("Later", (dialog, which) -> { })
+                .create();
+        installDialog.show();
+    }
+
     private void requestStartupPermissions() {
         java.util.ArrayList<String> requested = new java.util.ArrayList<>();
         requested.add(Manifest.permission.ACCESS_FINE_LOCATION);
@@ -260,6 +338,10 @@ public class MainActivity extends Activity {
 
     @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == UPDATE_REQUEST_CODE) {
+            if (resultCode != RESULT_OK) checkForPlayUpdate();
+            return;
+        }
         if (requestCode == FILE_CHOOSER_REQUEST && filePathCallback != null) {
             Uri[] results = WebChromeClient.FileChooserParams.parseResult(resultCode, data);
             filePathCallback.onReceiveValue(results);
@@ -295,6 +377,9 @@ public class MainActivity extends Activity {
     }
 
     @Override protected void onDestroy() {
+        if (appUpdateManager != null) appUpdateManager.unregisterListener(updateListener);
+        if (updateDialog != null && updateDialog.isShowing()) updateDialog.dismiss();
+        if (installDialog != null && installDialog.isShowing()) installDialog.dismiss();
         if (googleSignIn != null) googleSignIn.cancel();
         if (filePathCallback != null) filePathCallback.onReceiveValue(null);
         if (webView != null) { webView.destroy(); webView = null; }
