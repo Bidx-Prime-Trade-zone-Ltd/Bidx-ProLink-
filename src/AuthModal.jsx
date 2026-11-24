@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase, supabaseConfigError } from './lib/supabase.js';
+import { INITIAL_COUNTRIES } from './globalCountries.js';
 import { LoaderCircle, CheckCircle2, Eye, EyeOff, ArrowLeft } from 'lucide-react';
 
 export default function AuthModal({ onClose }) {
@@ -10,6 +11,7 @@ export default function AuthModal({ onClose }) {
   const [showPassword,setShowPassword]=useState(false);
   const [showConfirmPassword,setShowConfirmPassword]=useState(false);
   const [acceptedTerms,setAcceptedTerms]=useState(false);
+  const [countryCode,setCountryCode]=useState('');
   const [busy,setBusy]=useState(false);
   const [busyLabel,setBusyLabel]=useState('');
   const [message,setMessage]=useState('');
@@ -44,13 +46,16 @@ export default function AuthModal({ onClose }) {
   const submit=async e=>{
     e.preventDefault();
     if(!supabase){setError(supabaseConfigError);return;}
+    if(mode==='Create account'&&!countryCode){setError('Select your home country before creating your account.');return;}
     if(mode==='Create account'&&!acceptedTerms){setError('Please accept the Terms and Conditions and Privacy Policy.');return;}
     if(mode==='Reset password'&&!recovery){setError('Open the password-reset link from your email first.');return;}
     if(mode==='Reset password'&&password!==confirmPassword){setError('The passwords do not match.');return;}
     if(mode!=='Forgot password'&&password.length<8){setError('Use a password with at least 8 characters.');return;}
     await run(mode==='Sign in'?'Signing in…':mode==='Create account'?'Creating account…':mode==='Forgot password'?'Sending reset link…':'Updating password…',async()=>{
       if(mode==='Create account'){
-        const {data,error:e}=await supabase.auth.signUp({email:email.trim(),password,options:{emailRedirectTo:authRedirectUrl(),data:{preferred_language:'en'}}});
+        const selectedCountry=INITIAL_COUNTRIES.find(country=>country.code===countryCode);
+        if(!selectedCountry)throw new Error('Select a valid supported country.');
+        const {data,error:e}=await supabase.auth.signUp({email:email.trim(),password,options:{emailRedirectTo:authRedirectUrl(),data:{home_country_code:selectedCountry.code,home_country_iso3:selectedCountry.iso3,home_country_name:selectedCountry.name,country_code:selectedCountry.code,country_iso3:selectedCountry.iso3,country_name:selectedCountry.name,preferred_language:selectedCountry.language||'en'}}});
         if(e)throw e;
         if(data.session){setMessage('Account created. Opening ProLink…');}
         else{setMessage('Confirmation email sent. Confirm your email, then return here to sign in.');setBusy(false);setBusyLabel('');}
@@ -119,6 +124,11 @@ export default function AuthModal({ onClose }) {
   // Supabase-hosted OAuth. The Android path returns an ID token to Supabase.
   const google=async()=>{
     if(!supabase){setError(supabaseConfigError);return;}
+    if(mode==='Create account'){
+      const selectedCountry=INITIAL_COUNTRIES.find(country=>country.code===countryCode);
+      if(!selectedCountry){setError('Select your home country before creating your account.');return;}
+      localStorage.setItem('prolink-pending-home-country',JSON.stringify({home_country_code:selectedCountry.code,home_country_iso3:selectedCountry.iso3,home_country_name:selectedCountry.name,preferred_language:selectedCountry.language||'en'}));
+    }
     setBusy(true);setBusyLabel('Connecting to Google…');setError('');setMessage('');
     try{
       if(/BidxProLinkAndroid/.test(navigator.userAgent)){
@@ -146,6 +156,7 @@ export default function AuthModal({ onClose }) {
       <p>{signedIn?'Your sign-in is complete. Taking you into ProLink now.':'Sign in or create an account to continue.'}</p>
       {(busy||signedIn)&&<div className="auth-progress" role="status"><span className="auth-progress-track"><i/></span><b>{signedIn?'Loading your account…':busyLabel}</b></div>}
       {!signedIn&&!busy&&<>
+        {mode==='Create account'&&<label className="form-label">Home country *<select required value={countryCode} onChange={e=>setCountryCode(e.target.value)}><option value="">Select your country</option>{INITIAL_COUNTRIES.map(country=><option key={country.code} value={country.code}>{country.name}</option>)}</select><small>Your country will be permanently attached to this account.</small></label>}
         {mode!=='Forgot password'&&mode!=='Reset password'&&<button className="google-button" type="button" onClick={google}><span className="google-g">G</span> Continue with Google</button>}
         {mode!=='Forgot password'&&mode!=='Reset password'&&<div className="or-divider"><span>or continue with email</span></div>}
         <form onSubmit={submit}>
