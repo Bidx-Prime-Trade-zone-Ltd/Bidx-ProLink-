@@ -85,9 +85,17 @@ public class MainActivity extends Activity {
                 SwipeRefreshLayout.LayoutParams.MATCH_PARENT,
                 SwipeRefreshLayout.LayoutParams.MATCH_PARENT));
         setContentView(swipeRefreshLayout);
+        // Pull-to-refresh is enabled only on the home screen and only when the
+        // WebView is already scrolled to the top. This prevents refresh gestures
+        // from stealing normal vertical scrolling on any page.
+        swipeRefreshLayout.setOnChildScrollUpCallback((parent, child) ->
+                webView != null && webView.canScrollVertically(-1));
         swipeRefreshLayout.setOnRefreshListener(() -> {
-            if (isHomeScreen(webView.getUrl())) webView.reload();
-            else swipeRefreshLayout.setRefreshing(false);
+            if (isHomeScreen(webView.getUrl()) && !webView.canScrollVertically(-1)) {
+                webView.reload();
+            } else {
+                swipeRefreshLayout.setRefreshing(false);
+            }
         });
         swipeRefreshLayout.setEnabled(false);
 
