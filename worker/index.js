@@ -453,7 +453,7 @@ async function supabaseRest(config,path,options={}) {
   return data;
 }
 
-const PROFILE_CHANGE_FIELDS = new Set(["title","full_name","date_of_birth","phone","whatsapp","country_code","country_iso3","country_name","region","district","city","local_area","postal_code","address","professional_name","category","subcategory","experience","skills","about","business_phone","business_email","website","business_address"]);
+const PROFILE_CHANGE_FIELDS = new Set(["title","full_name","date_of_birth","phone","whatsapp","country_code","country_iso3","country_name","region","district","city","local_area","administrative_levels","postal_code","address","professional_name","category","subcategory","experience","skills","about","business_phone","business_email","website","business_address"]);
 async function signedInProfileUser(request,env){
   const config=adminConfig(env),authorization=request.headers.get("authorization")||"";
   if(!config.url||!config.serviceKey||!config.anonKey)return {error:json({error:"Profile change service is not configured."},503)};
@@ -503,7 +503,8 @@ async function adminProfileChange(request,env){
       const metadata={...(account.user_metadata||{}),...allowed};
       const update=await fetch(auth.config.url+"/auth/v1/admin/users/"+encodeURIComponent(item.user_id),{method:"PUT",headers:{apikey:auth.config.serviceKey,authorization:"Bearer "+auth.config.serviceKey,"content-type":"application/json"},body:JSON.stringify({user_metadata:metadata})});
       if(!update.ok)throw new Error("Could not apply the approved account information.");
-      const profileUpdate=await fetch(auth.config.url+"/rest/v1/prolink_professional_profiles?user_id=eq."+encodeURIComponent(item.user_id),{method:"PATCH",headers:{apikey:auth.config.serviceKey,authorization:"Bearer "+auth.config.serviceKey,"content-type":"application/json",prefer:"return=minimal"},body:JSON.stringify({...allowed,approved_at:new Date().toISOString()})});
+      const publicProfileChanges=Object.fromEntries(Object.entries(allowed).filter(([key])=>key!=="administrative_levels"));
+      const profileUpdate=await fetch(auth.config.url+"/rest/v1/prolink_professional_profiles?user_id=eq."+encodeURIComponent(item.user_id),{method:"PATCH",headers:{apikey:auth.config.serviceKey,authorization:"Bearer "+auth.config.serviceKey,"content-type":"application/json",prefer:"return=minimal"},body:JSON.stringify({...publicProfileChanges,approved_at:new Date().toISOString()})});
       if(!profileUpdate.ok)throw new Error("Account details were updated, but the public professional record could not be updated. Contact support.");
     }
     await supabaseRest(auth.config,"/rest/v1/prolink_profile_change_requests?id=eq."+encodeURIComponent(id),{method:"PATCH",headers:{prefer:"return=minimal"},body:JSON.stringify({status:action==="approve"?"approved":"rejected",reviewed_at:new Date().toISOString(),reviewed_by:auth.user.id,review_reason:reason||null,approved_at:action==="approve"?new Date().toISOString():null})});
