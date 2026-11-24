@@ -146,6 +146,11 @@ function App() {
   const [portraitUrls,setPortraitUrls] = useState({});
   useEffect(()=>{if(!portraitFile){setPortraitPreview('');return;}const url=URL.createObjectURL(portraitFile);setPortraitPreview(url);return()=>URL.revokeObjectURL(url);},[portraitFile]);
   const [menuOpen, setMenuOpen] = useState(false);
+  // Notify Android when the navigation drawer takes over touch interaction.
+  useEffect(() => {
+    try { window.BidxNativeUI?.setMenuOpen?.(Boolean(menuOpen)); } catch {}
+  }, [menuOpen]);
+
   useEffect(()=>{
     if(!menuOpen)return;
     const scrollY=window.scrollY;
