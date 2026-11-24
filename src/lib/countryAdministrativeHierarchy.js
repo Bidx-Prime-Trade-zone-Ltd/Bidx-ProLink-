@@ -33,6 +33,10 @@ export async function loadCountryAdministrativeHierarchy(countryIso3, selectedNa
       levels.push({ level, name: levelName, areas });
       const selected = String(selectedNames[level - 1] || "").trim();
       parentName = areas.find(area => area.name.trim().toLocaleLowerCase() === selected.toLocaleLowerCase())?.name || "";
+      if (selected && !parentName) {
+        levels.pop();
+        return { levels, stoppedAt: level, reason: "saved-value-not-in-source" };
+      }
       if (!parentName) return { levels, stoppedAt: level + 1, reason: "parent-not-selected" };
     } catch {
       return { levels, stoppedAt: level, reason: "lookup-unavailable" };
