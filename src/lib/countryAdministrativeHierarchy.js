@@ -23,7 +23,7 @@ export async function loadCountryAdministrativeHierarchy(countryIso3, selectedNa
       const result = await response.json();
       const areas = Array.isArray(result?.areas) ? result.areas.filter(usableArea) : [];
       const levelName = String(result?.levelName || "").trim();
-      const hasCountrySpecificName = levelName && !/^administrative level\\s+\\d+$/i.test(levelName);
+      const hasCountrySpecificName = levelName && !/^administrative level\s+\d+$/i.test(levelName);
       if (!result?.available || result?.qualityStatus !== "structurally-checked" || !hasCountrySpecificName || !areas.length) {
         return { levels, stoppedAt: level, reason: "no-verified-data" };
       }
