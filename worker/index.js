@@ -397,6 +397,13 @@ async function verificationDocumentUpload(request,env){
   if(!allowedMime.has(file.type))return json({error:"Only JPEG, PNG, WebP and PDF documents are accepted."},400);
   if(file.size<1||file.size>10485760)return json({error:"Each professional document must be no larger than 10 MB."},400);
   const userId=auth.user.id;
+  const lockedCountryRows=await supabaseRest(auth.config,"/rest/v1/prolink_account_settings?select=home_country_code,home_country_iso3,home_country_name&user_id=eq."+encodeURIComponent(userId)+"&limit=1");
+  const lockedCountry=lockedCountryRows?.[0];
+  if(!lockedCountry)return json({error:"Complete your permanent home-country setup before uploading professional documents."},409);
+  const requestedCountry=String(form.get("country_code")||"").toUpperCase();
+  if(requestedCountry&&requestedCountry!==lockedCountry.home_country_code&&requestedCountry!==lockedCountry.home_country_iso3){
+    return json({error:"Document country does not match the home country locked to your ProLink account."},403);
+  }
   const safeName=String(file.name||"professional-document").replace(/[^a-zA-Z0-9._-]/g,"_").slice(-100)||"professional-document";
   const key="verification/"+userId+"/"+type+"-"+crypto.randomUUID()+"-"+safeName;
   try{
@@ -405,7 +412,7 @@ async function verificationDocumentUpload(request,env){
     try{
       const inserted=await supabaseRest(auth.config,"/rest/v1/prolink_review_records",{method:"POST",headers:{prefer:"return=representation"},body:JSON.stringify({
         user_id:userId,section:"supporting_document",status:"pending",document_path:key,
-        submitted_data:{document_type:type,document_name:file.name,mime_type:file.type,country_code:String(form.get("country_code")||"").slice(0,3),storage_provider:"cloudflare_r2"}
+        submitted_data:{document_type:type,document_name:file.name,mime_type:file.type,country_code:lockedCountry.home_country_code,country_iso3:lockedCountry.home_country_iso3,country_name:lockedCountry.home_country_name,storage_provider:"cloudflare_r2"}
       })});
       record=Array.isArray(inserted)?inserted[0]:null;
       if(!record?.id)throw new Error("The document review record could not be saved.");
@@ -453,7 +460,7 @@ async function supabaseRest(config,path,options={}) {
   return data;
 }
 
-const PROFILE_CHANGE_FIELDS = new Set(["title","full_name","date_of_birth","phone","whatsapp","country_code","country_iso3","country_name","region","district","city","local_area","administrative_levels","postal_code","address","professional_name","category","subcategory","experience","skills","about","business_phone","business_email","website","business_address"]);
+const PROFILE_CHANGE_FIELDS = new Set(["title","full_name","date_of_birth","phone","whatsapp","region","district","city","local_area","administrative_levels","postal_code","address","professional_name","category","subcategory","experience","skills","about","business_phone","business_email","website","business_address"]);
 async function signedInProfileUser(request,env){
   const config=adminConfig(env),authorization=request.headers.get("authorization")||"";
   if(!config.url||!config.serviceKey||!config.anonKey)return {error:json({error:"Profile change service is not configured."},503)};
