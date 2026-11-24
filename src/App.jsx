@@ -495,14 +495,14 @@ function App() {
     const legacyKeys={1:'region',2:'district',3:'city',4:'local_area'};
     const key=legacyKeys[level];
     if(key)next[key]=value;
-    const extra=Array.isArray(previous.administrative_levels)?previous.administrative_levels.filter(item=>item.level!==level):[];
-    if(level>4&&value)extra.push({level,name:levelName||'Administrative level '+level,value});
-    next.administrative_levels=[...extra.filter(item=>item.level<level),...(level>4&&value?[{level,name:levelName||'Administrative level '+level,value}]:[])].sort((a,b)=>a.level-b.level);
     if(level<=4){
       const later={1:['district','city','local_area'],2:['city','local_area'],3:['local_area'],4:[]}[level]||[];
       later.forEach(field=>{next[field]='';});
     }
-    next.administrative_levels=next.administrative_levels.filter(item=>item.level<level);
+    const extra=(Array.isArray(previous.administrative_levels)?previous.administrative_levels:[])
+      .filter(item=>item.level<level);
+    if(level>4&&value)extra.push({level,name:levelName||'Administrative level '+level,value});
+    next.administrative_levels=extra.sort((a,b)=>a.level-b.level);
     return next;
   });
   const renderAdministrativeFields = (hierarchy, data, setter, prefix) => hierarchy.map(item=>{
