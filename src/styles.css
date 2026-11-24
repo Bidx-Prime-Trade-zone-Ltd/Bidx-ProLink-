@@ -606,3 +606,7 @@ body.prolink-menu-locked{position:fixed!important;overflow:hidden!important;widt
 .legal-route-updated{border-top:1px solid #EEF2F8;padding-top:18px;margin-top:30px;color:#68776d;font-size:13px}
 .auth-modal .legal-copy a{color:#0E2D5C;font-weight:700;text-decoration:underline}
 @media(max-width:700px){.legal-route-page{padding:0 14px 40px}.legal-route-header{min-height:66px}.legal-route-content{margin:22px auto;padding:22px 18px}.legal-route-content .legal-copy-block{font-size:13px}}
+
+/* Keep the navigation drawer as the active touch/scroll surface above the home page. */
+.menu-scrim{overscroll-behavior:contain}
+.app-menu.prolink-drawer{overscroll-behavior:contain;touch-action:pan-y;-webkit-overflow-scrolling:touch}
