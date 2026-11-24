@@ -282,9 +282,15 @@ public class MainActivity extends Activity {
                 .setTitle("A new ProLink update is available")
                 .setMessage("Version " + availableVersion
                         + " is ready. Update now? You can keep using ProLink while it downloads.")
-                .setPositiveButton("Update", (dialog, which) ->
+                .setPositiveButton("Update", (dialog, which) -> {
+                    try {
                         appUpdateManager.startUpdateFlowForResult(
-                                info, AppUpdateType.FLEXIBLE, this, UPDATE_REQUEST_CODE))
+                                info, AppUpdateType.FLEXIBLE, this, UPDATE_REQUEST_CODE);
+                    } catch (android.content.IntentSender.SendIntentException error) {
+                        Log.e("ProLinkUpdate", "Could not launch the Google Play update flow", error);
+                        Toast.makeText(this, "Unable to start the update. Please try again later.", Toast.LENGTH_LONG).show();
+                    }
+                })
                 .setNegativeButton("Not now", (dialog, which) ->
                         getPreferences(MODE_PRIVATE).edit()
                                 .putInt("skipped_play_update_version", availableVersion).apply())
