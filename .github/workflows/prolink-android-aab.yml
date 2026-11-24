@@ -1,6 +1,11 @@
 name: Pedes ProLink Android AAB
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'android/**'
+      - '.github/workflows/prolink-android-aab.yml'
   workflow_dispatch:
     inputs:
       version_code:
