@@ -1,45 +1,42 @@
 const DEFAULT_LEVEL_LIMIT = 5;
 
-/**
- * Discover a country's own administrative hierarchy in order.
- * A level is included only when the source returns a non-empty, usable list.
- * The next level is requested only after its parent has been selected.
- */
+const usableArea = area => area
+  && typeof area.name === "string"
+  && area.name.trim()
+  && (typeof area.id === "string" || typeof area.id === "number");
+
 export async function loadCountryAdministrativeHierarchy(countryIso3, selectedNames = [], maxLevels = DEFAULT_LEVEL_LIMIT) {
   const country = String(countryIso3 || "").toUpperCase();
   if (!/^[A-Z]{3}$/.test(country)) return { levels: [], stoppedAt: 1, reason: "invalid-country" };
 
   const levels = [];
   let parentName = "";
-  for (let level = 1; level <= Math.min(Number(maxLevels) || DEFAULT_LEVEL_LIMIT, DEFAULT_LEVEL_LIMIT); level += 1) {
+  const limit = Math.min(Math.max(1, Number(maxLevels) || DEFAULT_LEVEL_LIMIT), DEFAULT_LEVEL_LIMIT);
+  for (let level = 1; level <= limit; level += 1) {
     if (level > 1 && !parentName) return { levels, stoppedAt: level, reason: "parent-not-selected" };
 
-    let result;
     try {
       const query = new URLSearchParams({ country, level: String(level) });
       if (parentName) query.set("parent", parentName);
       const response = await fetch(`/api/geography?${query.toString()}`);
       if (!response.ok) return { levels, stoppedAt: level, reason: "lookup-unavailable" };
-      result = await response.json();
+      const result = await response.json();
+      const areas = Array.isArray(result?.areas) ? result.areas.filter(usableArea) : [];
+      const levelName = String(result?.levelName || "").trim();
+      const hasCountrySpecificName = levelName && !/^administrative level\\s+\\d+$/i.test(levelName);
+      if (!result?.available || result?.qualityStatus !== "structurally-checked" || !hasCountrySpecificName || !areas.length) {
+        return { levels, stoppedAt: level, reason: "no-verified-data" };
+      }
+      const uniqueNames = new Set(areas.map(area => area.name.trim().toLocaleLowerCase()));
+      if (uniqueNames.size !== areas.length) return { levels, stoppedAt: level, reason: "ambiguous-data" };
+
+      levels.push({ level, name: levelName, areas });
+      const selected = String(selectedNames[level - 1] || "").trim();
+      parentName = areas.find(area => area.name.trim().toLocaleLowerCase() === selected.toLocaleLowerCase())?.name || "";
+      if (!parentName) return { levels, stoppedAt: level + 1, reason: "parent-not-selected" };
     } catch {
       return { levels, stoppedAt: level, reason: "lookup-unavailable" };
     }
-
-    const areas = Array.isArray(result?.areas)
-      ? result.areas.filter(area => area && typeof area.name === "string" && area.name.trim() && typeof area.id === "string")
-      : [];
-    if (!result?.available || !areas.length) return { levels, stoppedAt: level, reason: "no-verified-data" };
-
-    levels.push({
-      level,
-      name: String(result.levelName || `Administrative level ${level}`),
-      areas
-    });
-
-    const selected = String(selectedNames[level - 1] || "").trim();
-    parentName = areas.find(area => area.name === selected)?.name || "";
-    if (!parentName) return { levels, stoppedAt: level + 1, reason: "parent-not-selected" };
   }
-
   return { levels, stoppedAt: levels.length + 1, reason: "max-level-reached" };
 }
