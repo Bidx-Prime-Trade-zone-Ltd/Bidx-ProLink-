@@ -79,6 +79,9 @@ function App() {
   const [authReady, setAuthReady] = useState(false);
   const [accountCountry,setAccountCountry] = useState(null);
   const [accountCountryLoading,setAccountCountryLoading] = useState(false);
+  useEffect(()=>{
+    if(accountCountry?.preferred_language)document.documentElement.lang=accountCountry.preferred_language;
+  },[accountCountry?.preferred_language]);
   const [countryGateChoice,setCountryGateChoice] = useState('');
   const [countryGateError,setCountryGateError] = useState('');
   const [profile, setProfile] = useState({full_name:'',date_of_birth:'',phone:'',whatsapp:'',state:'',lga:'',address:'',profession:'',bio:''});
