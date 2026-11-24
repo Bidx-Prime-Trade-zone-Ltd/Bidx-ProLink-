@@ -1,5 +1,14 @@
 const DEFAULT_LEVEL_LIMIT = 5;
 
+const COUNTRY_LEVEL_LABELS = {
+  ESP: ["Autonomous Community / City", "Province / Island Council", "Municipality", "Local entity"],
+  POL: ["Voivodeship", "County (Powiat)", "Municipality (Gmina)", "Locality"],
+  PRT: ["Administrative region", "Municipality (Município)", "Parish (Freguesia)", "Locality"],
+  NGA: ["State", "Local Government Area (LGA)", "Ward", "Community / locality"],
+  GHA: ["Region", "District", "Municipal / Metropolitan Assembly area", "Community / locality"]
+};
+const invalidLevelName = value => !value || /^(unknown|n\/?a|null|undefined|administrative level\s+\d+)$/i.test(String(value).trim());
+
 const usableArea = area => area
   && typeof area.name === "string"
   && area.name.trim()
@@ -22,8 +31,10 @@ export async function loadCountryAdministrativeHierarchy(countryIso3, selectedNa
       if (!response.ok) return { levels, stoppedAt: level, reason: "lookup-unavailable" };
       const result = await response.json();
       const areas = Array.isArray(result?.areas) ? result.areas.filter(usableArea) : [];
-      const levelName = String(result?.levelName || "").trim();
-      const hasCountrySpecificName = levelName && !/^administrative level\s+\d+$/i.test(levelName);
+      const sourceLevelName = String(result?.levelName || "").trim();
+      const configuredLevelName = COUNTRY_LEVEL_LABELS[country]?.[level - 1] || "";
+      const levelName = invalidLevelName(sourceLevelName) ? configuredLevelName : sourceLevelName;
+      const hasCountrySpecificName = !invalidLevelName(levelName);
       if (!result?.available || result?.qualityStatus !== "structurally-checked" || !hasCountrySpecificName || !areas.length) {
         return { levels, stoppedAt: level, reason: "no-verified-data" };
       }
