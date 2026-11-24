@@ -84,6 +84,6 @@ export const INITIAL_COUNTRIES = [
   ["VU","VUT","Vanuatu"],
   ["ZM","ZMB","Zambia"],
   ["ZW","ZWE","Zimbabwe"]
-].map(([code, iso3, name]) => ({ code, iso3, name, language: "en" }));
+].map(([code, iso3, name]) => ({ code, iso3, name, language: {"ESP":"es","POL":"pl","PRT":"pt","NGA":"en","GHA":"en","FRA":"fr","DEU":"de","ITA":"it","NLD":"nl","BEL":"nl","AUT":"de","BGR":"bg","HRV":"hr","CYP":"el","CZE":"cs","DNK":"da","EST":"et","FIN":"fi","GRC":"el","HUN":"hu","IRL":"en","LVA":"lv","LTU":"lt","LUX":"fr","MLT":"mt","ROU":"ro","SVK":"sk","SVN":"sl","SWE":"sv","GBR":"en","USA":"en","CAN":"en","AUS":"en","NZL":"en","JAM":"en","TTO":"en","BRB":"en","ATG":"en","BHS":"en","BLZ":"en","BWA":"en","CMR":"fr","FJI":"en","GMB":"en","GUY":"en","KEN":"en","KIR":"en","LSO":"en","LBR":"en","MWI":"en","MUS":"en","NAM":"en","NRU":"en","PNG":"en","PHL":"en","RWA":"rw","SYC":"en","SLE":"en","SGP":"en","SLB":"en","ZAF":"en","SSD":"en","SWZ":"en","TZA":"sw","TON":"en","TUV":"en","UGA":"en","VUT":"fr","ZMB":"en","ZWE":"en","BGD":"bn","IND":"hi","PAK":"ur","WSM":"sm","FSM":"en","MHL":"en","PLW":"en","KNA":"en","LCA":"en","VCT":"en","DMA":"en","GRD":"en"}[iso3] || "en" }));
 
 export const COUNTRY_BY_CODE = Object.fromEntries(INITIAL_COUNTRIES.map(country => [country.code, country]));
