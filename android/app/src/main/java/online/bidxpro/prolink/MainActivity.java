@@ -15,6 +15,7 @@ import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
+import android.webkit.JavascriptInterface;
 import android.webkit.WebViewClient;
 import android.util.Log;
 import androidx.core.content.ContextCompat;
@@ -37,6 +38,20 @@ public class MainActivity extends Activity {
     private static final int STARTUP_PERMISSION_REQUEST = 4104;
     private static final String HOME_URL = "https://app.bidxpro.online";
     private WebView webView;
+    private volatile boolean navigationMenuOpen = false;
+
+    private final class NativeUiBridge {
+        @JavascriptInterface
+        public void setMenuOpen(boolean open) {
+            navigationMenuOpen = open;
+            runOnUiThread(() -> {
+                if (swipeRefreshLayout != null) {
+                    swipeRefreshLayout.setEnabled(!open && isHomeScreen(webView == null ? null : webView.getUrl()));
+                    if (open) swipeRefreshLayout.setRefreshing(false);
+                }
+            });
+        }
+    }
     private SwipeRefreshLayout swipeRefreshLayout;
     private GoogleSignInBridge googleSignIn;
     private static final int UPDATE_REQUEST_CODE = 4205;
@@ -109,7 +124,7 @@ public class MainActivity extends Activity {
         swipeRefreshLayout.setOnChildScrollUpCallback((parent, child) ->
                 webView != null && webView.canScrollVertically(-1));
         swipeRefreshLayout.setOnRefreshListener(() -> {
-            if (isHomeScreen(webView.getUrl()) && !webView.canScrollVertically(-1)) {
+            if (!navigationMenuOpen && isHomeScreen(webView.getUrl()) && !webView.canScrollVertically(-1)) {
                 webView.reload();
             } else {
                 swipeRefreshLayout.setRefreshing(false);
@@ -117,6 +132,7 @@ public class MainActivity extends Activity {
         });
         swipeRefreshLayout.setEnabled(false);
 
+        webView.addJavascriptInterface(new NativeUiBridge(), "BidxNativeUI");
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
@@ -139,7 +155,7 @@ public class MainActivity extends Activity {
                 super.onPageStarted(view, url, favicon);
                 if (swipeRefreshLayout != null) {
                     swipeRefreshLayout.setRefreshing(false);
-                    swipeRefreshLayout.setEnabled(isHomeScreen(url));
+                    swipeRefreshLayout.setEnabled(!navigationMenuOpen && isHomeScreen(url));
                 }
             }
             @Override public void onPageFinished(WebView view, String url) {
