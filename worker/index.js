@@ -519,6 +519,71 @@ async function adminProfileChange(request,env){
   }catch(error){console.error("[prolink-admin] profile_change_review_failed",{name:error?.name||"Error"});return json({error:error?.message||"Profile change review failed."},502);}
 }
 
+
+async function workRequests(request,env){
+  const auth=await signedInProfileUser(request,env);
+  if(auth.error)return auth.error;
+  const userId=auth.user.id;
+  try{
+    if(request.method==="POST"){
+      const body=await request.json();
+      const professionalUserId=String(body.professionalUserId||"").trim();
+      const description=String(body.description||"").trim();
+      const location=String(body.location||"").trim();
+      const preferredDate=String(body.preferredDate||"").trim()||null;
+      if(!/^[0-9a-f-]{36}$/i.test(professionalUserId))return json({error:"Choose a valid professional."},400);
+      if(professionalUserId===userId)return json({error:"You cannot request work from your own professional profile."},400);
+      if(description.length<10||description.length>5000)return json({error:"Describe the job using between 10 and 5,000 characters."},400);
+      if(location.length<2||location.length>500)return json({error:"Enter a valid job location."},400);
+      if(preferredDate&&!/^\d{4}-\d{2}-\d{2}$/.test(preferredDate))return json({error:"Choose a valid preferred date."},400);
+      const professionals=await supabaseRest(auth.config,"/rest/v1/prolink_professional_profiles?select=user_id,professional_name,full_name,is_published&user_id=eq."+encodeURIComponent(professionalUserId)+"&is_published=eq.true&limit=1");
+      const professional=professionals?.[0];
+      if(!professional)return json({error:"This professional is no longer available. Refresh the profile and try again."},404);
+      const rows=await supabaseRest(auth.config,"/rest/v1/prolink_work_requests",{
+        method:"POST",
+        headers:{prefer:"return=representation"},
+        body:JSON.stringify({
+          requester_user_id:userId,
+          professional_user_id:professionalUserId,
+          professional_name:professional.professional_name||professional.full_name||"ProLink professional",
+          job_description:description,
+          preferred_date:preferredDate,
+          job_location:location,
+          status:"pending"
+        })
+      });
+      const saved=rows?.[0];
+      if(!saved)throw new Error("The request was not confirmed by the database.");
+      return json({success:true,request:{id:saved.id,status:saved.status,created_at:saved.created_at},message:"Your request has been sent directly to "+(saved.professional_name||"the professional")+". Admin has retained a private record."},201);
+    }
+    if(request.method==="GET"){
+      const rows=await supabaseRest(auth.config,
+        "/rest/v1/prolink_work_requests?select=id,requester_user_id,professional_user_id,professional_name,job_description,preferred_date,job_location,status,created_at,updated_at&or=(requester_user_id.eq."+encodeURIComponent(userId)+",professional_user_id.eq."+encodeURIComponent(userId)+")&order=created_at.desc&limit=100");
+      return json({requests:(rows||[]).map(row=>({...row,direction:row.professional_user_id===userId?"incoming":"outgoing"}))});
+    }
+    if(request.method==="PATCH"){
+      const body=await request.json();
+      const id=String(body.id||"").trim(),status=String(body.status||"").trim();
+      if(!/^[0-9a-f-]{36}$/i.test(id)||!["accepted","declined","completed","cancelled"].includes(status))return json({error:"Choose a valid request update."},400);
+      const rows=await supabaseRest(auth.config,"/rest/v1/prolink_work_requests?select=id,requester_user_id,professional_user_id,status&id=eq."+encodeURIComponent(id)+"&limit=1");
+      const item=rows?.[0];
+      if(!item)return json({error:"Work request not found."},404);
+      const professionalAction=["accepted","declined","completed"].includes(status);
+      if(professionalAction&&item.professional_user_id!==userId)return json({error:"Only the selected professional can update this request."},403);
+      if(status==="cancelled"&&item.requester_user_id!==userId)return json({error:"Only the customer who sent this request can cancel it."},403);
+      if(item.status!=="pending"&&!(item.status==="accepted"&&status==="completed"))return json({error:"This request can no longer be changed."},409);
+      const updated=await supabaseRest(auth.config,"/rest/v1/prolink_work_requests?id=eq."+encodeURIComponent(id),{
+        method:"PATCH",headers:{prefer:"return=representation"},body:JSON.stringify({status,updated_at:new Date().toISOString()})
+      });
+      return json({success:true,request:updated?.[0]||null,message:"Work request updated."});
+    }
+    return json({error:"Method not allowed."},405);
+  }catch(error){
+    console.error("[prolink-work-requests] operation_failed",{method:request.method,name:error?.name||"Error",message:String(error?.message||"").slice(0,180)});
+    return json({error:error?.message||"Work request could not be processed. Please try again."},502);
+  }
+}
+
 async function adminDashboard(request,env) {
   const auth=await requireProlinkAdmin(request,env);if(auth.error)return auth.error;
   const {config}=auth;
@@ -536,7 +601,8 @@ async function adminDashboard(request,env) {
   const [profilesResult,reviewsResult,profileChangeRequestsResult]=await Promise.all([
     readRows("professional_profiles","/rest/v1/prolink_professional_profiles?select=*&order=approved_at.desc&limit=5000"),
     readRows("document_reviews","/rest/v1/prolink_review_records?select=*&order=submitted_at.desc&limit=5000"),
-    readRows("profile_change_requests","/rest/v1/prolink_profile_change_requests?select=*&order=requested_at.desc&limit=1000")
+    readRows("profile_change_requests","/rest/v1/prolink_profile_change_requests?select=*&order=requested_at.desc&limit=1000"),
+    readRows("work_requests","/rest/v1/prolink_work_requests?select=*&order=created_at.desc&limit=5000")
   ]);
   let users=[],usersAvailable=true;
   try{
@@ -554,7 +620,7 @@ async function adminDashboard(request,env) {
   const todayFormatter=new Intl.DateTimeFormat("en-CA",{timeZone:"Africa/Lagos",year:"numeric",month:"2-digit",day:"2-digit"});
   const today=todayFormatter.format(new Date());
   const newUsersToday=users.filter(user=>user.created_at&&todayFormatter.format(new Date(user.created_at))===today).length;
-  const profiles=profilesResult||[],reviews=reviewsResult||[],profileChangeRequests=profileChangeRequestsResult||[];
+  const profiles=profilesResult||[],reviews=reviewsResult||[],profileChangeRequests=profileChangeRequestsResult||[],workRequests=workRequestsResult||[];
   const counts={
     totalUsers:usersAvailable?users.length:null,
     newUsersToday:usersAvailable?newUsersToday:null,
@@ -562,9 +628,10 @@ async function adminDashboard(request,env) {
     pendingDocuments:reviewsResult?reviews.filter(r=>r.status==="pending"&&r.document_path).length:null,
     pendingReviews:reviewsResult?reviews.filter(r=>r.status==="pending").length:null,
     approvedDocuments:reviewsResult?reviews.filter(r=>r.status==="approved").length:null,
-    rejectedDocuments:reviewsResult?reviews.filter(r=>r.status==="rejected").length:null
+    rejectedDocuments:reviewsResult?reviews.filter(r=>r.status==="rejected").length:null,
+    pendingWorkRequests:workRequestsResult?workRequests.filter(r=>r.status==="pending").length:null
   };
-  return json({counts,users,profiles,reviews,profileChangeRequests,warnings,adminEmail:auth.user.email});
+  return json({counts,users,profiles,reviews,profileChangeRequests,workRequests,warnings,adminEmail:auth.user.email});
 }
 
 async function adminReview(request,env) {
@@ -1557,6 +1624,7 @@ export default {
     if (url.pathname === "/api/location/reverse" && request.method === "GET") return reverseGeocode(request, env);
     if (url.pathname === "/api/profile/change-status" && request.method === "GET") return profileChangeStatus(request, env);
     if (url.pathname === "/api/profile/change-request" && request.method === "POST") return profileChangeRequest(request, env);
+    if (url.pathname === "/api/work-requests" && ["GET","POST","PATCH"].includes(request.method)) return workRequests(request, env);
     if (url.pathname === "/api/admin/profile-change" && request.method === "POST") return adminProfileChange(request, env);
     if (url.pathname === "/api/admin/dashboard" && request.method === "GET") return adminDashboard(request, env);
     if (url.pathname === "/api/admin/broadcasts" && (request.method === "GET" || request.method === "POST")) return adminBroadcasts(request, env);
