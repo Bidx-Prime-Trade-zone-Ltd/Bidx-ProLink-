@@ -5,13 +5,13 @@ import SupportInbox from './SupportInbox.jsx';
 import BroadcastManager from './BroadcastManager.jsx';
 
 const ADMIN_EMAIL='ojepaamedu@gmail.com';
-const tabs=['Overview','Users','Professional profiles','Document review','Profile Change Requests','Review history','Support Inbox','Email broadcasts'];
+const tabs=['Overview','Users','Professional profiles','Work Requests','Document review','Profile Change Requests','Review history','Support Inbox','Email broadcasts'];
 const fmt=value=>value?new Date(value).toLocaleString():'—';
 const label=value=>String(value||'').replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase());
 
 export default function AdminPortal(){
  const [user,setUser]=useState(null),[ready,setReady]=useState(false),[tab,setTab]=useState('Overview');
- const [dashboard,setDashboard]=useState({counts:{},users:[],profiles:[],reviews:[],profileChangeRequests:[],warnings:[]});
+ const [dashboard,setDashboard]=useState({counts:{},users:[],profiles:[],reviews:[],profileChangeRequests:[],workRequests:[],warnings:[]});
  const [query,setQuery]=useState(''),[selected,setSelected]=useState(null),[reason,setReason]=useState('');
  const [notice,setNotice]=useState(''),[busy,setBusy]=useState(false),[documentUrl,setDocumentUrl]=useState('');
  const [documentLoading,setDocumentLoading]=useState(false);
@@ -26,7 +26,7 @@ export default function AdminPortal(){
    const response=await fetch('/api/admin/dashboard',{headers:{authorization:'Bearer '+session.access_token}});
    const payload=await response.json();
    if(!response.ok)throw new Error(payload.error||'Dashboard could not be loaded.');
-   setDashboard({counts:payload.counts||{},users:payload.users||[],profiles:payload.profiles||[],reviews:payload.reviews||[],profileChangeRequests:payload.profileChangeRequests||[],warnings:payload.warnings||[]});
+   setDashboard({counts:payload.counts||{},users:payload.users||[],profiles:payload.profiles||[],reviews:payload.reviews||[],profileChangeRequests:payload.profileChangeRequests||[],workRequests:payload.workRequests||[],warnings:payload.warnings||[]});
   }catch(error){setNotice(error.message||'Dashboard could not be loaded.');}
   finally{setBusy(false);}
  };
@@ -61,6 +61,7 @@ export default function AdminPortal(){
  const profiles=useMemo(()=>dashboard.profiles.filter(p=>(p.full_name+' '+p.professional_name+' '+p.country_name+' '+p.region+' '+p.city+' '+p.user_id).toLowerCase().includes(query.toLowerCase())),[dashboard.profiles,query]);
  const reviews=useMemo(()=>dashboard.reviews.filter(r=>(r.section+' '+r.status+' '+r.user_id+' '+(r.submitted_data?.document_name||'')).toLowerCase().includes(query.toLowerCase())),[dashboard.reviews,query]);
  const pending=reviews.filter(r=>r.status==='pending');
+ const workRequests=useMemo(()=>dashboard.workRequests.filter(r=>(r.professional_name+' '+r.job_description+' '+r.job_location+' '+r.status+' '+r.requester_user_id+' '+r.professional_user_id).toLowerCase().includes(query.toLowerCase())),[dashboard.workRequests,query]);
 
  const reviewProfileChange=async(row,action)=>{
   if(action==='reject'&&!reason.trim()){setNotice('Enter a reason before rejecting this request.');return;}
@@ -115,6 +116,7 @@ export default function AdminPortal(){
   {tab==='Professional profiles'&&<section className="admin-panel"><div className="admin-panel-heading"><div><h2>Professional profiles</h2><p>View-only professional information.</p></div><label className="admin-search"><Search size={15}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search name, country or area"/></label></div>
    <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Professional</th><th>Trade</th><th>Country</th><th>Region / State</th><th>District</th><th>City</th><th>Published</th></tr></thead><tbody>{profiles.map(p=><tr key={p.user_id}><td>{p.professional_name||p.full_name||'—'}<small className="admin-cell-sub">{p.user_id}</small></td><td>{p.subcategory||p.category||'—'}</td><td>{p.country_name||'—'}</td><td>{p.region||'—'}</td><td>{p.district||'—'}</td><td>{p.city||'—'}</td><td>{p.is_published?'Yes':'No'}</td></tr>)}</tbody></table></div>
   </section>}
+  {tab==='Work Requests'&&<section className="admin-panel"><div className="admin-panel-heading"><div><h2>Direct work-request records</h2><p>Administrative copies of customer requests. Each request is addressed to one selected professional only; this Admin record is not broadcast.</p></div><label className="admin-search"><Search size={15}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search customer, professional or job"/></label></div><div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Submitted</th><th>Professional</th><th>Professional account ID</th><th>Customer account ID</th><th>Job description</th><th>Preferred date</th><th>Job location</th><th>Status</th></tr></thead><tbody>{workRequests.map(r=><tr key={r.id}><td>{fmt(r.created_at)}</td><td>{r.professional_name||'—'}</td><td className="admin-id">{r.professional_user_id}</td><td className="admin-id">{r.requester_user_id}</td><td style={{whiteSpace:'pre-wrap',minWidth:240}}>{r.job_description}</td><td>{r.preferred_date||'Flexible'}</td><td>{r.job_location}</td><td>{label(r.status)}</td></tr>)}</tbody></table></div>{!workRequests.length&&<p className="admin-empty">No work requests have been submitted.</p>}</section>}
   {tab==='Document review'&&<section className="admin-panel"><div className="admin-panel-heading"><div><h2>Document approval queue</h2><p>Inspect the submitted file, then approve or reject it. Submitted personal details are not editable.</p></div><label className="admin-search"><Search size={15}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search applicant or document"/></label></div>
    <div className="admin-review-layout"><div className="admin-review-list">{reviews.map(r=><button key={r.id} className={'admin-row '+(selected?.id===r.id?'chosen':'')} onClick={()=>setSelected(r)}><span><b>{label(r.submitted_data?.document_type||r.section)}</b><small>{r.submitted_data?.document_name||r.user_id}</small></span><em>{label(r.status)}</em></button>)}</div>
     {selected?<article className="admin-detail"><h3>Document review</h3><dl className="admin-readonly"><div><dt>Applicant ID</dt><dd>{selected.user_id}</dd></div><div><dt>Document type</dt><dd>{label(selected.submitted_data?.document_type||selected.section)}</dd></div><div><dt>File name</dt><dd>{selected.submitted_data?.document_name||'—'}</dd></div><div><dt>Submitted</dt><dd>{fmt(selected.submitted_at)}</dd></div><div><dt>Status</dt><dd>{label(selected.status)}</dd></div></dl>
