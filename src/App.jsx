@@ -418,6 +418,7 @@ function App() {
   const [workRequestSaving,setWorkRequestSaving]=useState(false);
   const [workRequests,setWorkRequests]=useState([]);
   const [workRequestsLoading,setWorkRequestsLoading]=useState(false);
+  const [unreadNotificationCount,setUnreadNotificationCount]=useState(0);
 
   // Pull-to-refresh is allowed only on the unobstructed Explore landing page.
   // Category selection and professional registration are overlays on the
@@ -662,6 +663,26 @@ function App() {
     catch(error){notify(error.message||'Work request could not be updated.');}
   };
   useEffect(()=>{if(tab==='Messages'||tab==='Requests')refreshWorkRequests();},[tab,session?.access_token]);
+  const refreshUnreadNotifications=async()=>{
+    if(!session?.access_token){setUnreadNotificationCount(0);return;}
+    try{
+      const response=await fetch('/api/notifications/unread',{headers:{authorization:'Bearer '+session.access_token}});
+      if(!response.ok)return;
+      const data=await response.json();
+      setUnreadNotificationCount(Number(data.total)||0);
+    }catch{}
+  };
+  useEffect(()=>{
+    if(!session?.access_token){setUnreadNotificationCount(0);return;}
+    refreshUnreadNotifications();
+    const timer=setInterval(refreshUnreadNotifications,7000);
+    return()=>clearInterval(timer);
+  },[session?.access_token]);
+  useEffect(()=>{
+    if(tab!=='Messages'||!session?.access_token)return;
+    fetch('/api/work-requests/read',{method:'POST',headers:{authorization:'Bearer '+session.access_token}})
+      .then(()=>refreshUnreadNotifications()).catch(()=>{});
+  },[tab,session?.access_token]);
   const startJoin = (category = '', service = '') => { pushView({overlay:'join',menu:false,selected:null});setJoinData(p=>({...p,category:category||p.category,subcategory:service||p.subcategory}));setJoinStep(1);setShowCategories(false);setShowJoin(true); };
   const openCategoryBrowser = (group = '') => { pushView({overlay:'categories',menu:false,selected:null});setCategoryGroup(group);setCategorySearch('');setMenuOpen(false);setShowCategories(true); };
 
@@ -762,7 +783,7 @@ function App() {
 
     <footer className="footer"><div className="content-wrap footer-inner"><div><Brand/><p className="footer-copy">Connecting skilled professionals with people who need quality work.</p></div><div className="footer-links"><div><b>Explore</b><button onClick={()=>navigateTab('Explore')}>Find professionals</button><button onClick={()=>navigateTab('How it works')}>How it works</button></div><div><b>Professionals</b><button onClick={()=>openCategoryBrowser()}>Join ProLink</button><button onClick={()=>openAuth()}>Sign in</button></div><div><b>Contact</b><a href="mailto:Support@bidxpro.online">Support@bidxpro.online</a><a href="mailto:Info@bidxpro.online">Info@bidxpro.online</a></div></div><div className="footer-bottom"><span>© 2026 Bidx ProLink</span><span>A product of BIDX PRIME TRADE ZONE LTD</span><span>Payments are arranged directly between customers and professionals.</span></div></div></footer>
 
-    <nav className="mobile-bottom-nav prolink-bottom-nav"><button className={tab==='Explore'?'selected':''} onClick={()=>{navigateTab('Explore');setSelected(null);}}><Home size={21}/><span>Home</span></button><button className={tab==='Messages'?'selected':''} onClick={()=>navigateTab('Messages')}><MessageCircle size={21}/><span>Messages</span></button><button className={tab==='Profile'?'selected':''} onClick={()=>navigateTab('Profile')}><UserRound size={21}/><span>Profile</span></button><button className={tab==='Plan'?'selected':''} onClick={()=>navigateTab('Plan')}><BriefcaseBusiness size={21}/><span>Plan</span></button></nav>
+    <nav className="mobile-bottom-nav prolink-bottom-nav"><button className={tab==='Explore'?'selected':''} onClick={()=>{navigateTab('Explore');setSelected(null);}}><Home size={21}/><span>Home</span></button><button className={tab==='Messages'?'selected':''} onClick={()=>navigateTab('Messages')}><span className="prolink-message-nav-icon"><MessageCircle size={21}/>{unreadNotificationCount>0&&<span className="prolink-unread-badge">{unreadNotificationCount>99?"99+":unreadNotificationCount}</span>}</span><span>Messages</span></button><button className={tab==='Profile'?'selected':''} onClick={()=>navigateTab('Profile')}><UserRound size={21}/><span>Profile</span></button><button className={tab==='Plan'?'selected':''} onClick={()=>navigateTab('Plan')}><BriefcaseBusiness size={21}/><span>Plan</span></button></nav>
 
 
     {showAuth&&<AuthModal onClose={back} />}
