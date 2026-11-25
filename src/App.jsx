@@ -318,12 +318,6 @@ function App() {
   const [tab, setTab] = useState('Explore');
   const activeTabRef=useRef(tab);
   activeTabRef.current=tab;
-  // Keep the Android native refresh gesture synchronized with the actual
-  // in-app tab. ProLink uses SPA navigation, so the URL alone cannot identify
-  // whether the user is still on the Explore home screen.
-  useEffect(()=>{
-    try { window.BidxNativeUI?.setHomeScreen?.(tab==='Explore'); } catch {}
-  },[tab]);
   const [query, setQuery] = useState('');
   const [location, setLocation] = useState('');
   const [locationBusy, setLocationBusy] = useState(false);
@@ -418,6 +412,15 @@ function App() {
   const [categoryGroup, setCategoryGroup] = useState('');
   const [showRequest, setShowRequest] = useState(false);
   const [requestSent, setRequestSent] = useState(false);
+
+  // Pull-to-refresh is allowed only on the unobstructed Explore landing page.
+  // Category selection and professional registration are overlays on the
+  // Explore tab, so tab-only detection incorrectly left refresh enabled there.
+  const isExploreHome = tab === 'Explore' && !menuOpen && !showCategories &&
+    !showJoin && !showAuth && !showRequest && !selected;
+  useEffect(() => {
+    try { window.BidxNativeUI?.setHomeScreen?.(isExploreHome); } catch {}
+  }, [isExploreHome]);
   const [toast, setToast] = useState('');
   const [mobileMenu, setMobileMenu] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -473,9 +476,9 @@ function App() {
   },[]);
   const navigateTab = (next) => {
     if(next===tab&&!menuOpen&&!showCategories&&!showJoin&&!showAuth&&!showRequest&&!selected)return;
-    // Disable refresh immediately before switching away from Explore; the
-    // effect below also covers browser back/forward and restored navigation.
-    try { window.BidxNativeUI?.setHomeScreen?.(next==='Explore'); } catch {}
+    // Disable refresh during every navigation transition. The home-screen
+    // effect re-enables it only after all overlays and menus have closed.
+    try { window.BidxNativeUI?.setHomeScreen?.(false); } catch {}
     pushView({tab:next,menu:false,overlay:null,selected:null});
     setTab(next);setSelected(null);setMenuOpen(false);setShowCategories(false);setShowJoin(false);setShowAuth(false);setShowRequest(false);
   };
@@ -511,6 +514,11 @@ function App() {
       setShowRequest(state.overlay==='request');
       setSelected(state.selected||null);
       setNavStack(prev=>prev.filter(item=>(item.index??0)<=(state.index??0)));
+      try {
+        const isHome = (state.tab||'Explore')==='Explore' && !state.menu &&
+          !state.overlay && !state.selected;
+        window.BidxNativeUI?.setHomeScreen?.(isHome);
+      } catch {}
       window.requestAnimationFrame(()=>window.scrollTo(0,Number(state.scrollY)||0));
     };
     window.addEventListener('popstate',onPop);
