@@ -115,6 +115,7 @@ function App() {
     if(!galleryViewerOpenRef.current){
       const url=window.location.pathname+window.location.search+'#portfolio-gallery';
       window.history.pushState({...window.history.state,prolinkGallery:true},'',url);
+      try { window.BidxNativeUI?.setCanGoBack?.(true); } catch {}
     }
     setGalleryViewerOpen(true);
   };
@@ -473,6 +474,7 @@ function App() {
       ...view
     };
     window.history.pushState(next,'',view.overlay?'#'+view.overlay:view.menu?'#menu':'#'+encodeURIComponent((view.tab||tab).toLowerCase().replaceAll(' ','-')));
+    try { window.BidxNativeUI?.setCanGoBack?.(true); } catch {}
     setNavStack(prev=>[...prev,next]);
   };
   useEffect(()=>{
@@ -480,6 +482,19 @@ function App() {
       const initial={prolink:true,index:0,tab:'Explore',menu:false,overlay:null,selected:null};
       window.history.replaceState(initial,'',window.location.pathname+window.location.search+window.location.hash);
     }
+    try {
+      const state=window.history.state;
+      window.BidxNativeUI?.setCanGoBack?.(Boolean(state?.prolinkGallery || (state?.prolink && Number.isInteger(state.index) && state.index>0)));
+    } catch {}
+    window.BidxHandleBack=()=>{
+      const state=window.history.state;
+      if(state?.prolinkGallery || (state?.prolink && Number.isInteger(state.index) && state.index>0)){
+        window.history.back();
+        return true;
+      }
+      return false;
+    };
+    return()=>{try{delete window.BidxHandleBack;}catch{}};
   },[]);
   const navigateTab = (next) => {
     if(next===tab&&!menuOpen&&!showCategories&&!showJoin&&!showAuth&&!showRequest&&!selected)return;
@@ -510,6 +525,9 @@ function App() {
     // read the ?code= parameter and exchange it for a session before URL cleanup.
     const onPop=event=>{
       const state=event.state;
+      try {
+        window.BidxNativeUI?.setCanGoBack?.(Boolean(state?.prolinkGallery || (state?.prolink && Number.isInteger(state.index) && state.index>0)));
+      } catch {}
       // Ignore non-ProLink history entries: resetting to Explore here caused
       // unexpected jumps when the browser returned across an app boundary.
       if(!state?.prolink)return;
