@@ -11,11 +11,11 @@ on:
       version_code:
         description: "Google Play version code (must be higher than the last uploaded version)"
         required: true
-        default: "32"
+        default: "33"
       version_name:
         description: "Android version name"
         required: true
-        default: "6.3"
+        default: "6.4"
 
 permissions:
   contents: read
@@ -103,7 +103,7 @@ jobs:
           ./gradlew --version 2>/dev/null || true
           for attempt in 1 2 3; do
             echo "Gradle build attempt $attempt of 3"
-            if gradle --no-daemon --max-workers=2 -p android :app:bundleRelease -PVERSION_CODE="${{ inputs.version_code || '32' }}" -PVERSION_NAME="${{ inputs.version_name || '6.3' }}" -PGOOGLE_WEB_CLIENT_ID="$GOOGLE_WEB_CLIENT_ID" --stacktrace; then
+            if gradle --no-daemon --max-workers=2 -p android :app:bundleRelease -PVERSION_CODE="${{ inputs.version_code || '33' }}" -PVERSION_NAME="${{ inputs.version_name || '6.4' }}" -PGOOGLE_WEB_CLIENT_ID="$GOOGLE_WEB_CLIENT_ID" --stacktrace; then
               exit 0
             fi
             if [ "$attempt" -lt 3 ]; then

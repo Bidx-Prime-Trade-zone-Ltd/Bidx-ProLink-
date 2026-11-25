@@ -40,11 +40,13 @@ public class MainActivity extends Activity {
     private WebView webView;
     private volatile boolean navigationMenuOpen = false;
     private volatile boolean supportChatOpen = false;
+    // React reports the active SPA tab. Do not infer it from WebView URL:
+    // internal ProLink pages share the same origin and often the same path.
+    private volatile boolean homeScreenActive = true;
 
     private void updatePullToRefreshState() {
         if (swipeRefreshLayout == null) return;
-        boolean enabled = !navigationMenuOpen && !supportChatOpen
-                && isHomeScreen(webView == null ? null : webView.getUrl());
+        boolean enabled = homeScreenActive && !navigationMenuOpen && !supportChatOpen;
         swipeRefreshLayout.setEnabled(enabled);
         if (!enabled) swipeRefreshLayout.setRefreshing(false);
     }
@@ -59,6 +61,12 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void setSupportChatOpen(boolean open) {
             supportChatOpen = open;
+            runOnUiThread(() -> updatePullToRefreshState());
+        }
+
+        @JavascriptInterface
+        public void setHomeScreen(boolean active) {
+            homeScreenActive = active;
             runOnUiThread(() -> updatePullToRefreshState());
         }
     }
@@ -88,14 +96,6 @@ public class MainActivity extends Activity {
         return uri != null
             && "https".equalsIgnoreCase(uri.getScheme())
             && "app.bidxpro.online".equalsIgnoreCase(uri.getHost());
-    }
-
-    // Pull-to-refresh is deliberately limited to the ProLink home page only.
-    private boolean isHomeScreen(String url) {
-        if (url == null) return false;
-        Uri uri = Uri.parse(url);
-        String path = uri.getPath();
-        return isProLinkAppLink(uri) && (path == null || path.isEmpty() || "/".equals(path));
     }
 
     private boolean isOAuthCallback(Uri uri) {
@@ -145,7 +145,7 @@ public class MainActivity extends Activity {
         swipeRefreshLayout.setOnChildScrollUpCallback((parent, child) ->
                 webView != null && webView.canScrollVertically(-1));
         swipeRefreshLayout.setOnRefreshListener(() -> {
-            if (!navigationMenuOpen && !supportChatOpen && isHomeScreen(webView.getUrl()) && !webView.canScrollVertically(-1)) {
+            if (homeScreenActive && !navigationMenuOpen && !supportChatOpen && !webView.canScrollVertically(-1)) {
                 webView.reload();
             } else {
                 swipeRefreshLayout.setRefreshing(false);

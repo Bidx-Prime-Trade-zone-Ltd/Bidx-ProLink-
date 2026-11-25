@@ -318,6 +318,12 @@ function App() {
   const [tab, setTab] = useState('Explore');
   const activeTabRef=useRef(tab);
   activeTabRef.current=tab;
+  // Keep the Android native refresh gesture synchronized with the actual
+  // in-app tab. ProLink uses SPA navigation, so the URL alone cannot identify
+  // whether the user is still on the Explore home screen.
+  useEffect(()=>{
+    try { window.BidxNativeUI?.setHomeScreen?.(tab==='Explore'); } catch {}
+  },[tab]);
   const [query, setQuery] = useState('');
   const [location, setLocation] = useState('');
   const [locationBusy, setLocationBusy] = useState(false);
@@ -467,6 +473,9 @@ function App() {
   },[]);
   const navigateTab = (next) => {
     if(next===tab&&!menuOpen&&!showCategories&&!showJoin&&!showAuth&&!showRequest&&!selected)return;
+    // Disable refresh immediately before switching away from Explore; the
+    // effect below also covers browser back/forward and restored navigation.
+    try { window.BidxNativeUI?.setHomeScreen?.(next==='Explore'); } catch {}
     pushView({tab:next,menu:false,overlay:null,selected:null});
     setTab(next);setSelected(null);setMenuOpen(false);setShowCategories(false);setShowJoin(false);setShowAuth(false);setShowRequest(false);
   };
