@@ -57,3 +57,5 @@ jobs:
           path: dist/
           if-no-files-found: error
           retention-days: 7
+
+# Deployment retry trigger: re-run the production workflow after repository secrets were verified.
