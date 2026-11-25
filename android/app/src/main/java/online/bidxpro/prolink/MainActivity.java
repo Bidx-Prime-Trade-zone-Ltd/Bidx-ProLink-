@@ -302,7 +302,7 @@ public class MainActivity extends Activity {
             // If Play interrupted an immediate update (for example, the app was
             // backgrounded), resume that same installation flow automatically.
             if (info.updateAvailability() == UpdateAvailability.DEVELOPER_TRIGGERED_UPDATE_IN_PROGRESS) {
-                startImmediateUpdate(info);
+                startPlayUpdate(info);
                 return;
             }
 
@@ -313,7 +313,8 @@ public class MainActivity extends Activity {
             }
 
             if (info.updateAvailability() == UpdateAvailability.UPDATE_AVAILABLE
-                    && info.isUpdateTypeAllowed(AppUpdateType.IMMEDIATE)) {
+                    && (info.isUpdateTypeAllowed(AppUpdateType.IMMEDIATE)
+                        || info.isUpdateTypeAllowed(AppUpdateType.FLEXIBLE))) {
                 int availableVersion = info.availableVersionCode();
                 int skippedVersion = getPreferences(MODE_PRIVATE)
                         .getInt("skipped_play_update_version", -1);
@@ -323,12 +324,14 @@ public class MainActivity extends Activity {
         });
     }
 
-    private void startImmediateUpdate(AppUpdateInfo info) {
+    private void startPlayUpdate(AppUpdateInfo info) {
         try {
+            int updateType = info.isUpdateTypeAllowed(AppUpdateType.IMMEDIATE)
+                    ? AppUpdateType.IMMEDIATE : AppUpdateType.FLEXIBLE;
             appUpdateManager.startUpdateFlowForResult(
-                    info, AppUpdateType.IMMEDIATE, this, UPDATE_REQUEST_CODE);
+                    info, updateType, this, UPDATE_REQUEST_CODE);
         } catch (android.content.IntentSender.SendIntentException error) {
-            Log.e("ProLinkUpdate", "Could not launch the Google Play immediate update flow", error);
+            Log.e("ProLinkUpdate", "Could not launch the Google Play update flow", error);
             Toast.makeText(this, "Unable to start the update. Please try again later.", Toast.LENGTH_LONG).show();
         }
     }
@@ -338,7 +341,7 @@ public class MainActivity extends Activity {
         updateDialog = new AlertDialog.Builder(this)
                 .setTitle("A new ProLink update is available")
                 .setMessage("Version " + availableVersion + " is ready to install. Install it now or skip this version?")
-                .setPositiveButton("Install", (dialog, which) -> startImmediateUpdate(info))
+                .setPositiveButton("Install", (dialog, which) -> startPlayUpdate(info))
                 .setNegativeButton("Skip", (dialog, which) ->
                         getPreferences(MODE_PRIVATE).edit()
                                 .putInt("skipped_play_update_version", availableVersion).apply())
