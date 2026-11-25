@@ -1604,4 +1604,4 @@ export default {
   }
 };
 
-export { supportGreetingReply, supportGreetingPrefix, supportMessageIntent, supportAttachmentCategory, supportAccountLookupChoice, supportAiExtractText, adminDashboard, adminBroadcasts, broadcastEmailHtml };
+export { supportGreetingReply, supportGreetingPrefix, supportMessageIntent, supportAttachmentCorrectionReply, supportAttachmentCategory, supportAccountLookupChoice, supportAiExtractText, adminDashboard, adminBroadcasts, broadcastEmailHtml };
