@@ -43,6 +43,10 @@ public class MainActivity extends Activity {
     // React reports the active SPA tab. Do not infer it from WebView URL:
     // internal ProLink pages share the same origin and often the same path.
     private volatile boolean homeScreenActive = true;
+    // React owns in-app navigation. WebView.canGoBack() alone is not reliable
+    // for SPA pushState entries, so React keeps this native flag in sync.
+    private volatile boolean spaCanGoBack = false;
+    private android.window.OnBackInvokedCallback systemBackCallback;
 
     private void updatePullToRefreshState() {
         if (swipeRefreshLayout == null) return;
@@ -68,6 +72,11 @@ public class MainActivity extends Activity {
         public void setHomeScreen(boolean active) {
             homeScreenActive = active;
             runOnUiThread(() -> updatePullToRefreshState());
+        }
+
+        @JavascriptInterface
+        public void setCanGoBack(boolean canGoBack) {
+            spaCanGoBack = canGoBack;
         }
     }
     private SwipeRefreshLayout swipeRefreshLayout;
@@ -137,6 +146,12 @@ public class MainActivity extends Activity {
                 SwipeRefreshLayout.LayoutParams.MATCH_PARENT,
                 SwipeRefreshLayout.LayoutParams.MATCH_PARENT));
         setContentView(swipeRefreshLayout);
+        if (android.os.Build.VERSION.SDK_INT >= 33) {
+            systemBackCallback = this::handleBackNavigation;
+            getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
+                    android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT,
+                    systemBackCallback);
+        }
         appUpdateManager = AppUpdateManagerFactory.create(this);
         appUpdateManager.registerListener(updateListener);
         // Pull-to-refresh is enabled only on the home screen and only when the
@@ -416,12 +431,34 @@ public class MainActivity extends Activity {
         if (webView != null) webView.saveState(outState);
     }
 
+    private void handleBackNavigation() {
+        if (webView == null) {
+            finish();
+            return;
+        }
+        if (spaCanGoBack) {
+            // Let React's popstate handler restore the previous tab, drawer,
+            // profile, or overlay one entry at a time.
+            webView.evaluateJavascript(
+                    "(function(){if(typeof window.BidxHandleBack==='function' && window.BidxHandleBack())return true;" +
+                    "if(window.history.length>1){window.history.back();return true;}return false;})()",
+                    null);
+        } else if (webView.canGoBack()) {
+            webView.goBack();
+        } else {
+            finish();
+        }
+    }
+
     @Override public void onBackPressed() {
-        if (webView != null && webView.canGoBack()) webView.goBack();
-        else super.onBackPressed();
+        handleBackNavigation();
     }
 
     @Override protected void onDestroy() {
+        if (android.os.Build.VERSION.SDK_INT >= 33 && systemBackCallback != null) {
+            getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback(systemBackCallback);
+            systemBackCallback = null;
+        }
         if (appUpdateManager != null) appUpdateManager.unregisterListener(updateListener);
         if (updateDialog != null && updateDialog.isShowing()) updateDialog.dismiss();
         if (installDialog != null && installDialog.isShowing()) installDialog.dismiss();
