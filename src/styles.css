@@ -610,3 +610,7 @@ body.prolink-menu-locked{position:fixed!important;overflow:hidden!important;widt
 /* Keep the navigation drawer as the active touch/scroll surface above the home page. */
 .menu-scrim{overscroll-behavior:contain}
 .app-menu.prolink-drawer{overscroll-behavior:contain;touch-action:pan-y;-webkit-overflow-scrolling:touch}
+
+/* Unread count badge on the existing Messages bottom-navigation icon only. */
+.prolink-message-nav-icon{position:relative;display:inline-flex;align-items:center;justify-content:center;line-height:1}
+.prolink-unread-badge{position:absolute;top:-8px;right:-12px;min-width:18px;height:18px;padding:0 5px;display:flex;align-items:center;justify-content:center;border:2px solid #fff;border-radius:999px;background:#e53935;color:#fff;font-size:10px;font-weight:850;line-height:1;box-shadow:0 1px 4px rgba(0,0,0,.18);z-index:2}
