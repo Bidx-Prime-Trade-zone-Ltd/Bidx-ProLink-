@@ -119,11 +119,21 @@ export const PROFESSION_GROUPS = [
       "Auto AC technician",
       "Car detailer",
       "Car washer",
-      "Vehicle upholsterer",
+      "Vehicle upholsterer"
+    ]
+  },
+  {
+    "name": "Driving & Delivery",
+    "services": [
       "Driver",
+      "Private driver",
+      "Corporate driver",
+      "Chauffeur",
       "Truck driver",
-      "Logistics operator",
+      "Heavy-duty driver",
+      "Delivery driver",
       "Dispatch rider",
+      "Logistics operator",
       "Fleet manager"
     ]
   },
