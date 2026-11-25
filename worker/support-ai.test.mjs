@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { supportGreetingReply, supportGreetingPrefix, supportMessageIntent, supportAttachmentCategory, supportAccountLookupChoice, supportAiExtractText } from "./index.js";
+import { supportGreetingReply, supportGreetingPrefix, supportMessageIntent, supportAttachmentCorrectionReply, supportAttachmentCategory, supportAccountLookupChoice, supportAiExtractText } from "./index.js";
 
 test("greeting replies match the user's exact greeting and include their first name", () => {
   assert.equal(supportGreetingReply("Good morning", "Ada"), "Good morning, Ada. How may I help you today?");
