@@ -598,7 +598,7 @@ async function adminDashboard(request,env) {
       return null;
     }
   };
-  const [profilesResult,reviewsResult,profileChangeRequestsResult]=await Promise.all([
+  const [profilesResult,reviewsResult,profileChangeRequestsResult,workRequestsResult]=await Promise.all([
     readRows("professional_profiles","/rest/v1/prolink_professional_profiles?select=*&order=approved_at.desc&limit=5000"),
     readRows("document_reviews","/rest/v1/prolink_review_records?select=*&order=submitted_at.desc&limit=5000"),
     readRows("profile_change_requests","/rest/v1/prolink_profile_change_requests?select=*&order=requested_at.desc&limit=1000"),
