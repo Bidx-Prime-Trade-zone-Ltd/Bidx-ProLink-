@@ -412,6 +412,12 @@ function App() {
   const [categoryGroup, setCategoryGroup] = useState('');
   const [showRequest, setShowRequest] = useState(false);
   const [requestSent, setRequestSent] = useState(false);
+  const [workRequestDescription,setWorkRequestDescription]=useState('');
+  const [workRequestDate,setWorkRequestDate]=useState('');
+  const [workRequestLocation,setWorkRequestLocation]=useState('');
+  const [workRequestSaving,setWorkRequestSaving]=useState(false);
+  const [workRequests,setWorkRequests]=useState([]);
+  const [workRequestsLoading,setWorkRequestsLoading]=useState(false);
 
   // Pull-to-refresh is allowed only on the unobstructed Explore landing page.
   // Category selection and professional registration are overlays on the
@@ -643,7 +649,19 @@ function App() {
   };
   const signOut = async () => { const {error}=await supabase.auth.signOut(); if(error) notify(error.message); };
   const openProfessional = (person) => { pushView({selected:person,overlay:null,menu:false});setSelected(person);setMenuOpen(false); };
-  const startRequest = (person) => { pushView({overlay:'request',selected:person});setSelected(person);setRequestSent(false);setShowRequest(true); };
+  const startRequest = (person) => { pushView({overlay:'request',selected:person});setSelected(person);setRequestSent(false);setWorkRequestDescription('');setWorkRequestDate('');setWorkRequestLocation('');setShowRequest(true); };
+  const refreshWorkRequests = async () => {
+    if(!session?.access_token)return;
+    setWorkRequestsLoading(true);
+    try{const response=await fetch('/api/work-requests',{headers:{authorization:'Bearer '+session.access_token}});const data=await response.json();if(!response.ok)throw new Error(data.error||'Work requests could not be loaded.');setWorkRequests(data.requests||[]);}
+    catch(error){notify(error.message||'Work requests could not be loaded.');}
+    finally{setWorkRequestsLoading(false);}
+  };
+  const updateWorkRequest = async (id,status) => {
+    try{const response=await fetch('/api/work-requests',{method:'PATCH',headers:{'content-type':'application/json',authorization:'Bearer '+session.access_token},body:JSON.stringify({id,status})});const data=await response.json();if(!response.ok)throw new Error(data.error||'Work request could not be updated.');await refreshWorkRequests();notify(data.message||'Work request updated.');}
+    catch(error){notify(error.message||'Work request could not be updated.');}
+  };
+  useEffect(()=>{if(tab==='Messages'||tab==='Requests')refreshWorkRequests();},[tab,session?.access_token]);
   const startJoin = (category = '', service = '') => { pushView({overlay:'join',menu:false,selected:null});setJoinData(p=>({...p,category:category||p.category,subcategory:service||p.subcategory}));setJoinStep(1);setShowCategories(false);setShowJoin(true); };
   const openCategoryBrowser = (group = '') => { pushView({overlay:'categories',menu:false,selected:null});setCategoryGroup(group);setCategorySearch('');setMenuOpen(false);setShowCategories(true); };
 
