@@ -855,6 +855,26 @@ function supportAccountLookupChoice(message,history=[]){
   if(affirmative)return "accept";
   return "none";
 }
+function supportAttachmentCorrectionReply(message,history=[]){
+  const text=String(message||"").toLowerCase().trim().replace(/[.!?,;:]+$/g,"").replace(/\s+/g," ");
+  const correction=/^(?:it was a mistake|that was a mistake|i made a mistake|i uploaded it by mistake|i sent it by mistake|i attached it by mistake|it was uploaded by mistake|it was sent by mistake|i did that by mistake|wrong file|wrong attachment|please ignore (?:the )?(?:file|document|attachment)|ignore (?:the )?(?:file|document|attachment)|disregard (?:the )?(?:file|document|attachment)|i uploaded (?:the )?(?:wrong|incorrect) (?:file|document|attachment)|that was accidental|it was accidental|i did it accidentally|i uploaded it accidentally)$/i.test(text);
+  if(!correction)return "";
+  const turns=(history||[]).filter(item=>["user","ai","admin"].includes(item.sender_role));
+  const latestAssistant=turns.find(item=>item.sender_role==="ai"||item.sender_role==="admin");
+  if(!latestAssistant)return "";
+  const assistantText=String(latestAssistant.content||"");
+  const acknowledgesAttachment=/\b(received|uploaded|attached)\b/i.test(assistantText)
+    &&/\b(?:file|document|attachment|image|photo|screenshot)\b/i.test(assistantText)
+    &&/\b(?:pinned|attached|upload|admin review|securely stored)\b/i.test(assistantText);
+  if(!acknowledgesAttachment)return "";
+  const precedingUser=turns.find(item=>item.sender_role==="user");
+  const userText=String(precedingUser?.content||"");
+  const userUploadedAttachment=/^(?:attachment received|text document received|image received|document received)\b/i.test(userText)
+    ||/\b(?:attachment received|text document received|image received|detected attachment category)\b/i.test(userText);
+  if(!userUploadedAttachment)return "";
+  return "No problem—I understand the upload was accidental. We can leave that file aside and continue with your original question. What would you like help with?";
+}
+
 function supportMessageIntent(message,history=[]){
   const text=String(message||"").toLowerCase().trim();
   // Explicit conversation closers take precedence over generic thanks/acknowledgements.
@@ -951,6 +971,7 @@ CONVERSATION, GREETING AND AGREEMENT INTELLIGENCE:
 - If "okay" has no clear antecedent in the conversation, ask one short, natural clarification instead of guessing.
 - Understand common conversational intent: acknowledgement, agreement, disagreement, correction, frustration, thanks, apology, follow-up, request for explanation, request for navigation, and request for human support. Respond to the intent and preserve context across turns.
 - If the user corrects you, acknowledge the correction briefly and use the corrected information going forward. Do not argue or repeat the wrong answer.
+- ATTACHMENT CORRECTIONS: When the user says an upload was a mistake, accidental, the wrong file, or asks you to ignore/disregard it, interpret that message in the context of the immediately preceding attachment acknowledgement. Respond briefly and naturally: acknowledge the accidental upload, say you can leave the file aside, and return to the user's original question. Do not repeat the full upload confirmation, do not imply the file was deleted or removed, do not claim Admin has reviewed it, and do not pressure the user to submit it for review. Ask at most one short question about what they would like help with next.
 - If the user says "thank you", respond briefly and naturally; do not restart the business introduction or add an unnecessary greeting.
 
 PRIMARY ROLE — PROLINK APP ADMINISTRATOR AND NAVIGATION GUIDE:
@@ -1277,6 +1298,11 @@ async function supportSend(request,env){
     }
     await supportInsertMessage(auth.config,conversation.id,"user",message,{senderUserId:auth.user.id});
     if(conversation.status==="admin_attending")return json({conversation:{...conversation,last_message_at:new Date().toISOString()},messages:[],awaitingAdmin:true});
+    const attachmentCorrection=supportAttachmentCorrectionReply(message,priorHistory||[]);
+    if(attachmentCorrection){
+      const saved=await supportInsertMessage(auth.config,conversation.id,"ai",attachmentCorrection);
+      return json({conversation,messages:saved?[saved]:[],awaitingAdmin:conversation.status==="admin_requested"});
+    }
     if(intent==="chat_ending"){
       const saved=await supportInsertMessage(auth.config,conversation.id,"ai","You’re welcome. I’m glad I could help. Feel free to message again anytime you need support with ProLink. Have a great day!");
       return json({conversation,messages:saved?[saved]:[],awaitingAdmin:conversation.status==="admin_requested"});
