@@ -40,6 +40,7 @@ test("admin dashboard returns real counts from the ProLink account and review ta
     if(url.includes("/rest/v1/prolink_professional_profiles"))return jsonResponse(profileRows);
     if(url.includes("/rest/v1/prolink_review_records"))return jsonResponse(reviewRows);
     if(url.includes("/rest/v1/prolink_profile_change_requests"))return jsonResponse([]);
+    if(url.includes("/rest/v1/prolink_work_requests"))return jsonResponse([]);
     if(url.includes("/auth/v1/admin/users?page=1"))return jsonResponse({users:userRows});
     throw new Error("Unexpected request: "+url);
   },async()=>{
@@ -65,6 +66,7 @@ test("one unavailable dashboard table does not blank every metric",async()=>{
     if(url.includes("/rest/v1/prolink_professional_profiles"))return jsonResponse(profileRows);
     if(url.includes("/rest/v1/prolink_review_records"))return jsonResponse(reviewRows);
     if(url.includes("/rest/v1/prolink_profile_change_requests"))return jsonResponse({message:"relation does not exist"},404);
+    if(url.includes("/rest/v1/prolink_work_requests"))return jsonResponse([]);
     if(url.includes("/auth/v1/admin/users?page=1"))return jsonResponse({users:userRows});
     throw new Error("Unexpected request: "+url);
   },async()=>{
@@ -86,6 +88,7 @@ test("an unavailable user directory marks only user counts unavailable",async()=
     if(url.includes("/rest/v1/prolink_professional_profiles"))return jsonResponse(profileRows);
     if(url.includes("/rest/v1/prolink_review_records"))return jsonResponse(reviewRows);
     if(url.includes("/rest/v1/prolink_profile_change_requests"))return jsonResponse([]);
+    if(url.includes("/rest/v1/prolink_work_requests"))return jsonResponse([]);
     if(url.includes("/auth/v1/admin/users?page=1"))return jsonResponse({message:"forbidden"},403);
     throw new Error("Unexpected request: "+url);
   },async()=>{
