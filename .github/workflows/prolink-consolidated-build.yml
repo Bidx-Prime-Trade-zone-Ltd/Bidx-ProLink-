@@ -40,11 +40,15 @@ jobs:
         run: npx --yes wrangler@4 deploy --dry-run
 
       - name: Deploy ProLink to Cloudflare production
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
         run: npx --yes wrangler@4 deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Explain skipped Cloudflare deployment
+        if: github.event_name != 'pull_request' && (secrets.CLOUDFLARE_API_TOKEN == '' || secrets.CLOUDFLARE_ACCOUNT_ID == '')
+        run: echo "Cloudflare production deployment skipped. Add CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID as repository Actions secrets."
 
       - name: Upload production build artifact
         uses: actions/upload-artifact@v4
