@@ -28,6 +28,10 @@ export default function SupportChat({session,profile}){
  // list scrollable. Restore the exact previous page position when it closes.
  useEffect(()=>{
   if(!open)return;
+  // Tell the native Android shell that Support Chat owns touch gestures now.
+  // This disables the parent SwipeRefreshLayout so pulling through the chat
+  // history can never refresh the underlying Home page.
+  try{window.BidxNativeUI?.setSupportChatOpen(true);}catch{}
   const scrollY=window.scrollY;
   const body=document.body;
   const html=document.documentElement;
@@ -48,6 +52,7 @@ export default function SupportChat({session,profile}){
    body.style.overflow=previous.overflow;
    html.style.overflow=previous.htmlOverflow;
    window.scrollTo(0,scrollY);
+   try{window.BidxNativeUI?.setSupportChatOpen(false);}catch{}
   };
  },[open]);
  const firstName=(profile?.full_name||session?.user?.user_metadata?.full_name||session?.user?.user_metadata?.name||'').trim().split(/\s+/)[0];
