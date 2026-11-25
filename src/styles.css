@@ -614,3 +614,18 @@ body.prolink-menu-locked{position:fixed!important;overflow:hidden!important;widt
 /* Unread count badge on the existing Messages bottom-navigation icon only. */
 .prolink-message-nav-icon{position:relative;display:inline-flex;align-items:center;justify-content:center;line-height:1}
 .prolink-unread-badge{position:absolute;top:-8px;right:-12px;min-width:18px;height:18px;padding:0 5px;display:flex;align-items:center;justify-content:center;border:2px solid #fff;border-radius:999px;background:#e53935;color:#fff;font-size:10px;font-weight:850;line-height:1;box-shadow:0 1px 4px rgba(0,0,0,.18);z-index:2}
+
+/* Professional membership status and dates */
+.membership-status-card{margin-bottom:18px}
+.membership-status-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.membership-status-heading h2{margin:0}
+.membership-status-pill{display:inline-flex;align-items:center;padding:6px 11px;border-radius:999px;font-size:.78rem;font-weight:800;letter-spacing:.02em}
+.membership-status-pill.is-active{background:#e7f7ed;color:#18733b}
+.membership-status-pill.is-expired{background:#fff0e8;color:#a64b19}
+.membership-status-pill.is-inactive{background:#eef2f7;color:#42536a}
+.membership-status-pill.is-loading,.membership-status-pill.is-unavailable{background:#f1f3f5;color:#5f6b78}
+.membership-dates{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:18px;padding-top:16px;border-top:1px solid rgba(25,55,85,.12)}
+.membership-dates>div{display:flex;flex-direction:column;gap:5px}
+.membership-dates small{color:#6b7785;font-size:.8rem}
+.membership-dates strong{color:#183a61;font-size:.95rem}
+@media(max-width:480px){.membership-dates{grid-template-columns:1fr}}
