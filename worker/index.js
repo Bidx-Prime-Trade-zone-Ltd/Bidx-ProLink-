@@ -520,6 +520,35 @@ async function adminProfileChange(request,env){
 }
 
 
+
+async function unreadNotificationCount(request,env){
+  const auth=await signedInProfileUser(request,env);if(auth.error)return auth.error;
+  try{
+    const userId=encodeURIComponent(auth.user.id);
+    const [requests,adminReplies]=await Promise.all([
+      supabaseRest(auth.config,"/rest/v1/prolink_work_requests?select=id&professional_user_id=eq."+userId+"&professional_read_at=is.null&limit=1000"),
+      supabaseRest(auth.config,"/rest/v1/prolink_support_messages?select=id&sender_role=eq.admin&user_read_at=is.null&conversation_id=in.(select%20id%20from%20prolink_support_conversations%20where%20user_id%20eq%20"+userId+")&limit=1000")
+    ]);
+    return json({workRequests:(requests||[]).length,adminChat:(adminReplies||[]).length,total:(requests||[]).length+(adminReplies||[]).length});
+  }catch(error){
+    console.error("[prolink-notifications] unread_count_failed",{name:error?.name||"Error",message:String(error?.message||"").slice(0,180)});
+    return json({error:"Unread notifications could not be loaded."},502);
+  }
+}
+async function markWorkRequestsRead(request,env){
+  const auth=await signedInProfileUser(request,env);if(auth.error)return auth.error;
+  try{
+    const readAt=new Date().toISOString();
+    await supabaseRest(auth.config,"/rest/v1/prolink_work_requests?professional_user_id=eq."+encodeURIComponent(auth.user.id)+"&professional_read_at=is.null",{
+      method:"PATCH",headers:{prefer:"return=minimal"},body:JSON.stringify({professional_read_at:readAt})
+    });
+    return json({success:true,read_at:readAt});
+  }catch(error){
+    console.error("[prolink-notifications] mark_requests_read_failed",{name:error?.name||"Error"});
+    return json({error:"Work requests could not be marked as read."},502);
+  }
+}
+
 async function workRequests(request,env){
   const auth=await signedInProfileUser(request,env);
   if(auth.error)return auth.error;
@@ -1625,6 +1654,8 @@ export default {
     if (url.pathname === "/api/profile/change-status" && request.method === "GET") return profileChangeStatus(request, env);
     if (url.pathname === "/api/profile/change-request" && request.method === "POST") return profileChangeRequest(request, env);
     if (url.pathname === "/api/work-requests" && ["GET","POST","PATCH"].includes(request.method)) return workRequests(request, env);
+    if (url.pathname === "/api/work-requests/read" && request.method === "POST") return markWorkRequestsRead(request, env);
+    if (url.pathname === "/api/notifications/unread" && request.method === "GET") return unreadNotificationCount(request, env);
     if (url.pathname === "/api/admin/profile-change" && request.method === "POST") return adminProfileChange(request, env);
     if (url.pathname === "/api/admin/dashboard" && request.method === "GET") return adminDashboard(request, env);
     if (url.pathname === "/api/admin/broadcasts" && (request.method === "GET" || request.method === "POST")) return adminBroadcasts(request, env);
