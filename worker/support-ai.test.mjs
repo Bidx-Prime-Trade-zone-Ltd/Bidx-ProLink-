@@ -69,6 +69,36 @@ test("standalone acknowledgements are not treated as blanket permission", () => 
   assert.equal(supportMessageIntent("Thank you", []), "thanks");
 });
 
+test("accidental attachment corrections receive a short contextual response", () => {
+  const history = [
+    { sender_role: "ai", content: "I’ve received your text document and extracted its readable text. It is securely attached and pinned for Admin review." },
+    { sender_role: "user", content: "Text document received: application.pdf. Extracted text: ..." }
+  ];
+  for (const message of ["It was a mistake", "That was a mistake.", "I uploaded it by mistake", "I sent it by mistake", "Wrong file", "Please ignore the document", "It was accidental"]) {
+    assert.equal(
+      supportAttachmentCorrectionReply(message, history),
+      "No problem—I understand the upload was accidental. We can leave that file aside and continue with your original question. What would you like help with?",
+      message
+    );
+  }
+});
+
+test("attachment correction does not trigger without an immediately preceding attachment acknowledgement", () => {
+  assert.equal(supportAttachmentCorrectionReply("It was a mistake", []), "");
+  assert.equal(supportAttachmentCorrectionReply("It was a mistake", [
+    { sender_role: "ai", content: "Your membership is active." },
+    { sender_role: "user", content: "I paid yesterday." }
+  ]), "");
+  assert.equal(supportAttachmentCorrectionReply("It was a mistake", [
+    { sender_role: "ai", content: "I’ve received your file and pinned it for Admin review." },
+    { sender_role: "user", content: "Can you help me with my profile?" }
+  ]), "");
+  assert.equal(supportAttachmentCorrectionReply("It was a mistake", [
+    { sender_role: "ai", content: "I’ve received your text document and pinned it for Admin review." },
+    { sender_role: "user", content: "My original question is about membership." }
+  ]), "");
+});
+
 test("attachments are classified from filename and MIME type", () => {
   assert.equal(supportAttachmentCategory("trade-certificate.pdf", "application/pdf"), "professional_certificate");
   assert.equal(supportAttachmentCategory("payment-receipt.pdf", "application/pdf"), "payment_receipt_or_invoice");
