@@ -60,7 +60,20 @@ import {
   Clock3, Award, Building2, Mail, Lock, ArrowUpRight, Filter, Sparkles
 } from 'lucide-react';
 
-const categories = PROFESSION_GROUPS.slice(0,7).map(g=>({name:g.name,sub:g.services})).concat([{name:'More categories',sub:[]}]);
+// Home-screen shortcuts are intentionally curated for high-frequency services.
+// Keep display labels separate from the underlying profession-group names so existing
+// category records (for example "Cleaning & Domestic") remain compatible.
+const categories = [
+  {name:'Electrical & Power',group:'Electrical & Power'},
+  {name:'Plumbing & Water',group:'Plumbing & Water'},
+  {name:'Driving & Delivery',group:'Driving & Delivery'},
+  {name:'Automotive & Transport',group:'Automotive & Transport'},
+  {name:'Building & Masonry',group:'Building & Masonry'},
+  {name:'Carpentry & Furniture',group:'Carpentry & Furniture'},
+  {name:'Cooling & Refrigeration',group:'Cooling & Refrigeration'},
+  {name:'Cleaning & Home Care',group:'Cleaning & Domestic'},
+  {name:'More categories',more:true}
+];
 
 function Brand() {
   return <div className="brand-mark"><img className="brand-symbol brand-logo-image" src="/icon.svg" alt="BK Bidx ProLink"/><span>Bidx <b>ProLink</b><small>SKILLED PEOPLE. QUALITY WORK.</small></span></div>;
@@ -704,7 +717,7 @@ function App() {
       </section>
       <section className="prolink-category-section">
         <div className="prolink-category-intro"><h2>Find skilled professionals. Build your profile. Grow your work.</h2><p>Join Pedes Prolink to showcase your skills and connect with customers around the world.</p><button onClick={()=>openCategoryBrowser()}>Register as a professional <ChevronRight size={14}/></button></div>
-        <div className="prolink-category-grid">{categories.map((category,index)=><button key={category.name} className={index===7?'prolink-category-card more-category':'prolink-category-card'} onClick={()=>openCategoryBrowser(index===7?'':category.name)}><span>{category.name}</span>{index===7&&<small>View all services</small>}</button>)}</div>
+        <div className="prolink-category-grid">{categories.map(category=><button key={category.name} className={category.more?'prolink-category-card more-category':'prolink-category-card'} onClick={()=>openCategoryBrowser(category.more?'':category.group)}><span>{category.name}</span>{category.more&&<small>View all services</small>}</button>)}</div>
       </section>
       <section className="prolink-category-section">
         <div className="section-heading"><div><h2>Approved professionals</h2><p>Real professionals who have completed Prolink's manual review</p></div><div style={{display:'flex',alignItems:'center',gap:10}}><span className="muted-small">{filtered.length} listed</span><button className="outline-button" disabled={directoryLoading} onClick={loadProfessionals}>{directoryLoading?'Refreshing…':'Refresh'}</button></div></div>
