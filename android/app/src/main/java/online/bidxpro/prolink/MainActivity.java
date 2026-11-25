@@ -39,17 +39,27 @@ public class MainActivity extends Activity {
     private static final String HOME_URL = "https://app.bidxpro.online";
     private WebView webView;
     private volatile boolean navigationMenuOpen = false;
+    private volatile boolean supportChatOpen = false;
+
+    private void updatePullToRefreshState() {
+        if (swipeRefreshLayout == null) return;
+        boolean enabled = !navigationMenuOpen && !supportChatOpen
+                && isHomeScreen(webView == null ? null : webView.getUrl());
+        swipeRefreshLayout.setEnabled(enabled);
+        if (!enabled) swipeRefreshLayout.setRefreshing(false);
+    }
 
     private final class NativeUiBridge {
         @JavascriptInterface
         public void setMenuOpen(boolean open) {
             navigationMenuOpen = open;
-            runOnUiThread(() -> {
-                if (swipeRefreshLayout != null) {
-                    swipeRefreshLayout.setEnabled(!open && isHomeScreen(webView == null ? null : webView.getUrl()));
-                    if (open) swipeRefreshLayout.setRefreshing(false);
-                }
-            });
+            runOnUiThread(() -> updatePullToRefreshState());
+        }
+
+        @JavascriptInterface
+        public void setSupportChatOpen(boolean open) {
+            supportChatOpen = open;
+            runOnUiThread(() -> updatePullToRefreshState());
         }
     }
     private SwipeRefreshLayout swipeRefreshLayout;
@@ -60,7 +70,13 @@ public class MainActivity extends Activity {
     private AlertDialog installDialog;
     private boolean updateCheckInProgress = false;
     private final InstallStateUpdatedListener updateListener = state -> {
-        if (state.installStatus() == InstallStatus.DOWNLOADED) runOnUiThread(this::showInstallUpdateDialog);
+        // Immediate updates install and restart through Google Play. This is a
+        // fallback for a previously-started flexible update: finish it as soon
+        // as the download is ready instead of asking the user to tap again.
+        if (state.installStatus() == InstallStatus.DOWNLOADED) {
+            runOnUiThread(() -> appUpdateManager.completeUpdate()
+                    .addOnFailureListener(error -> Log.e("ProLinkUpdate", "Could not complete downloaded update", error)));
+        }
     };
     private static final String PROLINK_ORIGIN = "https://app.bidxpro.online";
     private ValueCallback<Uri[]> filePathCallback;
@@ -129,7 +145,7 @@ public class MainActivity extends Activity {
         swipeRefreshLayout.setOnChildScrollUpCallback((parent, child) ->
                 webView != null && webView.canScrollVertically(-1));
         swipeRefreshLayout.setOnRefreshListener(() -> {
-            if (!navigationMenuOpen && isHomeScreen(webView.getUrl()) && !webView.canScrollVertically(-1)) {
+            if (!navigationMenuOpen && !supportChatOpen && isHomeScreen(webView.getUrl()) && !webView.canScrollVertically(-1)) {
                 webView.reload();
             } else {
                 swipeRefreshLayout.setRefreshing(false);
@@ -160,14 +176,14 @@ public class MainActivity extends Activity {
                 super.onPageStarted(view, url, favicon);
                 if (swipeRefreshLayout != null) {
                     swipeRefreshLayout.setRefreshing(false);
-                    swipeRefreshLayout.setEnabled(!navigationMenuOpen && isHomeScreen(url));
+                    updatePullToRefreshState();
                 }
             }
             @Override public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
                 if (swipeRefreshLayout != null) {
                     swipeRefreshLayout.setRefreshing(false);
-                    swipeRefreshLayout.setEnabled(isHomeScreen(url));
+                    updatePullToRefreshState();
                 }
             }
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
@@ -282,12 +298,22 @@ public class MainActivity extends Activity {
             updateCheckInProgress = false;
             if (!task.isSuccessful() || isFinishing()) return;
             AppUpdateInfo info = task.getResult();
-            if (info.installStatus() == InstallStatus.DOWNLOADED) {
-                showInstallUpdateDialog();
+
+            // If Play interrupted an immediate update (for example, the app was
+            // backgrounded), resume that same installation flow automatically.
+            if (info.updateAvailability() == UpdateAvailability.DEVELOPER_TRIGGERED_UPDATE_IN_PROGRESS) {
+                startImmediateUpdate(info);
                 return;
             }
+
+            if (info.installStatus() == InstallStatus.DOWNLOADED) {
+                appUpdateManager.completeUpdate()
+                        .addOnFailureListener(error -> Log.e("ProLinkUpdate", "Could not complete downloaded update", error));
+                return;
+            }
+
             if (info.updateAvailability() == UpdateAvailability.UPDATE_AVAILABLE
-                    && info.isUpdateTypeAllowed(AppUpdateType.FLEXIBLE)) {
+                    && info.isUpdateTypeAllowed(AppUpdateType.IMMEDIATE)) {
                 int availableVersion = info.availableVersionCode();
                 int skippedVersion = getPreferences(MODE_PRIVATE)
                         .getInt("skipped_play_update_version", -1);
@@ -297,22 +323,23 @@ public class MainActivity extends Activity {
         });
     }
 
+    private void startImmediateUpdate(AppUpdateInfo info) {
+        try {
+            appUpdateManager.startUpdateFlowForResult(
+                    info, AppUpdateType.IMMEDIATE, this, UPDATE_REQUEST_CODE);
+        } catch (android.content.IntentSender.SendIntentException error) {
+            Log.e("ProLinkUpdate", "Could not launch the Google Play immediate update flow", error);
+            Toast.makeText(this, "Unable to start the update. Please try again later.", Toast.LENGTH_LONG).show();
+        }
+    }
+
     private void showAvailableUpdateDialog(AppUpdateInfo info, int availableVersion) {
         if (isFinishing() || (updateDialog != null && updateDialog.isShowing())) return;
         updateDialog = new AlertDialog.Builder(this)
                 .setTitle("A new ProLink update is available")
-                .setMessage("Version " + availableVersion
-                        + " is ready. Update now? You can keep using ProLink while it downloads.")
-                .setPositiveButton("Update", (dialog, which) -> {
-                    try {
-                        appUpdateManager.startUpdateFlowForResult(
-                                info, AppUpdateType.FLEXIBLE, this, UPDATE_REQUEST_CODE);
-                    } catch (android.content.IntentSender.SendIntentException error) {
-                        Log.e("ProLinkUpdate", "Could not launch the Google Play update flow", error);
-                        Toast.makeText(this, "Unable to start the update. Please try again later.", Toast.LENGTH_LONG).show();
-                    }
-                })
-                .setNegativeButton("Not now", (dialog, which) ->
+                .setMessage("Version " + availableVersion + " is ready to install. Install it now or skip this version?")
+                .setPositiveButton("Install", (dialog, which) -> startImmediateUpdate(info))
+                .setNegativeButton("Skip", (dialog, which) ->
                         getPreferences(MODE_PRIVATE).edit()
                                 .putInt("skipped_play_update_version", availableVersion).apply())
                 .create();
@@ -320,18 +347,6 @@ public class MainActivity extends Activity {
                 getPreferences(MODE_PRIVATE).edit()
                         .putInt("skipped_play_update_version", availableVersion).apply());
         updateDialog.show();
-    }
-
-    private void showInstallUpdateDialog() {
-        if (isFinishing() || (installDialog != null && installDialog.isShowing())) return;
-        installDialog = new AlertDialog.Builder(this)
-                .setTitle("ProLink update downloaded")
-                .setMessage("The update is ready. Restart ProLink to install it now, or continue using the current version.")
-                .setPositiveButton("Restart and install",
-                        (dialog, which) -> appUpdateManager.completeUpdate())
-                .setNegativeButton("Later", (dialog, which) -> { })
-                .create();
-        installDialog.show();
     }
 
     private void requestStartupPermissions() {
