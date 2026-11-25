@@ -525,10 +525,14 @@ async function unreadNotificationCount(request,env){
   const auth=await signedInProfileUser(request,env);if(auth.error)return auth.error;
   try{
     const userId=encodeURIComponent(auth.user.id);
-    const [requests,adminReplies]=await Promise.all([
+    const [requests,conversations]=await Promise.all([
       supabaseRest(auth.config,"/rest/v1/prolink_work_requests?select=id&professional_user_id=eq."+userId+"&professional_read_at=is.null&limit=1000"),
-      supabaseRest(auth.config,"/rest/v1/prolink_support_messages?select=id&sender_role=eq.admin&user_read_at=is.null&conversation_id=in.(select%20id%20from%20prolink_support_conversations%20where%20user_id%20eq%20"+userId+")&limit=1000")
+      supabaseRest(auth.config,"/rest/v1/prolink_support_conversations?select=id&user_id=eq."+userId+"&limit=1")
     ]);
+    let adminReplies=[];
+    if(conversations?.[0]?.id){
+      adminReplies=await supabaseRest(auth.config,"/rest/v1/prolink_support_messages?select=id&conversation_id=eq."+encodeURIComponent(conversations[0].id)+"&sender_role=eq.admin&user_read_at=is.null&limit=1000");
+    }
     return json({workRequests:(requests||[]).length,adminChat:(adminReplies||[]).length,total:(requests||[]).length+(adminReplies||[]).length});
   }catch(error){
     console.error("[prolink-notifications] unread_count_failed",{name:error?.name||"Error",message:String(error?.message||"").slice(0,180)});
