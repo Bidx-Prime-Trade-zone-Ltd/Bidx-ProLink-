@@ -211,7 +211,7 @@ function App() {
         setMembership({loading:false,data:data||null,error:''});
       }).catch(()=>{if(active)setMembership({loading:false,data:null,error:'Membership status is temporarily unavailable.'});});
     return()=>{active=false;};
-  },[session?.user?.id,tab]);
+  },[session?.user?.id]);
   useEffect(() => {
     if (!supabase) { setAuthReady(true); return; }
     supabase.auth.getSession().then(({data}) => { setSession(data.session); setProfile(p=>({...p,...(data.session?.user?.user_metadata||{})})); setAuthReady(true); });
