@@ -15,7 +15,8 @@ export default function AdminPortal(){
  const [query,setQuery]=useState(''),[selected,setSelected]=useState(null),[reason,setReason]=useState('');
  const [notice,setNotice]=useState(''),[busy,setBusy]=useState(false),[documentUrl,setDocumentUrl]=useState('');
  const [documentLoading,setDocumentLoading]=useState(false);
- const [unreadSupportConversations,setUnreadSupportConversations]=useState(0);\n const [selectedUser,setSelectedUser]=useState(null),[userMessage,setUserMessage]=useState(''),[sendingUserMessage,setSendingUserMessage]=useState(false),[userFilter,setUserFilter]=useState('all');
+ const [unreadSupportConversations,setUnreadSupportConversations]=useState(0);
+ const [selectedUser,setSelectedUser]=useState(null),[userMessage,setUserMessage]=useState(''),[sendingUserMessage,setSendingUserMessage]=useState(false),[userFilter,setUserFilter]=useState('all');
  const admin=!!user&&String(user.email||'').toLowerCase()===ADMIN_EMAIL;
 
  const load=async()=>{
