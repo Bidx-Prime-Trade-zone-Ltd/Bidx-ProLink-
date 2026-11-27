@@ -592,7 +592,7 @@ async function workRequests(request,env){
     }
     if(request.method==="GET"){
       const rows=await supabaseRest(auth.config,
-        "/rest/v1/prolink_work_requests?select=id,requester_user_id,professional_user_id,professional_name,job_description,preferred_date,job_location,status,created_at,updated_at&or=(requester_user_id.eq."+encodeURIComponent(userId)+",professional_user_id.eq."+encodeURIComponent(userId)+")&order=created_at.desc&limit=100");
+        "/rest/v1/prolink_work_requests?select=id,requester_user_id,professional_user_id,professional_name,job_description,preferred_date,job_location,status,created_at,updated_at,professional_read_at&or=(requester_user_id.eq."+encodeURIComponent(userId)+",professional_user_id.eq."+encodeURIComponent(userId)+")&order=created_at.desc&limit=100");
       return json({requests:(rows||[]).map(row=>({...row,direction:row.professional_user_id===userId?"incoming":"outgoing"}))});
     }
     if(request.method==="PATCH"){
@@ -615,6 +615,69 @@ async function workRequests(request,env){
   }catch(error){
     console.error("[prolink-work-requests] operation_failed",{method:request.method,name:error?.name||"Error",message:String(error?.message||"").slice(0,180)});
     return json({error:error?.message||"Work request could not be processed. Please try again."},502);
+  }
+}
+
+async function workRequestThread(request,env,requestId,resource){
+  const auth=await signedInProfileUser(request,env);
+  if(auth.error)return auth.error;
+  const userId=auth.user.id;
+  try{
+    const requestRows=await supabaseRest(auth.config,"/rest/v1/prolink_work_requests?select=id,requester_user_id,professional_user_id,professional_name,job_description,preferred_date,job_location,status,created_at,updated_at,professional_read_at&id=eq."+encodeURIComponent(requestId)+"&limit=1");
+    const work=requestRows?.[0];
+    if(!work)return json({error:"Work request not found."},404);
+    const isRequester=work.requester_user_id===userId;
+    const isProfessional=work.professional_user_id===userId;
+    if(!isRequester&&!isProfessional)return json({error:"You are not a participant in this work conversation."},403);
+    if(resource==="conversation"&&request.method==="GET"){
+      const [messages,invoices]=await Promise.all([
+        supabaseRest(auth.config,"/rest/v1/prolink_work_request_messages?select=*&work_request_id=eq."+encodeURIComponent(requestId)+"&order=created_at.asc&limit=500"),
+        supabaseRest(auth.config,"/rest/v1/prolink_work_request_invoices?select=*&work_request_id=eq."+encodeURIComponent(requestId)+"&order=created_at.asc&limit=100")
+      ]);
+      const readAt=new Date().toISOString();
+      await Promise.all([
+        supabaseRest(auth.config,"/rest/v1/prolink_work_request_messages?work_request_id=eq."+encodeURIComponent(requestId)+"&sender_user_id=neq."+encodeURIComponent(userId)+"&recipient_read_at=is.null",{method:"PATCH",headers:{prefer:"return=minimal"},body:JSON.stringify({recipient_read_at:readAt})}),
+        supabaseRest(auth.config,"/rest/v1/prolink_work_request_invoices?work_request_id=eq."+encodeURIComponent(requestId)+"&sender_user_id=neq."+encodeURIComponent(userId)+"&recipient_read_at=is.null",{method:"PATCH",headers:{prefer:"return=minimal"},body:JSON.stringify({recipient_read_at:readAt})})
+      ]);
+      return json({workRequest:work,messages:messages||[],invoices:(invoices||[]).map(item=>({...item,...(item.sender_user_id!==userId&&!item.recipient_read_at?{recipient_read_at:readAt}:{})}))});
+    }
+    if(resource==="messages"&&request.method==="POST"){
+      const body=await request.json(),message=String(body.body||"").trim();
+      if(message.length<1||message.length>5000)return json({error:"Write a message of up to 5,000 characters."},400);
+      const rows=await supabaseRest(auth.config,"/rest/v1/prolink_work_request_messages",{method:"POST",headers:{prefer:"return=representation"},body:JSON.stringify({work_request_id:requestId,sender_user_id:userId,body:message})});
+      await supabaseRest(auth.config,"/rest/v1/prolink_work_requests?id=eq."+encodeURIComponent(requestId),{method:"PATCH",headers:{prefer:"return=minimal"},body:JSON.stringify({updated_at:new Date().toISOString()})});
+      return json({success:true,message:rows?.[0]||null},201);
+    }
+    if(resource==="invoices"&&request.method==="POST"){
+      if(!isProfessional)return json({error:"Only the selected professional can send an invoice."},403);
+      if(work.status!=="accepted")return json({error:"Accept the work request before sending an invoice."},409);
+      const body=await request.json();
+      const invoiceDate=String(body.invoiceDate||"").trim(),dueDate=String(body.dueDate||"").trim()||null;
+      const currency=String(body.currency||"").trim().toUpperCase(),amount=Number(body.amount),quotation=String(body.quotation||"").trim();
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(invoiceDate))return json({error:"Enter a valid invoice date."},400);
+      if(dueDate&&!/^\d{4}-\d{2}-\d{2}$/.test(dueDate))return json({error:"Enter a valid due date."},400);
+      if(!/^[A-Z]{3,8}$/.test(currency))return json({error:"Enter a valid currency code."},400);
+      if(!Number.isFinite(amount)||amount<=0||amount>999999999999)return json({error:"Enter a valid invoice amount."},400);
+      if(quotation.length<5||quotation.length>5000)return json({error:"Add a quotation or work breakdown of 5 to 5,000 characters."},400);
+      const rows=await supabaseRest(auth.config,"/rest/v1/prolink_work_request_invoices",{method:"POST",headers:{prefer:"return=representation"},body:JSON.stringify({work_request_id:requestId,sender_user_id:userId,invoice_date:invoiceDate,due_date:dueDate,currency,amount,quotation,status:"sent"})});
+      await supabaseRest(auth.config,"/rest/v1/prolink_work_requests?id=eq."+encodeURIComponent(requestId),{method:"PATCH",headers:{prefer:"return=minimal"},body:JSON.stringify({updated_at:new Date().toISOString()})});
+      return json({success:true,invoice:rows?.[0]||null,message:"Invoice sent to the customer."},201);
+    }
+    if(resource==="invoices"&&request.method==="PATCH"){
+      const body=await request.json(),invoiceId=String(body.invoiceId||"").trim(),status=String(body.status||"").trim();
+      if(!/^[0-9a-f-]{36}$/i.test(invoiceId)||!["accepted","declined"].includes(status))return json({error:"Choose a valid invoice response."},400);
+      if(!isRequester)return json({error:"Only the customer can respond to this invoice."},403);
+      const rows=await supabaseRest(auth.config,"/rest/v1/prolink_work_request_invoices?select=id,sender_user_id,status&id=eq."+encodeURIComponent(invoiceId)+"&work_request_id=eq."+encodeURIComponent(requestId)+"&limit=1");
+      const invoice=rows?.[0];
+      if(!invoice)return json({error:"Invoice not found."},404);
+      if(invoice.sender_user_id===userId||invoice.status!=="sent")return json({error:"This invoice can no longer be changed."},409);
+      const changed=await supabaseRest(auth.config,"/rest/v1/prolink_work_request_invoices?id=eq."+encodeURIComponent(invoiceId),{method:"PATCH",headers:{prefer:"return=representation"},body:JSON.stringify({status,updated_at:new Date().toISOString()})});
+      return json({success:true,invoice:changed?.[0]||null});
+    }
+    return json({error:"Method not allowed."},405);
+  }catch(error){
+    console.error("[prolink-work-request-thread] operation_failed",{resource,method:request.method,name:error?.name||"Error",message:String(error?.message||"").slice(0,180)});
+    return json({error:error?.message||"The work conversation could not be processed."},502);
   }
 }
 
@@ -1733,6 +1796,8 @@ export default {
     if (url.pathname === "/api/location/reverse" && request.method === "GET") return reverseGeocode(request, env);
     if (url.pathname === "/api/profile/change-status" && request.method === "GET") return profileChangeStatus(request, env);
     if (url.pathname === "/api/profile/change-request" && request.method === "POST") return profileChangeRequest(request, env);
+    const workThreadMatch=url.pathname.match(/^\/api\/work-requests\/([0-9a-f-]{36})\/(conversation|messages|invoices)$/i);
+    if(workThreadMatch)return workRequestThread(request,env,workThreadMatch[1],workThreadMatch[2]);
     if (url.pathname === "/api/work-requests" && ["GET","POST","PATCH"].includes(request.method)) return workRequests(request, env);
     if (url.pathname === "/api/work-requests/read" && request.method === "POST") return markWorkRequestsRead(request, env);
     if (url.pathname === "/api/notifications/unread" && request.method === "GET") return unreadNotificationCount(request, env);
