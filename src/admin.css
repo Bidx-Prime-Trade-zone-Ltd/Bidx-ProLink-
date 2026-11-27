@@ -302,3 +302,26 @@
 .admin-page-toolbar>span{display:flex;align-items:center;gap:8px}
 .admin-support-row-meta{display:flex;align-items:center;justify-content:flex-end;gap:7px;flex:0 0 auto;flex-wrap:wrap}
 .admin-support-row-meta .admin-support-unread-badge{min-width:20px;height:20px}
+
+.admin-metric-button{width:100%;text-align:left;cursor:pointer;color:inherit;font:inherit;transition:transform .16s ease,box-shadow .16s ease}
+.admin-metric-button:hover,.admin-metric-button:focus-visible{transform:translateY(-2px);box-shadow:0 8px 22px rgba(14,45,92,.12);outline:2px solid #9dbbe0;outline-offset:2px}
+.admin-metric-button>div>small{display:flex;align-items:center;gap:3px;margin-top:5px;color:#28659b;font-size:11px;font-weight:700}
+.admin-user-row{cursor:pointer}.admin-user-row:hover{background:#f3f7fd}
+.admin-user-link{padding:0;border:0;background:transparent;color:#1767a8;text-align:left;font:inherit;font-weight:700;text-decoration:underline;cursor:pointer;overflow-wrap:anywhere}
+.admin-inline-action{border:1px solid #cbd9e8;border-radius:9px;background:#edf4fb;color:#174b79;padding:8px 10px;font-size:12px;font-weight:800;white-space:nowrap}
+.admin-user-overlay{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;padding:18px;background:rgba(8,22,43,.56);backdrop-filter:blur(3px)}
+.admin-user-dialog{width:min(720px,100%);max-height:min(90vh,900px);overflow:auto;background:#fff;border:1px solid #dce5ef;border-radius:20px;padding:22px;box-shadow:0 24px 80px rgba(0,0,0,.25);color:#17345d}
+.admin-user-dialog-header{display:flex;justify-content:space-between;gap:14px;align-items:flex-start;padding-bottom:16px;border-bottom:1px solid #e6edf5}
+.admin-user-dialog-header h2{margin:6px 0;font-size:22px}.admin-user-dialog-header p{margin:0;color:#6b7b8e;overflow-wrap:anywhere}
+.admin-user-dialog-header>button{border:1px solid #dbe4ee;border-radius:10px;background:#f7f9fc;padding:9px;color:#24476c}
+.admin-user-profile-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px;padding:18px 0}
+.admin-user-profile-grid>div{min-width:0;padding:12px;border:1px solid #e5ecf4;border-radius:12px;background:#f8fafd}
+.admin-user-profile-grid small{display:block;margin-bottom:5px;color:#718096;font-size:11px}.admin-user-profile-grid b{display:block;font-size:13px;overflow-wrap:anywhere}
+.admin-user-message-form{padding:17px;border:1px solid #dce7f3;border-radius:15px;background:#f8fbff}
+.admin-user-message-form h3{display:flex;align-items:center;gap:8px;margin:0 0 6px;font-size:17px}
+.admin-user-message-form p{margin:0 0 12px;color:#62748a;font-size:13px;line-height:1.5}
+.admin-user-message-form textarea{width:100%;min-height:110px;resize:vertical;border:1px solid #cfdbe8;border-radius:11px;padding:12px;font:inherit;color:#17345d;background:#fff}
+.admin-user-message-actions{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:10px}
+.admin-user-message-actions small{color:#738398}.admin-user-message-actions button{display:flex;align-items:center;gap:7px;border:0;border-radius:10px;background:#1767a8;color:white;padding:11px 16px;font-weight:800}
+.admin-user-message-actions button:disabled{opacity:.5;cursor:not-allowed}
+@media(max-width:560px){.admin-user-overlay{padding:8px;align-items:flex-end}.admin-user-dialog{max-height:94vh;border-radius:18px 18px 10px 10px;padding:16px}.admin-user-profile-grid{gap:8px}.admin-user-profile-grid>div{padding:10px}.admin-user-profile-grid b{font-size:12px}.admin-user-message-form{padding:12px}}
