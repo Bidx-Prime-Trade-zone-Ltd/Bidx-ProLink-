@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { supportGreetingReply, supportGreetingPrefix, supportMessageIntent, supportAttachmentCorrectionReply, supportAttachmentCategory, supportAccountLookupChoice, supportAiExtractText } from "./index.js";
+import { supportGreetingReply, supportGreetingPrefix, supportMessageIntent, supportAttachmentCorrectionReply, supportAttachmentCategory, supportAccountLookupChoice, supportAiExtractText, supportUnreadConversationCount } from "./index.js";
 
 test("greeting replies match the user's exact greeting and include their first name", () => {
   assert.equal(supportGreetingReply("Good morning", "Ada"), "Good morning, Ada. How may I help you today?");
@@ -145,4 +145,17 @@ test("goodbye intent does not override direct Admin requests or account consent"
   const permission = [{ sender_role: "ai", content: "Would you like me to check your membership status securely?" }];
   assert.equal(supportMessageIntent("Yes, please", permission), "confirm_account_lookup");
   assert.equal(supportMessageIntent("I want to talk to a human Admin", []), "human_admin_request");
+});
+
+test("Admin support unread notifications count distinct users, not messages", () => {
+  const unread = [
+    { conversation_id: "user-a", sender_role: "user", read_at: null },
+    { conversation_id: "user-a", sender_role: "user", read_at: null },
+    { conversation_id: "user-a", sender_role: "user", read_at: null },
+    { conversation_id: "user-b", sender_role: "user", read_at: null },
+    { conversation_id: "user-c", sender_role: "user", read_at: "2026-11-27T10:00:00Z" },
+    { conversation_id: "user-b", sender_role: "ai", read_at: null }
+  ];
+  assert.equal(supportUnreadConversationCount(unread), 2);
+  assert.equal(supportUnreadConversationCount([]), 0);
 });
