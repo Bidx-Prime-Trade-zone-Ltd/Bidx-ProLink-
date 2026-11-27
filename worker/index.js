@@ -666,7 +666,8 @@ async function adminDashboard(request,env) {
     pendingWorkRequests:workRequestsResult?workRequests.filter(r=>r.status==="pending").length:null
   };
   const profileByUser=Object.fromEntries(profiles.map(profile=>[profile.user_id,profile]));
-  users=users.map(account=>({...account,profile:profileByUser[account.id]||null}));\n  return json({counts,users,profiles,reviews,profileChangeRequests,workRequests,warnings,adminEmail:auth.user.email});
+  users=users.map(account=>({...account,profile:profileByUser[account.id]||null}));
+  return json({counts,users,profiles,reviews,profileChangeRequests,workRequests,warnings,adminEmail:auth.user.email});
 }
 
 async function adminUserMessage(request,env){
@@ -1705,7 +1706,8 @@ export default {
     if (url.pathname === "/api/work-requests/read" && request.method === "POST") return markWorkRequestsRead(request, env);
     if (url.pathname === "/api/notifications/unread" && request.method === "GET") return unreadNotificationCount(request, env);
     if (url.pathname === "/api/admin/profile-change" && request.method === "POST") return adminProfileChange(request, env);
-    if (url.pathname === "/api/admin/dashboard" && request.method === "GET") return adminDashboard(request, env);\n    if (url.pathname === "/api/admin/users/message" && request.method === "POST") return adminUserMessage(request, env);
+    if (url.pathname === "/api/admin/dashboard" && request.method === "GET") return adminDashboard(request, env);
+    if (url.pathname === "/api/admin/users/message" && request.method === "POST") return adminUserMessage(request, env);
     if (url.pathname === "/api/admin/broadcasts" && (request.method === "GET" || request.method === "POST")) return adminBroadcasts(request, env);
     if (url.pathname === "/api/support/messages" && request.method === "GET") return supportMessages(request, env);
     if (url.pathname === "/api/support/read" && request.method === "POST") return supportMarkRead(request, env);
