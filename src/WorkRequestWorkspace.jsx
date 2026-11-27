@@ -20,7 +20,7 @@ export default function WorkRequestWorkspace({session,requests=[],loading=false,
   try{
    const response=await fetch('/api/work-requests/'+encodeURIComponent(id)+'/conversation',{headers:{authorization:'Bearer '+token}});
    const data=await response.json();if(!response.ok)throw new Error(data.error||'The work conversation could not be loaded.');
-   setMessages(data.messages||[]);setInvoices(data.invoices||[]);setError('');
+   setMessages(data.messages||[]);setInvoices(data.invoices||[]);if(data.workRequest)setActive(current=>current?.id===id?{...current,...data.workRequest}:current);setError('');
   }catch(e){if(!silent)setError(e.message||'The conversation could not be loaded.');}
   finally{if(!silent)setBusy(false);}
  },[token]);
