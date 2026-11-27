@@ -1396,20 +1396,20 @@ async function supportSend(request,env){
     if(conversation.status==="resolved"){
       await supabaseRest(auth.config,"/rest/v1/prolink_support_conversations?id=eq."+encodeURIComponent(conversation.id),{method:"PATCH",headers:{prefer:"return=minimal"},body:JSON.stringify({status:"ai_active",resolved_at:null,updated_at:new Date().toISOString()})});
     }
-    await supportInsertMessage(auth.config,conversation.id,"user",message,{senderUserId:auth.user.id});
-    if(conversation.status==="admin_attending")return json({conversation:{...conversation,last_message_at:new Date().toISOString()},messages:[],awaitingAdmin:true});
+    const savedUserMessage=await supportInsertMessage(auth.config,conversation.id,"user",message,{senderUserId:auth.user.id});
+    if(conversation.status==="admin_attending")return json({conversation:{...conversation,last_message_at:new Date().toISOString()},messages:savedUserMessage?[savedUserMessage]:[],awaitingAdmin:true});
     const attachmentCorrection=supportAttachmentCorrectionReply(message,priorHistory||[]);
     if(attachmentCorrection){
       const saved=await supportInsertMessage(auth.config,conversation.id,"ai",attachmentCorrection);
-      return json({conversation,messages:saved?[saved]:[],awaitingAdmin:conversation.status==="admin_requested"});
+      return json({conversation,messages:[savedUserMessage,saved].filter(Boolean),awaitingAdmin:conversation.status==="admin_requested"});
     }
     if(intent==="chat_ending"){
       const saved=await supportInsertMessage(auth.config,conversation.id,"ai","You’re welcome. I’m glad I could help. Feel free to message again anytime you need support with ProLink. Have a great day!");
-      return json({conversation,messages:saved?[saved]:[],awaitingAdmin:conversation.status==="admin_requested"});
+      return json({conversation,messages:[savedUserMessage,saved].filter(Boolean),awaitingAdmin:conversation.status==="admin_requested"});
     }
     if(accountLookupDeclined){
       const saved=await supportInsertMessage(auth.config,conversation.id,"ai","Understood. I will not access or check your private account or membership information. I can still help with general ProLink questions, and you can ask me to check it whenever you choose.");
-      return json({conversation,messages:saved?[saved]:[],awaitingAdmin:conversation.status==="admin_requested"});
+      return json({conversation,messages:[savedUserMessage,saved].filter(Boolean),awaitingAdmin:conversation.status==="admin_requested"});
     }
     // A direct request to connect with Admin, or an affirmative reply to
     // an earlier Admin-handover offer anywhere in recent history, is a clear
@@ -1418,10 +1418,10 @@ async function supportSend(request,env){
       if(conversation.status!=="admin_requested"){
         await supabaseRest(auth.config,"/rest/v1/prolink_support_conversations?id=eq."+encodeURIComponent(conversation.id),{method:"PATCH",headers:{prefer:"return=minimal"},body:JSON.stringify({status:"admin_requested",admin_requested_at:new Date().toISOString(),updated_at:new Date().toISOString()})});
         const saved=await supportInsertMessage(auth.config,conversation.id,"ai","Your request for human Admin assistance has been submitted successfully. It is now in the ProLink Admin support queue. I will remain available while you wait. Admin has not yet marked this conversation as attending.");
-        return json({conversation:{...conversation,status:"admin_requested",last_message_at:new Date().toISOString()},messages:saved?[saved]:[],awaitingAdmin:true});
+        return json({conversation:{...conversation,status:"admin_requested",last_message_at:new Date().toISOString()},messages:[savedUserMessage,saved].filter(Boolean),awaitingAdmin:true});
       }
       const saved=await supportInsertMessage(auth.config,conversation.id,"ai","Your request for human Admin assistance is already in the support queue. I will remain available while you wait.");
-      return json({conversation,messages:saved?[saved]:[],awaitingAdmin:true});
+      return json({conversation,messages:[savedUserMessage,saved].filter(Boolean),awaitingAdmin:true});
     }
     const greeting=supportGreetingReply(message,supportName(auth.user));
     const greetingPrefix=greeting?"":supportGreetingPrefix(message,supportName(auth.user));
@@ -1437,18 +1437,23 @@ async function supportSend(request,env){
       if(greetingPrefix)reply=greetingPrefix+" "+reply;
     }
     const saved=await supportInsertMessage(auth.config,conversation.id,"ai",reply);
-    return json({conversation,messages:saved?[saved]:[],awaitingAdmin:conversation.status==="admin_requested"});
+    return json({conversation,messages:[savedUserMessage,saved].filter(Boolean),awaitingAdmin:conversation.status==="admin_requested"});
   }catch(error){console.error("[prolink-support] send_failed",{name:error?.name||"Error",message:String(error?.message||"").slice(0,150)});return json({error:"Your message could not be sent. Please try again."},502);}
 }
 async function supportRequestAdmin(request,env){
   const auth=await signedInProfileUser(request,env);if(auth.error)return auth.error;
   try{
     const conversation=await supportConversation(auth.config,auth.user.id);
+    let messages=[];
     if(conversation.status!=="admin_attending"&&conversation.status!=="admin_requested"){
+      // The user tapped "Connect me to human Admin". Save that action as a
+      // user-authored message so the Admin sees the request in the same thread.
+      const userRequest=await supportInsertMessage(auth.config,conversation.id,"user","I would like to speak to a human Admin.",{senderUserId:auth.user.id});
       await supabaseRest(auth.config,"/rest/v1/prolink_support_conversations?id=eq."+encodeURIComponent(conversation.id),{method:"PATCH",headers:{prefer:"return=minimal"},body:JSON.stringify({status:"admin_requested",admin_requested_at:new Date().toISOString(),updated_at:new Date().toISOString()})});
-      await supportInsertMessage(auth.config,conversation.id,"ai","I’ve sent your request for human Admin assistance. Your conversation is now in the Admin support queue. I’ll remain available while you wait; Admin has not yet marked this conversation as attending.");
+      const aiReply=await supportInsertMessage(auth.config,conversation.id,"ai","I’ve sent your request for human Admin assistance. Your conversation is now in the Admin support queue. I’ll remain available while you wait; Admin has not yet marked this conversation as attending.");
+      messages=[userRequest,aiReply].filter(Boolean);
     }
-    return json({success:true,message:"Your request is in the Admin support queue. The AI assistant remains available while you wait."});
+    return json({success:true,message:"Your request is in the Admin support queue. The AI assistant remains available while you wait.",messages});
   }catch(error){return json({error:"Your Admin request could not be submitted. Please try again."},502);}
 }
 async function supportAttachment(request,env){
