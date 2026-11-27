@@ -1,5 +1,5 @@
 import React,{useCallback,useEffect,useMemo,useState} from 'react';
-import {MessageCircle,Send,FileText,Receipt,CheckCheck,ArrowLeft,CalendarDays,MapPin,UserRound,BriefcaseBusiness,Plus,Trash2,Printer} from 'lucide-react';
+import {MessageCircle,Send,FileText,Receipt,CheckCheck,ArrowLeft,CalendarDays,MapPin,UserRound,BriefcaseBusiness,Plus,Trash2,Printer,Paperclip,Image as ImageIcon,Download} from 'lucide-react';
 import './work-requests.css';
 
 const dateLabel=value=>value?new Date(value+'T00:00:00').toLocaleDateString(): 'Flexible';
@@ -16,6 +16,7 @@ const printWorkInvoice=(inv,work)=>{
 };
 export default function WorkRequestWorkspace({session,requests=[],loading=false,onRefresh,onUpdate,direction='incoming'}){
  const [active,setActive]=useState(null),[messages,setMessages]=useState([]),[invoices,setInvoices]=useState([]);
+ const [uploading,setUploading]=useState(false);const attachmentInput=useRef(null);
  const [draft,setDraft]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
  const [showInvoice,setShowInvoice]=useState(false),[invoiceDate,setInvoiceDate]=useState(new Date().toISOString().slice(0,10));
  const [dueDate,setDueDate]=useState(''),[currency,setCurrency]=useState('USD');
@@ -25,7 +26,7 @@ export default function WorkRequestWorkspace({session,requests=[],loading=false,
  const lineItems=useMemo(()=>items.map(i=>({...i,quantity:Number(i.quantity),unit_price:Number(i.unitPrice),line_total:Math.round(Number(i.quantity)*Number(i.unitPrice)*100)/100})).filter(i=>i.description.trim()&&i.quantity>0&&i.unit_price>=0),[items]);
  const subtotal=lineItems.reduce((sum,i)=>sum+i.line_total,0),discount=Math.min(Math.max(0,Number(discountAmount)||0),subtotal),tax=Math.round((subtotal-discount)*Math.max(0,Number(taxPercent)||0))/100,total=Math.max(0,Math.round((subtotal-discount+tax)*100)/100);
  const token=session?.access_token;
- const mine=useMemo(()=>requests.filter(r=>r.direction===direction),[requests,direction]);
+ const mine=useMemo(()=>requests.filter(r=>direction==='all'||r.direction===direction),[requests,direction]);
  const loadThread=useCallback(async(id,silent=false)=>{
   if(!token||!id)return;
   if(!silent)setBusy(true);
@@ -52,6 +53,20 @@ export default function WorkRequestWorkspace({session,requests=[],loading=false,
   }catch(e){setError(e.message||'Message could not be sent.');}
   finally{setBusy(false);}
  };
+ const uploadAttachment=async file=>{
+  if(!file||!active||!token)return;
+  const allowed=['image/jpeg','image/png','image/webp','application/pdf','text/plain','text/csv','application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.ms-excel','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
+  if(!allowed.includes(file.type)){setError('Choose an image, PDF, Word, Excel, TXT or CSV file.');return;}
+  if(file.size>10*1024*1024){setError('Files must be no larger than 10 MB.');return;}
+  setUploading(true);setError('');
+  try{const form=new FormData();form.append('file',file);const response=await fetch('/api/work-requests/'+encodeURIComponent(active.id)+'/attachments',{method:'POST',headers:{authorization:'Bearer '+token},body:form});const data=await response.json();if(!response.ok)throw new Error(data.error||'File could not be sent.');await loadThread(active.id,true);}
+  catch(e){setError(e.message||'File could not be sent.');}
+  finally{setUploading(false);if(attachmentInput.current)attachmentInput.current.value='';}
+ };
+ const openAttachment=async(messageId,index)=>{
+  try{const response=await fetch('/api/work-requests/'+encodeURIComponent(active.id)+'/attachments?messageId='+encodeURIComponent(messageId)+'&index='+index,{headers:{authorization:'Bearer '+token}});if(!response.ok){const data=await response.json().catch(()=>({}));throw new Error(data.error||'Attachment could not be opened.');}const blob=await response.blob();const url=URL.createObjectURL(blob);const opened=window.open(url,'_blank');if(!opened){const link=document.createElement('a');link.href=url;link.download='ProLink-attachment';link.click();}setTimeout(()=>URL.revokeObjectURL(url),60000);}
+  catch(e){setError(e.message||'Attachment could not be opened.');}
+ };
  const submitInvoice=async event=>{
   event.preventDefault();if(!active||invoiceBusy)return;setError('');
   const payloadItems=lineItems.map(({description,quantity,unit,unit_price,line_total})=>({description:description.trim(),quantity,unit,unit_price,line_total}));
@@ -75,19 +90,19 @@ export default function WorkRequestWorkspace({session,requests=[],loading=false,
   }catch(e){setError(e.message||'Invoice response could not be saved.');}
   finally{setInvoiceActionBusy('');}
  };
- const professional=direction==='incoming';
+ const professional=active?active.direction==='incoming':direction==='incoming';
  return <main className="work-request-page-scroll"><section className="work-workspace">
   {!active?<>
    <div className="work-workspace-heading"><div><h1>{professional?'Incoming work requests':'My work requests'}</h1><p>{professional?'Private customer requests sent directly to your professional account.':'Requests you have sent to professionals, including their replies and quotations.'}</p></div><button className="outline-button" type="button" onClick={onRefresh} disabled={loading}>{loading?'Refreshing…':'Refresh requests'}</button></div>
    {loading&&!mine.length?<p className="work-empty">Loading your work requests…</p>:mine.length?mine.map(r=><article className="work-request-card" key={r.id}>
-    <div className="work-card-top"><span className="work-eyebrow">DIRECT CUSTOMER REQUEST</span><span className={'work-status status-'+r.status}>{r.status.replaceAll('_',' ')}</span></div>
+    <div className="work-card-top"><span className="work-eyebrow">{r.direction==='incoming'?'REQUEST RECEIVED':'REQUEST SENT'}</span><span className={'work-status status-'+r.status}>{r.status.replaceAll('_',' ')}</span></div>
     <h2>{r.job_description}</h2><div className="work-meta"><span><MapPin size={15}/>{r.job_location}</span><span><CalendarDays size={15}/>Preferred: {dateLabel(r.preferred_date)}</span></div>
     <p className="work-request-date">Submitted {stamp(r.created_at)}</p>
-    {!professional&&<p className="work-professional-name"><UserRound size={15}/> Sent to {r.professional_name}</p>}
-    {professional&&<p className="work-received-state">{r.professional_read_at?'You have viewed this request':'New request · Not yet viewed'}</p>}
+    {r.direction==='outgoing'&&<p className="work-professional-name"><UserRound size={15}/> Sent to {r.professional_name}</p>}
+    {r.direction==='incoming'&&<p className="work-received-state">{r.professional_read_at?'You have viewed this request':'New request · Not yet viewed'}</p>}
     <div className="work-card-actions">
-     {professional&&r.status==='pending'&&<><button type="button" className="work-accept" onClick={()=>onUpdate(r.id,'accepted')}>Accept request</button><button type="button" className="work-decline" onClick={()=>onUpdate(r.id,'declined')}>Decline</button></>}
-     {!professional&&r.status==='pending'&&<button type="button" className="work-decline" onClick={()=>onUpdate(r.id,'cancelled')}>Cancel request</button>}
+     {r.direction==='incoming'&&r.status==='pending'&&<><button type="button" className="work-accept" onClick={()=>onUpdate(r.id,'accepted')}>Accept request</button><button type="button" className="work-decline" onClick={()=>onUpdate(r.id,'declined')}>Decline</button></>}
+     {r.direction==='outgoing'&&r.status==='pending'&&<button type="button" className="work-decline" onClick={()=>onUpdate(r.id,'cancelled')}>Cancel request</button>}
      <button type="button" className="work-open-chat" onClick={()=>setActive(r)}><MessageCircle size={16}/> Open conversation</button>
     </div>
    </article>):<div className="work-empty"><BriefcaseBusiness size={28}/><b>{professional?'No incoming requests yet':'You have not sent any work requests yet'}</b><span>When a customer or professional starts a request, it will appear here.</span></div>}
@@ -97,8 +112,8 @@ export default function WorkRequestWorkspace({session,requests=[],loading=false,
    <div className="work-thread-messages">
     {busy&&!messages.length&&!invoices.length&&<p className="work-empty">Opening conversation…</p>}
     {!messages.length&&!invoices.length&&!busy&&<p className="work-empty">This is the beginning of your private conversation about this job. Discuss the work, timing and quotation here.</p>}
-    {messages.map(m=><article key={m.id} className={'work-chat-message '+(m.sender_user_id===session?.user?.id?'mine':'theirs')}><b>{m.sender_user_id===session?.user?.id?'You':professional?'Customer':active.professional_name}</b><p>{m.body}</p><small>{stamp(m.created_at)} {m.recipient_read_at&&<CheckCheck size={12}/>}</small></article>)}
-    {invoices.map(inv=><article key={inv.id} className="work-invoice-card">
+    {messages.map(m=><article key={m.id} className={'work-chat-message '+(m.sender_user_id===session?.user?.id?'mine':'theirs')}><b>{m.sender_user_id===session?.user?.id?'You':professional?active.requester_name||'Customer':active.professional_name||'Professional'}</b>{m.body&&<p>{m.body}</p>}{(m.attachments||[]).map((file,index)=><button type="button" className="work-chat-attachment" key={index} onClick={()=>openAttachment(m.id,index)}><span>{file.kind==='image'?<ImageIcon size={18}/>:<FileText size={18}/>}</span><span><b>{file.name}</b><small>{file.size?Math.max(1,Math.round(file.size/1024))+' KB':'Attachment'} · Tap to open</small></span><Download size={16}/></button>)}<small>{stamp(m.created_at)} {m.recipient_read_at&&<CheckCheck size={12}/>}</small></article>)}
+   {invoices.map(inv=><article key={inv.id} className="work-invoice-card">
      <div className="work-invoice-head"><Receipt size={19}/><div><b>Invoice {inv.invoice_number}</b><small>Issued {dateLabel(inv.invoice_date)}{inv.due_date?' · Due '+dateLabel(inv.due_date):''}</small></div><span className={'work-status status-'+inv.status}>{inv.status}</span></div>
      <div className="work-invoice-parties"><span><b>From:</b> {inv.from_name||'Professional'} {inv.from_contact&&' · '+inv.from_contact}</span><span><b>Bill to:</b> {inv.bill_to_name||active.requester_name||'Customer'}</span></div>
      <div className="work-invoice-table-wrap"><table className="work-invoice-table"><thead><tr><th>Item / description</th><th>Qty</th><th>Unit price</th><th>Total</th></tr></thead><tbody>{(inv.line_items?.length?inv.line_items:[{description:inv.quotation,quantity:1,unit_price:inv.amount,line_total:inv.amount}]).map((item,i)=><tr key={i}><td>{item.description}{item.unit?' ('+item.unit+')':''}</td><td>{item.quantity}</td><td>{money(item.unit_price,inv.currency)}</td><td>{money(item.line_total??Number(item.quantity)*Number(item.unit_price),inv.currency)}</td></tr>)}</tbody></table></div>
@@ -123,7 +138,7 @@ export default function WorkRequestWorkspace({session,requests=[],loading=false,
     <label className="work-invoice-quotation-field">Notes or payment terms<textarea rows={3} maxLength={3000} value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Additional scope, warranty, payment instructions or notes (optional)."/></label>
     <button className="work-invoice-submit" disabled={invoiceBusy||!lineItems.length}>{invoiceBusy?'Preparing invoice…':'Review and send invoice to customer'}</button>
    </form>}
-   <form className="work-thread-composer" onSubmit={send}><textarea rows={2} value={draft} onChange={e=>setDraft(e.target.value)} maxLength={5000} placeholder="Write a message about this job…"/><button type="submit" disabled={!draft.trim()||busy}><Send size={17}/> Send</button></form>
+   <form className="work-thread-composer" onSubmit={send}><input ref={attachmentInput} type="file" hidden accept="image/jpeg,image/png,image/webp,application/pdf,text/plain,text/csv,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={e=>uploadAttachment(e.target.files?.[0])}/><button type="button" className="work-attach-button" onClick={()=>attachmentInput.current?.click()} disabled={uploading||busy} aria-label="Attach image or file">{uploading?'…':<Paperclip size={18}/>}</button><textarea rows={2} value={draft} onChange={e=>setDraft(e.target.value)} maxLength={5000} placeholder="Write a message about this job…"/><button type="submit" disabled={!draft.trim()||busy||uploading}><Send size={17}/> Send</button></form>
    {error&&<p className="work-thread-error" role="alert">{error}</p>}
   </>}
  </section></main>;
