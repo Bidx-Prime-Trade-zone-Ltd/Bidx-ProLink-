@@ -618,7 +618,7 @@ async function workRequests(request,env){
   }
 }
 
-async function workRequestThread(request,env,requestId,resource){
+async function workRequestThread(request,env,requestId,resource,attachmentId=null){
   const auth=await signedInProfileUser(request,env);
   if(auth.error)return auth.error;
   const userId=auth.user.id;
@@ -630,16 +630,45 @@ async function workRequestThread(request,env,requestId,resource){
     const isProfessional=work.professional_user_id===userId;
     if(!isRequester&&!isProfessional)return json({error:"You are not a participant in this work conversation."},403);
     if(resource==="conversation"&&request.method==="GET"){
-      const [messages,invoices]=await Promise.all([
+      const [messages,invoices,attachments]=await Promise.all([
         supabaseRest(auth.config,"/rest/v1/prolink_work_request_messages?select=*&work_request_id=eq."+encodeURIComponent(requestId)+"&order=created_at.asc&limit=500"),
-        supabaseRest(auth.config,"/rest/v1/prolink_work_request_invoices?select=*&work_request_id=eq."+encodeURIComponent(requestId)+"&order=created_at.asc&limit=100")
+        supabaseRest(auth.config,"/rest/v1/prolink_work_request_invoices?select=*&work_request_id=eq."+encodeURIComponent(requestId)+"&order=created_at.asc&limit=100"),
+        supabaseRest(auth.config,"/rest/v1/prolink_work_request_attachments?select=id,work_request_id,sender_user_id,file_name,mime_type,file_size,kind,caption,created_at,recipient_read_at&work_request_id=eq."+encodeURIComponent(requestId)+"&order=created_at.asc&limit=200")
       ]);
       const readAt=new Date().toISOString();
       await Promise.all([
         supabaseRest(auth.config,"/rest/v1/prolink_work_request_messages?work_request_id=eq."+encodeURIComponent(requestId)+"&sender_user_id=neq."+encodeURIComponent(userId)+"&recipient_read_at=is.null",{method:"PATCH",headers:{prefer:"return=minimal"},body:JSON.stringify({recipient_read_at:readAt})}),
-        supabaseRest(auth.config,"/rest/v1/prolink_work_request_invoices?work_request_id=eq."+encodeURIComponent(requestId)+"&sender_user_id=neq."+encodeURIComponent(userId)+"&recipient_read_at=is.null",{method:"PATCH",headers:{prefer:"return=minimal"},body:JSON.stringify({recipient_read_at:readAt})})
+        supabaseRest(auth.config,"/rest/v1/prolink_work_request_invoices?work_request_id=eq."+encodeURIComponent(requestId)+"&sender_user_id=neq."+encodeURIComponent(userId)+"&recipient_read_at=is.null",{method:"PATCH",headers:{prefer:"return=minimal"},body:JSON.stringify({recipient_read_at:readAt})}),
+        supabaseRest(auth.config,"/rest/v1/prolink_work_request_attachments?work_request_id=eq."+encodeURIComponent(requestId)+"&sender_user_id=neq."+encodeURIComponent(userId)+"&recipient_read_at=is.null",{method:"PATCH",headers:{prefer:"return=minimal"},body:JSON.stringify({recipient_read_at:readAt})})
       ]);
-      return json({workRequest:work,messages:messages||[],invoices:(invoices||[]).map(item=>({...item,...(item.sender_user_id!==userId&&!item.recipient_read_at?{recipient_read_at:readAt}:{})}))});
+      return json({workRequest:work,messages:messages||[],invoices:(invoices||[]).map(item=>({...item,...(item.sender_user_id!==userId&&!item.recipient_read_at?{recipient_read_at:readAt}:{})})),attachments:(attachments||[]).map(item=>({...item,...(item.sender_user_id!==userId&&!item.recipient_read_at?{recipient_read_at:readAt}:{})}))});
+    }
+    if(resource==="attachments"&&request.method==="POST"){
+      if(!env.R2)return json({error:"Private file storage is not configured."},503);
+      let form;try{form=await request.formData();}catch{return json({error:"The attachment could not be read. Please choose the file again."},400);}
+      const file=form.get("file"),caption=String(form.get("caption")||"").trim();
+      const allowed=new Set(["image/jpeg","image/png","image/webp","application/pdf","text/plain","text/csv","application/msword","application/vnd.openxmlformats-officedocument.wordprocessingml.document","application/vnd.ms-excel","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"]);
+      if(!file||typeof file.arrayBuffer!=="function"||!allowed.has(file.type))return json({error:"Choose a JPEG, PNG, WebP image, PDF, Word, Excel, CSV or text file."},400);
+      if(file.size<1||file.size>10485760)return json({error:"Attachments must be no larger than 10 MB."},400);
+      if(caption.length>1000)return json({error:"Attachment caption is too long."},400);
+      const fileName=String(file.name||"attachment").replace(/[^a-zA-Z0-9._ -]/g,"_").slice(-120)||"attachment";
+      const key="work-conversations/"+requestId+"/"+userId+"/"+crypto.randomUUID()+"-"+fileName;
+      try{
+        await env.R2.put(key,await file.arrayBuffer(),{httpMetadata:{contentType:file.type,cacheControl:"private, no-store"}});
+        const saved=await supabaseRest(auth.config,"/rest/v1/prolink_work_request_attachments",{method:"POST",headers:{prefer:"return=representation"},body:JSON.stringify({work_request_id:requestId,sender_user_id:userId,storage_key:key,file_name:fileName,mime_type:file.type,file_size:file.size,kind:file.type.startsWith("image/")?"image":"file",caption})});
+        if(!saved?.[0]?.id)throw new Error("Attachment details could not be saved.");
+        await supabaseRest(auth.config,"/rest/v1/prolink_work_requests?id=eq."+encodeURIComponent(requestId),{method:"PATCH",headers:{prefer:"return=minimal"},body:JSON.stringify({updated_at:new Date().toISOString()})});
+        return json({success:true,attachment:{id:saved[0].id,file_name:fileName,kind:file.type.startsWith("image/")?"image":"file"}},201);
+      }catch(error){await env.R2.delete(key);throw error;}
+    }
+    if(resource==="attachments"&&request.method==="GET"){
+      if(!env.R2)return json({error:"Private file storage is not configured."},503);
+      if(!attachmentId||!/^[0-9a-f-]{36}$/i.test(attachmentId))return json({error:"Choose a valid attachment."},400);
+      const rows=await supabaseRest(auth.config,"/rest/v1/prolink_work_request_attachments?select=storage_key,file_name,mime_type&id=eq."+encodeURIComponent(attachmentId)+"&work_request_id=eq."+encodeURIComponent(requestId)+"&limit=1");
+      const file=rows?.[0];if(!file)return json({error:"Attachment not found."},404);
+      const object=await env.R2.get(file.storage_key);if(!object)return json({error:"This attachment is no longer available."},404);
+      const safeName=String(file.file_name||"download").replace(/[\r\n"]/g,"_");
+      return new Response(object.body,{headers:{"content-type":file.mime_type||"application/octet-stream","content-disposition":(String(file.mime_type||"").startsWith("image/")||file.mime_type==="application/pdf"?"inline":"attachment")+'; filename="'+safeName+'"',"cache-control":"private, no-store","x-content-type-options":"nosniff"}});
     }
     if(resource==="messages"&&request.method==="POST"){
       const body=await request.json(),message=String(body.body||"").trim();
@@ -1822,8 +1851,8 @@ export default {
     if (url.pathname === "/api/location/reverse" && request.method === "GET") return reverseGeocode(request, env);
     if (url.pathname === "/api/profile/change-status" && request.method === "GET") return profileChangeStatus(request, env);
     if (url.pathname === "/api/profile/change-request" && request.method === "POST") return profileChangeRequest(request, env);
-    const workThreadMatch=url.pathname.match(/^\/api\/work-requests\/([0-9a-f-]{36})\/(conversation|messages|invoices)$/i);
-    if(workThreadMatch)return workRequestThread(request,env,workThreadMatch[1],workThreadMatch[2]);
+    const workThreadMatch=url.pathname.match(/^\/api\/work-requests\/([0-9a-f-]{36})\/(conversation|messages|invoices|attachments)(?:\/([0-9a-f-]{36}))?$/i);
+    if(workThreadMatch)return workRequestThread(request,env,workThreadMatch[1],workThreadMatch[2],workThreadMatch[3]||null);
     if (url.pathname === "/api/work-requests" && ["GET","POST","PATCH"].includes(request.method)) return workRequests(request, env);
     if (url.pathname === "/api/work-requests/read" && request.method === "POST") return markWorkRequestsRead(request, env);
     if (url.pathname === "/api/notifications/unread" && request.method === "GET") return unreadNotificationCount(request, env);
