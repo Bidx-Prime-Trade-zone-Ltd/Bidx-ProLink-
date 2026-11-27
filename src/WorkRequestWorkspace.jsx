@@ -1,5 +1,5 @@
 import React,{useCallback,useEffect,useMemo,useState} from 'react';
-import {MessageCircle,Send,FileText,Receipt,CheckCheck,ArrowLeft,CalendarDays,MapPin,UserRound,BriefcaseBusiness,Plus,Trash2,Printer,Paperclip,Image as ImageIcon,Download,LoaderCircle} from 'lucide-react';
+import {MessageCircle,Send,FileText,Receipt,CheckCheck,ArrowLeft,CalendarDays,MapPin,UserRound,BriefcaseBusiness,Plus,Trash2,Printer,Paperclip,Image as ImageIcon,Download,LoaderCircle,X} from 'lucide-react';
 import './work-requests.css';
 
 const dateLabel=value=>value?new Date(value+'T00:00:00').toLocaleDateString(): 'Flexible';
@@ -16,7 +16,7 @@ const printWorkInvoice=(inv,work)=>{
 };
 export default function WorkRequestWorkspace({session,requests=[],loading=false,onRefresh,onUpdate,direction='incoming'}){
  const [active,setActive]=useState(null),[messages,setMessages]=useState([]),[invoices,setInvoices]=useState([]),[attachments,setAttachments]=useState([]);
- const [draft,setDraft]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[uploading,setUploading]=useState(false),[selectedFile,setSelectedFile]=useState(null),[filePreviewUrl,setFilePreviewUrl]=useState('');
+ const [draft,setDraft]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[uploading,setUploading]=useState(false),[selectedFile,setSelectedFile]=useState(null),[filePreviewUrl,setFilePreviewUrl]=useState(''),[viewingAttachment,setViewingAttachment]=useState(null);
  const [showInvoice,setShowInvoice]=useState(false),[invoiceDate,setInvoiceDate]=useState(new Date().toISOString().slice(0,10));
  const [dueDate,setDueDate]=useState(''),[currency,setCurrency]=useState('USD');
  const [items,setItems]=useState([newInvoiceItem()]),[taxPercent,setTaxPercent]=useState('0'),[discountAmount,setDiscountAmount]=useState('0'),[notes,setNotes]=useState('');
@@ -27,6 +27,7 @@ export default function WorkRequestWorkspace({session,requests=[],loading=false,
  const token=session?.access_token;
  const fileRef=React.useRef(null);
  useEffect(()=>{if(!selectedFile){setFilePreviewUrl('');return;}const url=URL.createObjectURL(selectedFile);setFilePreviewUrl(url);return()=>URL.revokeObjectURL(url);},[selectedFile]);
+ useEffect(()=>()=>{if(viewingAttachment?.url)URL.revokeObjectURL(viewingAttachment.url);},[viewingAttachment?.url]);
  const mine=useMemo(()=>direction==='all'?requests:requests.filter(r=>r.direction===direction),[requests,direction]);
  const loadThread=useCallback(async(id,silent=false)=>{
   if(!token||!id)return;
@@ -70,12 +71,15 @@ export default function WorkRequestWorkspace({session,requests=[],loading=false,
  };
  const openAttachment=async attachment=>{
   try{
+   setError('');
    const response=await fetch('/api/work-requests/'+encodeURIComponent(active.id)+'/attachments/'+encodeURIComponent(attachment.id),{headers:{authorization:'Bearer '+token}});
-   if(!response.ok)throw new Error('This file could not be opened.');
-   const blob=await response.blob(),url=URL.createObjectURL(blob);
-   const opened=window.open(url,'_blank');
-   if(!opened){const link=document.createElement('a');link.href=url;link.download=attachment.file_name;link.click();}
-   setTimeout(()=>URL.revokeObjectURL(url),60000);
+   if(!response.ok)throw new Error('This file could not be opened. Please try again.');
+   const blob=await response.blob(),url=URL.createObjectURL(blob),type=attachment.mime_type||blob.type||'application/octet-stream';
+   if(type.startsWith('image/')||type==='application/pdf'){
+    setViewingAttachment({url,type,name:attachment.file_name||'Shared file'});
+   }else{
+    const link=document.createElement('a');link.href=url;link.download=attachment.file_name||'download';document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
+   }
   }catch(e){setError(e.message||'This file could not be opened.');}
  };
  const submitInvoice=async event=>{
@@ -163,5 +167,12 @@ export default function WorkRequestWorkspace({session,requests=[],loading=false,
    </form>
    {error&&<p className="work-thread-error" role="alert">{error}</p>}
   </>}
- </section></main>;
+ </section>
+ {viewingAttachment&&<div className="work-file-viewer-backdrop" role="presentation" onClick={()=>setViewingAttachment(null)}>
+  <section className="work-file-viewer" role="dialog" aria-modal="true" aria-label={'Viewing '+viewingAttachment.name} onClick={e=>e.stopPropagation()}>
+   <header className="work-file-viewer-header"><strong title={viewingAttachment.name}>{viewingAttachment.name}</strong><div><a href={viewingAttachment.url} download={viewingAttachment.name} className="work-file-viewer-download"><Download size={17}/> Download</a><button type="button" onClick={()=>setViewingAttachment(null)} aria-label="Close file viewer"><X size={22}/></button></div></header>
+   <div className="work-file-viewer-content">{viewingAttachment.type==='application/pdf'?<iframe title={viewingAttachment.name} src={viewingAttachment.url}/>:<img src={viewingAttachment.url} alt={viewingAttachment.name}/>}</div>
+  </section>
+ </div>}
+ </main>;
 }
