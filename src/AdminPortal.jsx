@@ -18,7 +18,17 @@ export default function AdminPortal(){
  const [unreadSupportConversations,setUnreadSupportConversations]=useState(0);
  const [selectedUser,setSelectedUser]=useState(null),[userMessage,setUserMessage]=useState(''),[sendingUserMessage,setSendingUserMessage]=useState(false),[userConversation,setUserConversation]=useState([]),[userConversationLoading,setUserConversationLoading]=useState(false),[userFilter,setUserFilter]=useState('all');
  const userChatEndRef=useRef(null);
+ const userChatAtBottomRef=useRef(true);
  const admin=!!user&&String(user.email||'').toLowerCase()===ADMIN_EMAIL;
+
+ // Keep Android/browser Back inside the restricted Admin workspace. The visible
+ // Return to ProLink button remains the intentional way to leave this portal.
+ useEffect(()=>{
+  const holdAdminRoute=()=>{window.history.pushState({...(window.history.state||{}),prolinkAdminStay:true},'',window.location.href);};
+  window.history.pushState({...(window.history.state||{}),prolinkAdminStay:true},'',window.location.href);
+  window.addEventListener('popstate',holdAdminRoute);
+  return()=>window.removeEventListener('popstate',holdAdminRoute);
+ },[]);
 
  const load=async()=>{
   if(!supabase)return;
@@ -87,7 +97,7 @@ export default function AdminPortal(){
  const openUser=(userId,extra={})=>{
   const account=dashboard.users.find(item=>item.id===userId)||{id:userId,email:''};
   const profile=dashboard.profiles.find(item=>item.user_id===userId)||account.profile||null;
-  setSelectedUser({...account,...extra,profile});setUserMessage('');setUserConversation([]);setNotice('');
+  setSelectedUser({...account,...extra,profile});setUserMessage('');setUserConversation([]);userChatAtBottomRef.current=true;setNotice('');
  };
  const loadUserConversation=async(showLoading=false)=>{
   if(!selectedUser?.id)return;
@@ -115,7 +125,10 @@ export default function AdminPortal(){
   const timer=setInterval(refresh,5000);
   return()=>{active=false;clearInterval(timer);};
  },[selectedUser?.id]);
- useEffect(()=>{userChatEndRef.current?.scrollIntoView({behavior:'smooth',block:'end'});},[userConversation]);
+ useEffect(()=>{
+  const node=userChatEndRef.current?.parentElement;
+  if(node&&userChatAtBottomRef.current)node.scrollTop=node.scrollHeight;
+ },[userConversation]);
  const openMetric=name=>{
   setQuery('');
   if(name==='Registered users'){setUserFilter('all');setTab('Users');}
@@ -128,6 +141,7 @@ export default function AdminPortal(){
  const sendUserMessage=async event=>{
   event.preventDefault();const message=userMessage.trim();
   if(!selectedUser||!message||sendingUserMessage)return;
+  userChatAtBottomRef.current=true;
   setSendingUserMessage(true);setNotice('');
   try{
    const {data:{session}}=await supabase.auth.getSession();
@@ -243,7 +257,7 @@ export default function AdminPortal(){
     </div>
     <section className="admin-user-chat">
      <div className="admin-user-chat-heading"><div><h3><MessageCircle size={18}/> Conversation with user</h3><p>Messages stay in this ProLink Support conversation. Keep this window open to continue chatting; close it with × when finished.</p></div><span className="admin-chat-live">Live · 5s refresh</span></div>
-     <div className="admin-user-chat-history" aria-live="polite">
+     <div className="admin-user-chat-history" aria-live="polite" onScroll={event=>{const node=event.currentTarget;userChatAtBottomRef.current=node.scrollHeight-node.scrollTop-node.clientHeight<48;}}>
       {userConversationLoading&&!userConversation.length?<p className="admin-chat-state">Loading conversation…</p>:userConversation.length?userConversation.map(message=><article key={message.id||message.created_at+message.content} className={'admin-chat-message '+(message.sender_role==='admin'?'from-admin':message.sender_role==='user'?'from-user':'from-ai')}>
        <div className="admin-chat-message-meta"><b>{message.sender_role==='admin'?'You · Admin':message.sender_role==='user'?'User':'ProLink AI'}</b><time>{fmt(message.created_at)}</time></div>
        <p>{message.content}</p>
