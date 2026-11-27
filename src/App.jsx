@@ -713,7 +713,7 @@ function App() {
   useEffect(()=>{
     if(tab!=='Messages'||!session?.access_token)return;
     fetch('/api/work-requests/read',{method:'POST',headers:{authorization:'Bearer '+session.access_token}})
-      .then(()=>refreshUnreadNotifications()).catch(()=>{});
+      .then(()=>Promise.all([refreshWorkRequests(),refreshUnreadNotifications()])).catch(()=>{});
   },[tab,session?.access_token]);
   const startJoin = (category = '', service = '') => { pushView({overlay:'join',menu:false,selected:null});setJoinData(p=>({...p,category:category||p.category,subcategory:service||p.subcategory}));setJoinStep(1);setShowCategories(false);setShowJoin(true); };
   const openCategoryBrowser = (group = '') => { pushView({overlay:'categories',menu:false,selected:null});setCategoryGroup(group);setCategorySearch('');setMenuOpen(false);setShowCategories(true); };
