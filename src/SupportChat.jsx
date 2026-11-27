@@ -17,6 +17,7 @@ export default function SupportChat({session,profile}){
  const [aiTyping,setAiTyping]=useState(false);
  const [uploading,setUploading]=useState(false);
  const [error,setError]=useState('');
+ const [unreadMessages,setUnreadMessages]=useState(0);
  const listRef=useRef(null);
  const panelRef=useRef(null);
  const fileRef=useRef(null);
@@ -57,6 +58,16 @@ export default function SupportChat({session,profile}){
  },[open]);
  const firstName=(profile?.full_name||session?.user?.user_metadata?.full_name||session?.user?.user_metadata?.name||'').trim().split(/\s+/)[0];
 
+ const refreshUnread=useCallback(async()=>{
+  if(!token){setUnreadMessages(0);return;}
+  try{
+   const response=await fetch('/api/notifications/unread',{headers:{authorization:'Bearer '+token}});
+   if(!response.ok)return;
+   const payload=await response.json();
+   setUnreadMessages(Number(payload.adminChat)||0);
+  }catch{}
+ },[token]);
+
  const load=useCallback(async(silent=false)=>{
   if(!token)return;
   if(!silent)setLoading(true);
@@ -70,6 +81,13 @@ export default function SupportChat({session,profile}){
   }catch(err){if(!silent)setError(err.message||'Support chat is temporarily unavailable.');}
   finally{if(!silent)setLoading(false);}
  },[token]);
+
+ useEffect(()=>{
+  if(!token){setUnreadMessages(0);return;}
+  refreshUnread();
+  const timer=setInterval(refreshUnread,7000);
+  return()=>clearInterval(timer);
+ },[token,refreshUnread]);
 
  useEffect(()=>{if(open){stickToBottom.current=true;load();}},[open,load]);
  useEffect(()=>{
@@ -86,17 +104,18 @@ export default function SupportChat({session,profile}){
 
  // Mark human Admin replies read after they have appeared in the open support thread.
  useEffect(()=>{
-  if(!open||!token||!messages.some(message=>message.sender_role==='admin'&&!message.user_read_at)||readReceiptInFlight.current)return;
+  if(!open||!token||!messages.some(message=>['admin','ai'].includes(message.sender_role)&&!message.user_read_at)||readReceiptInFlight.current)return;
   readReceiptInFlight.current=true;
   fetch('/api/support/read',{method:'POST',headers:{authorization:'Bearer '+token}})
    .then(response=>response.ok?response.json():null)
    .then(payload=>{
     if(!payload?.read_at)return;
-    setMessages(current=>current.map(message=>message.sender_role==='admin'&&!message.user_read_at?{...message,user_read_at:payload.read_at}:message));
+    setMessages(current=>current.map(message=>['admin','ai'].includes(message.sender_role)&&!message.user_read_at?{...message,user_read_at:payload.read_at}:message));
+    refreshUnread();
    })
    .catch(()=>{})
    .finally(()=>{readReceiptInFlight.current=false;});
- },[open,token,messages]);
+ },[open,token,messages,refreshUnread]);
  const onMessagesScroll=()=>{
   const node=listRef.current;if(!node)return;
   stickToBottom.current=node.scrollHeight-node.scrollTop-node.clientHeight<44;
@@ -164,7 +183,7 @@ export default function SupportChat({session,profile}){
  return <>
   {open&&<div className="prolink-support-overlay" aria-hidden="true"/>}
   <button type="button" className={'prolink-support-fab'+(open?' is-open':'')} onClick={()=>setOpen(v=>!v)} aria-label={open?'Close ProLink support':'Chat with ProLink Admin'}>
-   {open?<X size={21}/>:<MessageCircle size={21}/>}<span>{open?'Close':'Chat Admin'}</span>
+   {open?<X size={21}/>:<MessageCircle size={21}/>}<span>{open?'Close':'Chat Admin'}</span>{!open&&unreadMessages>0&&<b className="prolink-support-unread-badge" aria-label={unreadMessages+' unread support messages'}>{unreadMessages>99?'99+':unreadMessages}</b>}
   </button>
   {open&&<section ref={panelRef} className="prolink-support-panel" role="dialog" aria-modal="true" aria-label="Bidx ProLink support chat">
    <header className="prolink-support-header">
