@@ -16,7 +16,7 @@ const printWorkInvoice=(inv,work)=>{
 };
 export default function WorkRequestWorkspace({session,requests=[],loading=false,onRefresh,onUpdate,direction='incoming'}){
  const [active,setActive]=useState(null),[messages,setMessages]=useState([]),[invoices,setInvoices]=useState([]),[attachments,setAttachments]=useState([]);
- const [draft,setDraft]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[uploading,setUploading]=useState(false);
+ const [draft,setDraft]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[uploading,setUploading]=useState(false),[selectedFile,setSelectedFile]=useState(null),[filePreviewUrl,setFilePreviewUrl]=useState('');
  const [showInvoice,setShowInvoice]=useState(false),[invoiceDate,setInvoiceDate]=useState(new Date().toISOString().slice(0,10));
  const [dueDate,setDueDate]=useState(''),[currency,setCurrency]=useState('USD');
  const [items,setItems]=useState([newInvoiceItem()]),[taxPercent,setTaxPercent]=useState('0'),[discountAmount,setDiscountAmount]=useState('0'),[notes,setNotes]=useState('');
@@ -26,6 +26,7 @@ export default function WorkRequestWorkspace({session,requests=[],loading=false,
  const subtotal=lineItems.reduce((sum,i)=>sum+i.line_total,0),discount=Math.min(Math.max(0,Number(discountAmount)||0),subtotal),tax=Math.round((subtotal-discount)*Math.max(0,Number(taxPercent)||0))/100,total=Math.max(0,Math.round((subtotal-discount+tax)*100)/100);
  const token=session?.access_token;
  const fileRef=React.useRef(null);
+ useEffect(()=>{if(!selectedFile){setFilePreviewUrl('');return;}const url=URL.createObjectURL(selectedFile);setFilePreviewUrl(url);return()=>URL.revokeObjectURL(url);},[selectedFile]);
  const mine=useMemo(()=>direction==='all'?requests:requests.filter(r=>r.direction===direction),[requests,direction]);
  const loadThread=useCallback(async(id,silent=false)=>{
   if(!token||!id)return;
@@ -44,28 +45,28 @@ export default function WorkRequestWorkspace({session,requests=[],loading=false,
   return()=>clearInterval(timer);
  },[active?.id,loadThread]);
  const send=async event=>{
-  event.preventDefault();const body=draft.trim();if(!body||!active||busy)return;
+  event.preventDefault();const body=draft.trim(),file=selectedFile;if((!body&&!file)||!active||busy||uploading)return;
   setBusy(true);setError('');
   try{
-   const response=await fetch('/api/work-requests/'+encodeURIComponent(active.id)+'/messages',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+token},body:JSON.stringify({body})});
-   const data=await response.json();if(!response.ok)throw new Error(data.error||'Message could not be sent.');
-   setDraft('');await loadThread(active.id,true);
-  }catch(e){setError(e.message||'Message could not be sent.');}
-  finally{setBusy(false);}
- };
- const uploadAttachment=async file=>{
-  if(!file||!active||!token)return;
-  const allowed=['image/jpeg','image/png','image/webp','application/pdf','text/plain','text/csv','application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.ms-excel','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
-  if(!allowed.includes(file.type)){setError('Choose an image, PDF, Word, Excel, CSV or text file.');return;}
-  if(file.size<1||file.size>10485760){setError('Each attachment must be no larger than 10 MB.');return;}
-  setUploading(true);setError('');
-  try{
-   const form=new FormData();form.append('file',file);
-   const response=await fetch('/api/work-requests/'+encodeURIComponent(active.id)+'/attachments',{method:'POST',headers:{authorization:'Bearer '+token},body:form});
-   const data=await response.json();if(!response.ok)throw new Error(data.error||'File could not be sent.');
+   if(file){setUploading(true);const form=new FormData();form.append('file',file);if(body)form.append('caption',body);
+    const uploadResponse=await fetch('/api/work-requests/'+encodeURIComponent(active.id)+'/attachments',{method:'POST',headers:{authorization:'Bearer '+token},body:form});
+    const uploadData=await uploadResponse.json();if(!uploadResponse.ok)throw new Error(uploadData.error||'File could not be sent.');
+    setSelectedFile(null);if(fileRef.current)fileRef.current.value='';setDraft('');
+   }else{
+    const response=await fetch('/api/work-requests/'+encodeURIComponent(active.id)+'/messages',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+token},body:JSON.stringify({body})});
+    const data=await response.json();if(!response.ok)throw new Error(data.error||'Message could not be sent.');
+    setDraft('');
+   }
    await loadThread(active.id,true);
-  }catch(e){setError(e.message||'File could not be sent.');}
-  finally{setUploading(false);if(fileRef.current)fileRef.current.value='';}
+  }catch(e){setError(e.message||'Message or attachment could not be sent.');}
+  finally{setUploading(false);setBusy(false);}
+ };
+ const selectAttachment=file=>{
+  if(!file)return;
+  const allowed=['image/jpeg','image/png','image/webp','application/pdf','text/plain','text/csv','application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.ms-excel','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
+  if(!allowed.includes(file.type)){setError('Choose an image, PDF, Word, Excel, CSV or text file.');if(fileRef.current)fileRef.current.value='';return;}
+  if(file.size<1||file.size>10485760){setError('Each attachment must be no larger than 10 MB.');if(fileRef.current)fileRef.current.value='';return;}
+  setError('');setSelectedFile(file);
  };
  const openAttachment=async attachment=>{
   try{
@@ -149,7 +150,17 @@ export default function WorkRequestWorkspace({session,requests=[],loading=false,
     <label className="work-invoice-quotation-field">Notes or payment terms<textarea rows={3} maxLength={3000} value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Additional scope, warranty, payment instructions or notes (optional)."/></label>
     <button className="work-invoice-submit" disabled={invoiceBusy||!lineItems.length}>{invoiceBusy?'Preparing invoice…':'Review and send invoice to customer'}</button>
    </form>}
-   <form className="work-thread-composer" onSubmit={send}><textarea rows={2} value={draft} onChange={e=>setDraft(e.target.value)} maxLength={5000} placeholder="Message the customer or professional…"/><input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp,application/pdf,text/plain,text/csv,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden onChange={e=>uploadAttachment(e.target.files?.[0])}/><button type="button" className="work-attach-button" onClick={()=>fileRef.current?.click()} disabled={uploading||busy} aria-label="Attach image or document">{uploading?<LoaderCircle size={17}/>:<Paperclip size={17}/>}<span>{uploading?'Uploading':'Attach'}</span></button><button type="submit" disabled={!draft.trim()||busy||uploading}><Send size={17}/> Send</button></form>
+   <form className="work-thread-composer" onSubmit={send}>
+    {selectedFile&&<div className="work-selected-file" role="status">
+     {selectedFile.type.startsWith('image/')&&filePreviewUrl?<img className="work-selected-image" src={filePreviewUrl} alt="Selected image preview"/>:<span className="work-selected-file-icon">{selectedFile.type==='application/pdf'?<FileText size={27}/>:<FileText size={27}/>}</span>}
+     <span className="work-selected-file-details"><strong>{selectedFile.name}</strong><small>{selectedFile.type||'File'} · {selectedFile.size<1024*1024?(selectedFile.size/1024).toFixed(1)+' KB':(selectedFile.size/1024/1024).toFixed(2)+' MB'} · Ready to send</small></span>
+     <button type="button" className="work-remove-selected-file" onClick={()=>{setSelectedFile(null);if(fileRef.current)fileRef.current.value='';}} aria-label="Remove selected file" title="Remove selected file"><Trash2 size={18}/></button>
+    </div>}
+    <textarea rows={2} value={draft} onChange={e=>setDraft(e.target.value)} maxLength={5000} placeholder={selectedFile?'Add a message or caption (optional)…':'Message the customer or professional…'}/>
+    <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp,application/pdf,text/plain,text/csv,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden onChange={e=>selectAttachment(e.target.files?.[0])}/>
+    <button type="button" className="work-attach-button" onClick={()=>fileRef.current?.click()} disabled={uploading||busy} aria-label="Attach image or document"><Paperclip size={17}/><span>Attach</span></button>
+    <button type="submit" disabled={(!draft.trim()&&!selectedFile)||busy||uploading}>{uploading?<LoaderCircle size={17}/>:<Send size={17}/>} {uploading?'Sending file…':'Send'}</button>
+   </form>
    {error&&<p className="work-thread-error" role="alert">{error}</p>}
   </>}
  </section></main>;
