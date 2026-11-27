@@ -57,3 +57,15 @@ html,body,#root{min-height:100%;height:auto}body{overflow-x:hidden;overflow-y:au
 .work-selected-file-details small{font-size:10px;line-height:1.4;color:#6d8195}
 .work-thread-composer .work-remove-selected-file{flex:0 0 38px;width:38px;min-height:38px;padding:8px;border:1px solid #e8cccc;border-radius:9px;background:#fff0ef;color:#a23a35}
 .work-thread-composer .work-remove-selected-file:hover{background:#ffe5e3}
+
+/* Authenticated in-app viewer for private conversation images and PDF documents. */
+.work-file-viewer-backdrop{position:fixed;inset:0;z-index:10050;display:flex;align-items:center;justify-content:center;padding:12px;background:rgba(9,24,39,.78);overscroll-behavior:contain}
+.work-file-viewer{display:flex;flex-direction:column;width:min(100%,1000px);height:min(92dvh,900px);min-height:280px;overflow:hidden;border-radius:14px;background:#fff;box-shadow:0 18px 60px rgba(0,0,0,.28)}
+.work-file-viewer-header{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:58px;padding:9px 13px;border-bottom:1px solid #dce6ef;background:#fff;color:#203950}
+.work-file-viewer-header>strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px}
+.work-file-viewer-header>div{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.work-file-viewer-header button,.work-file-viewer-download{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:36px;padding:7px 10px;border:0;border-radius:8px;background:#eaf3fb;color:#1d5d91;font-size:12px;font-weight:800;text-decoration:none}
+.work-file-viewer-content{display:flex;flex:1;min-height:0;align-items:center;justify-content:center;overflow:auto;background:#202a34}
+.work-file-viewer-content img{display:block;max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain}
+.work-file-viewer-content iframe{display:block;width:100%;height:100%;min-height:0;border:0;background:#fff}
+@media(max-width:600px){.work-file-viewer-backdrop{padding:0}.work-file-viewer{width:100%;height:100dvh;max-height:100dvh;border-radius:0}.work-file-viewer-header{padding:8px 10px}.work-file-viewer-download{font-size:11px;padding:7px}}
