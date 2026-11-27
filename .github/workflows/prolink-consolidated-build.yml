@@ -37,6 +37,12 @@ jobs:
         run: npm test
 
       - name: Build frontend
+        env:
+          # These are the ProLink project's public Supabase browser credentials.
+          # The publishable/anon key is intended for client use; never place the
+          # service-role key in Vite or any browser bundle.
+          VITE_SUPABASE_URL: https://ljttcncfcetgdqfmtdhm.supabase.co
+          VITE_SUPABASE_ANON_KEY: sb_publishable_AcgbPQL6AEES5nLU59eyvw_VMTHVjQi
         run: npm run build
 
       - name: Validate Cloudflare Worker configuration (dry run)
