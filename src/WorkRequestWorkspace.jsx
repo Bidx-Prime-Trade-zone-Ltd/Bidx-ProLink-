@@ -126,10 +126,8 @@ export default function WorkRequestWorkspace({session,requests=[],loading=false,
    if(!response.ok)throw new Error('This file could not be opened. Please try again.');
    const blob=await response.blob(),url=URL.createObjectURL(blob),type=attachment.mime_type||blob.type||'application/octet-stream';
    if(type.startsWith('image/')||type==='application/pdf'){
-    if(type==='application/pdf'){
     window.history.pushState({...window.history.state,prolinkAttachmentViewer:true},'','#work-file');
-   }
-   setViewingAttachment({url,type,name:attachment.file_name||'Shared file'});
+    setViewingAttachment({url,type,name:attachment.file_name||'Shared file'});
    }else{
     const link=document.createElement('a');link.href=url;link.download=attachment.file_name||'download';document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
    }
