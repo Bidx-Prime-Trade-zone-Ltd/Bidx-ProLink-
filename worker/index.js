@@ -672,6 +672,20 @@ async function adminDashboard(request,env) {
 
 async function adminUserMessage(request,env){
   const auth=await requireProlinkAdmin(request,env);if(auth.error)return auth.error;
+  const requestUrl=new URL(request.url);
+  if(request.method==="GET"){
+    const userId=String(requestUrl.searchParams.get("userId")||"").trim();
+    if(!/^[0-9a-f-]{36}$/i.test(userId))return json({error:"Select a valid ProLink user."},400);
+    if(userId===auth.user.id)return json({error:"You cannot open a conversation with your own Admin account."},400);
+    try{
+      const conversation=await supportConversation(auth.config,userId);
+      const readAt=new Date().toISOString();
+      await supabaseRest(auth.config,"/rest/v1/prolink_support_messages?conversation_id=eq."+encodeURIComponent(conversation.id)+"&sender_role=eq.user&read_at=is.null",{method:"PATCH",headers:{prefer:"return=minimal"},body:JSON.stringify({read_at:readAt})});
+      const messages=await supabaseRest(auth.config,"/rest/v1/prolink_support_messages?select=id,conversation_id,sender_user_id,sender_role,content,attachments,created_at,read_at,delivered_at,user_read_at&conversation_id=eq."+encodeURIComponent(conversation.id)+"&order=created_at.asc&limit=1000");
+      return json({conversation,messages:messages||[]});
+    }catch(error){console.error("[prolink-admin] direct_user_conversation_load_failed",{name:error?.name||"Error"});return json({error:"The user's conversation could not be loaded."},502);}
+  }
+  if(request.method!=="POST")return json({error:"Method not allowed."},405);
   try{
     const body=await request.json(),userId=String(body.userId||"").trim(),message=String(body.message||"").trim();
     if(!/^[0-9a-f-]{36}$/i.test(userId))return json({error:"Select a valid ProLink user."},400);
@@ -1724,7 +1738,7 @@ export default {
     if (url.pathname === "/api/notifications/unread" && request.method === "GET") return unreadNotificationCount(request, env);
     if (url.pathname === "/api/admin/profile-change" && request.method === "POST") return adminProfileChange(request, env);
     if (url.pathname === "/api/admin/dashboard" && request.method === "GET") return adminDashboard(request, env);
-    if (url.pathname === "/api/admin/users/message" && request.method === "POST") return adminUserMessage(request, env);
+    if (url.pathname === "/api/admin/users/message" && (request.method === "GET" || request.method === "POST")) return adminUserMessage(request, env);
     if (url.pathname === "/api/admin/broadcasts" && (request.method === "GET" || request.method === "POST")) return adminBroadcasts(request, env);
     if (url.pathname === "/api/support/messages" && request.method === "GET") return supportMessages(request, env);
     if (url.pathname === "/api/support/read" && request.method === "POST") return supportMarkRead(request, env);
