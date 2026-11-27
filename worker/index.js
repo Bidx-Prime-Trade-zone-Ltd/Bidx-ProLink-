@@ -665,7 +665,8 @@ async function adminDashboard(request,env) {
     rejectedDocuments:reviewsResult?reviews.filter(r=>r.status==="rejected").length:null,
     pendingWorkRequests:workRequestsResult?workRequests.filter(r=>r.status==="pending").length:null
   };
-  const profileByUser=Object.fromEntries(profiles.map(profile=>[profile.user_id,profile]));\n  users=users.map(account=>({...account,profile:profileByUser[account.id]||null}));\n  return json({counts,users,profiles,reviews,profileChangeRequests,workRequests,warnings,adminEmail:auth.user.email});
+  const profileByUser=Object.fromEntries(profiles.map(profile=>[profile.user_id,profile]));
+  users=users.map(account=>({...account,profile:profileByUser[account.id]||null}));\n  return json({counts,users,profiles,reviews,profileChangeRequests,workRequests,warnings,adminEmail:auth.user.email});
 }
 
 async function adminUserMessage(request,env){
