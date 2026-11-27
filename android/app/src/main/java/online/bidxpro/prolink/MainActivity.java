@@ -40,6 +40,9 @@ public class MainActivity extends Activity {
     private WebView webView;
     private volatile boolean navigationMenuOpen = false;
     private volatile boolean supportChatOpen = false;
+    // The embedded Admin Portal is a protected workspace: native refresh and
+    // system Back must not accidentally leave or reload it.
+    private volatile boolean adminPortalOpen = false;
     // React reports the active SPA tab. Do not infer it from WebView URL:
     // internal ProLink pages share the same origin and often the same path.
     private volatile boolean homeScreenActive = true;
@@ -50,7 +53,7 @@ public class MainActivity extends Activity {
 
     private void updatePullToRefreshState() {
         if (swipeRefreshLayout == null) return;
-        boolean enabled = homeScreenActive && !navigationMenuOpen && !supportChatOpen;
+        boolean enabled = homeScreenActive && !navigationMenuOpen && !supportChatOpen && !adminPortalOpen;
         swipeRefreshLayout.setEnabled(enabled);
         if (!enabled) swipeRefreshLayout.setRefreshing(false);
     }
@@ -71,6 +74,13 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void setHomeScreen(boolean active) {
             homeScreenActive = active;
+            runOnUiThread(() -> updatePullToRefreshState());
+        }
+
+        @JavascriptInterface
+        public void setAdminPortalOpen(boolean open) {
+            adminPortalOpen = open;
+            if (open) homeScreenActive = false;
             runOnUiThread(() -> updatePullToRefreshState());
         }
 
@@ -432,6 +442,11 @@ public class MainActivity extends Activity {
     }
 
     private void handleBackNavigation() {
+        if (adminPortalOpen) {
+            // Keep the Admin workspace open; use its explicit Return to ProLink control.
+            Toast.makeText(this, "You are in ProLink Admin. Use Return to ProLink to leave this portal.", Toast.LENGTH_SHORT).show();
+            return;
+        }
         if (webView == null) {
             finish();
             return;
