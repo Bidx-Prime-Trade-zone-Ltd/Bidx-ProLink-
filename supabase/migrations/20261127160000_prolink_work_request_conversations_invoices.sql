@@ -19,7 +19,25 @@ create table if not exists public.prolink_work_request_invoices (
   sender_user_id uuid not null references auth.users(id) on delete restrict,
   invoice_date date not null default current_date,
   due_date date,
-  currency text not null default 'USD' check (currency ~ '^[A-Z]{3,8}$'),
+  currency text not null default 'USD' check (currency ~ '^[A-Z]{3}),
+  amount numeric(14,2) not null check (amount > 0),
+  quotation text not null check (char_length(trim(quotation)) between 5 and 5000),
+  status text not null default 'sent' check (status in ('sent','accepted','declined','paid')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  recipient_read_at timestamptz
+);
+create index if not exists prolink_work_request_invoices_thread_idx
+  on public.prolink_work_request_invoices(work_request_id, created_at desc);
+alter table public.prolink_work_request_invoices enable row level security;
+revoke all on public.prolink_work_request_invoices from anon, authenticated;
+grant all on public.prolink_work_request_invoices to service_role;
+
+comment on table public.prolink_work_request_messages is
+  'Private customer-professional conversation attached to a single ProLink work request; access is mediated by the authenticated Worker.';
+comment on table public.prolink_work_request_invoices is
+  'Quotations and invoices sent by professionals to the customer within a ProLink work-request conversation; access is mediated by the authenticated Worker.';
+),
   amount numeric(14,2) not null check (amount > 0),
   quotation text not null check (char_length(trim(quotation)) between 5 and 5000),
   status text not null default 'sent' check (status in ('sent','accepted','declined','paid')),
