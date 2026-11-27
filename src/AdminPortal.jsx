@@ -15,6 +15,7 @@ export default function AdminPortal(){
  const [query,setQuery]=useState(''),[selected,setSelected]=useState(null),[reason,setReason]=useState('');
  const [notice,setNotice]=useState(''),[busy,setBusy]=useState(false),[documentUrl,setDocumentUrl]=useState('');
  const [documentLoading,setDocumentLoading]=useState(false);
+ const [unreadSupportConversations,setUnreadSupportConversations]=useState(0);
  const admin=!!user&&String(user.email||'').toLowerCase()===ADMIN_EMAIL;
 
  const load=async()=>{
@@ -37,6 +38,24 @@ export default function AdminPortal(){
   return()=>subscription.unsubscribe();
  },[]);
  useEffect(()=>{if(admin)load();},[admin]);
+ useEffect(()=>{
+  if(!admin){setUnreadSupportConversations(0);return;}
+  let active=true;
+  const refresh=async()=>{
+   try{
+    const {data:{session}}=await supabase.auth.getSession();
+    if(!session?.access_token)return;
+    const response=await fetch('/api/admin/support/unread',{headers:{authorization:'Bearer '+session.access_token}});
+    if(!response.ok)return;
+    const payload=await response.json();
+    if(active)setUnreadSupportConversations(Number(payload.unreadConversations)||0);
+   }catch{}
+  };
+  refresh();
+  const timer=setInterval(refresh,7000);
+  return()=>{active=false;clearInterval(timer);};
+ },[admin]);
+
  useEffect(()=>{
   let active=true;setDocumentUrl('');
   if(!selected?.document_path)return()=>{active=false;};
@@ -115,12 +134,12 @@ export default function AdminPortal(){
  return <div className="admin-shell">
   <header className="admin-header"><div className="admin-brand"><span className="admin-brand-mark">P</span><div><span className="admin-kicker">PROLINK · RESTRICTED ADMINISTRATION</span><h1>ProLink Admin Portal</h1><p className="admin-subtitle">{ADMIN_EMAIL}</p></div></div><button className="admin-return-button" type="button" onClick={()=>window.location.assign("/")} aria-label="Return to ProLink" title="Return to ProLink"><ArrowLeft size={17}/> <span>Return to ProLink</span></button></header>
   <div className="admin-security-note"><LockKeyhole size={16}/><span>Secure internal workspace · Account and professional records are view-only. Authorised administrators can review documents and manage support conversations.</span></div>
-  {tab!=='Overview'&&<div className="admin-page-toolbar"><button type="button" onClick={()=>{setTab('Overview');setSelected(null);setQuery('');}}><ArrowLeft size={16}/> Dashboard overview</button><span><LayoutDashboard size={15}/> {tab}</span></div>}
+  {tab!=='Overview'&&<div className="admin-page-toolbar"><button type="button" onClick={()=>{setTab('Overview');setSelected(null);setQuery('');}}><ArrowLeft size={16}/> Dashboard overview</button><span><LayoutDashboard size={15}/> {tab}{tab==='Support Inbox'&&unreadSupportConversations>0&&<b className="admin-support-unread-badge">{unreadSupportConversations>99?'99+':unreadSupportConversations}</b>}</span></div>}
   {notice&&<p className="admin-notice" role="status">{notice}</p>}
   {!!dashboard.warnings?.length&&<p className="admin-notice admin-warning" role="status">Some dashboard sections could not be loaded: {dashboard.warnings.map(name=>name.replaceAll('_',' ')).join(', ')}. Other figures are still available. Use Refresh to try again.</p>}
   {tab==='Overview'&&<>
    <div className="admin-metrics">{metrics.map(([name,value,Icon])=><article className="admin-metric" key={name}><span className="admin-metric-icon"><Icon size={19}/></span><div><span>{name}</span><b className={value==null?'admin-metric-unavailable':''}>{value==null?'Unavailable':value}</b></div></article>)}</div>
-   <div className="admin-module-groups">{moduleGroups.map(group=><section className="admin-module-section" key={group.title}><div className="admin-section-heading"><h2>{group.title}</h2><span>{group.items.length} sections</span></div><div className="admin-module-grid">{group.items.map(item=><button type="button" className="admin-module-card" key={item.tab} onClick={()=>{setTab(item.tab);setSelected(null);setQuery('');}}><span className="admin-module-icon"><item.Icon size={21}/></span><span className="admin-module-copy"><b>{item.title}</b><small>{item.description}</small></span><span className="admin-module-arrow"><ChevronRight size={18}/></span></button>)}</div></section>)}</div>
+   <div className="admin-module-groups">{moduleGroups.map(group=><section className="admin-module-section" key={group.title}><div className="admin-section-heading"><h2>{group.title}</h2><span>{group.items.length} sections</span></div><div className="admin-module-grid">{group.items.map(item=><button type="button" className="admin-module-card" key={item.tab} onClick={()=>{setTab(item.tab);setSelected(null);setQuery('');}}><span className="admin-module-icon"><item.Icon size={21}/></span><span className="admin-module-copy"><b>{item.title}{item.tab==='Support Inbox'&&unreadSupportConversations>0&&<em className="admin-support-unread-badge">{unreadSupportConversations>99?'99+':unreadSupportConversations}</em>}</b><small>{item.description}</small></span><span className="admin-module-arrow"><ChevronRight size={18}/></span></button>)}</div></section>)}</div>
    <section className="admin-panel"><div className="admin-panel-heading"><div><h2>Pending document reviews</h2><p>Latest submissions requiring an approval decision.</p></div><button onClick={load} disabled={busy}><RefreshCw size={15}/> Refresh</button></div>
     {dashboard.reviews.filter(r=>r.status==='pending').slice(0,8).map(r=><button key={r.id} className="admin-row" onClick={()=>{setSelected(r);setTab('Document review');}}><span><b>{label(r.submitted_data?.document_type||r.section)}</b><small>{r.submitted_data?.document_name||r.user_id}</small></span><em>Pending</em><small>{fmt(r.submitted_at)}</small></button>)}
     {!pending.length&&<p className="admin-empty">There are no pending document reviews.</p>}
