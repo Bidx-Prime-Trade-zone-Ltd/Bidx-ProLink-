@@ -1,4 +1,6 @@
-import React,{useCallback,useEffect,useMemo,useState} from 'react';
+import React,{useCallback,useEffect,useMemo,useRef,useState} from 'react';
+import * as pdfjsLib from 'pdfjs-dist';
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import {MessageCircle,Send,FileText,Receipt,CheckCheck,ArrowLeft,CalendarDays,MapPin,UserRound,BriefcaseBusiness,Plus,Trash2,Printer,Paperclip,Image as ImageIcon,Download,LoaderCircle,X} from 'lucide-react';
 import './work-requests.css';
 
@@ -6,6 +8,7 @@ const dateLabel=value=>value?new Date(value+'T00:00:00').toLocaleDateString(): '
 const money=(amount,currency)=>new Intl.NumberFormat(undefined,{style:'currency',currency:currency||'USD'}).format(Number(amount||0));
 const CURRENCIES=[['NGN','Nigeria — NGN (₦)'],['USD','United States — USD ($)'],['GHS','Ghana — GHS (GH₵)'],['KES','Kenya — KES (KSh)'],['ZAR','South Africa — ZAR (R)'],['GBP','United Kingdom — GBP (£)'],['EUR','Euro — EUR (€)'],['CAD','Canada — CAD ($)'],['AUD','Australia — AUD ($)'],['NZD','New Zealand — NZD ($)'],['XOF','West African CFA franc — XOF'],['XAF','Central African CFA franc — XAF'],['EGP','Egypt — EGP'],['MAD','Morocco — MAD'],['INR','India — INR (₹)'],['JPY','Japan — JPY (¥)'],['CNY','China — CNY (¥)'],['AED','United Arab Emirates — AED'],['SAR','Saudi Arabia — SAR'],['QAR','Qatar — QAR'],['CHF','Switzerland — CHF'],['SEK','Sweden — SEK'],['NOK','Norway — NOK'],['DKK','Denmark — DKK'],['SGD','Singapore — SGD ($)'],['HKD','Hong Kong — HKD ($)'],['MYR','Malaysia — MYR'],['PHP','Philippines — PHP (₱)'],['IDR','Indonesia — IDR'],['BRL','Brazil — BRL (R$)'],['MXN','Mexico — MXN ($)'],['THB','Thailand — THB (฿)'],['TRY','Türkiye — TRY (₺)'],['PKR','Pakistan — PKR (₨)'],['BDT','Bangladesh — BDT (৳)'],['UGX','Uganda — UGX'],['TZS','Tanzania — TZS'],['RWF','Rwanda — RWF'],['ETB','Ethiopia — ETB'],['ZMW','Zambia — ZMW']];
 const stamp=value=>value?new Date(value).toLocaleString(): '';
+pdfjsLib.GlobalWorkerOptions.workerSrc=pdfWorkerUrl;
 
 const newInvoiceItem=()=>({key:globalThis.crypto?.randomUUID?.()||String(Date.now()+Math.random()),description:'',quantity:'1',unit:'pcs',unitPrice:''});
 const escapeInvoiceHtml=value=>String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
@@ -16,7 +19,8 @@ const printWorkInvoice=(inv,work)=>{
 };
 export default function WorkRequestWorkspace({session,requests=[],loading=false,onRefresh,onUpdate,direction='incoming'}){
  const [active,setActive]=useState(null),[messages,setMessages]=useState([]),[invoices,setInvoices]=useState([]),[attachments,setAttachments]=useState([]);
- const [draft,setDraft]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[uploading,setUploading]=useState(false),[selectedFile,setSelectedFile]=useState(null),[filePreviewUrl,setFilePreviewUrl]=useState(''),[viewingAttachment,setViewingAttachment]=useState(null);
+ const [draft,setDraft]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[uploading,setUploading]=useState(false),[selectedFile,setSelectedFile]=useState(null),[filePreviewUrl,setFilePreviewUrl]=useState(''),[viewingAttachment,setViewingAttachment]=useState(null),[pdfLoading,setPdfLoading]=useState(false),[pdfError,setPdfError]=useState('');
+ const pdfCanvasHost=useRef(null);
  const [showInvoice,setShowInvoice]=useState(false),[invoiceDate,setInvoiceDate]=useState(new Date().toISOString().slice(0,10));
  const [dueDate,setDueDate]=useState(''),[currency,setCurrency]=useState('USD');
  const [items,setItems]=useState([newInvoiceItem()]),[taxPercent,setTaxPercent]=useState('0'),[discountAmount,setDiscountAmount]=useState('0'),[notes,setNotes]=useState('');
@@ -28,6 +32,52 @@ export default function WorkRequestWorkspace({session,requests=[],loading=false,
  const fileRef=React.useRef(null);
  useEffect(()=>{if(!selectedFile){setFilePreviewUrl('');return;}const url=URL.createObjectURL(selectedFile);setFilePreviewUrl(url);return()=>URL.revokeObjectURL(url);},[selectedFile]);
  useEffect(()=>()=>{if(viewingAttachment?.url)URL.revokeObjectURL(viewingAttachment.url);},[viewingAttachment?.url]);
+ const closeAttachmentViewer=useCallback(()=>{
+  if(window.history.state?.prolinkAttachmentViewer){window.history.back();return;}
+  setViewingAttachment(null);
+ },[]);
+ useEffect(()=>{
+  if(!viewingAttachment)return;
+  const onPop=()=>setViewingAttachment(null);
+  const onKey=event=>{if(event.key==='Escape'||event.key==='Backspace'){event.preventDefault();closeAttachmentViewer();}};
+  window.addEventListener('popstate',onPop);window.addEventListener('keydown',onKey);
+  const body=document.body,previous={overflow:body.style.overflow,touchAction:body.style.touchAction};
+  body.style.overflow='hidden';body.style.touchAction='none';
+  try{window.BidxNativeUI?.setCanGoBack?.(true);}catch{}
+  return()=>{window.removeEventListener('popstate',onPop);window.removeEventListener('keydown',onKey);body.style.overflow=previous.overflow;body.style.touchAction=previous.touchAction;};
+ },[viewingAttachment?.url,closeAttachmentViewer]);
+ useEffect(()=>{
+  if(!viewingAttachment||viewingAttachment.type!=='application/pdf'||!pdfCanvasHost.current)return;
+  let cancelled=false,documentTask=null;
+  const host=pdfCanvasHost.current;host.replaceChildren();setPdfLoading(true);setPdfError('');
+  (async()=>{
+   try{
+    const response=await fetch(viewingAttachment.url);
+    if(!response.ok)throw new Error('The PDF data could not be read.');
+    const data=new Uint8Array(await response.arrayBuffer());
+    documentTask=pdfjsLib.getDocument({data});
+    const pdf=await documentTask.promise;
+    if(cancelled)return;
+    for(let pageNumber=1;pageNumber<=pdf.numPages;pageNumber++){
+     const page=await pdf.getPage(pageNumber);if(cancelled)return;
+     const base=page.getViewport({scale:1});
+     const available=Math.max(280,Math.min(host.clientWidth-24,900));
+     const scale=Math.min(1.65,available/base.width);
+     const viewport=page.getViewport({scale});
+     const canvas=document.createElement('canvas'),context=canvas.getContext('2d');
+     const ratio=Math.min(window.devicePixelRatio||1,2);
+     canvas.width=Math.ceil(viewport.width*ratio);canvas.height=Math.ceil(viewport.height*ratio);
+     canvas.style.width=viewport.width+'px';canvas.style.height=viewport.height+'px';
+     canvas.className='work-pdf-page';canvas.setAttribute('aria-label','PDF page '+pageNumber+' of '+pdf.numPages);
+     host.appendChild(canvas);
+     await page.render({canvasContext:context,viewport,transform:ratio===1?null:[ratio,0,0,ratio,0,0]}).promise;
+     if(cancelled)return;
+    }
+   }catch(error){if(!cancelled)setPdfError(error?.message||'This PDF could not be displayed. Please download it to view.');}
+   finally{if(!cancelled)setPdfLoading(false);}
+  })();
+  return()=>{cancelled=true;try{documentTask?.destroy();}catch{}};
+ },[viewingAttachment?.url,viewingAttachment?.type]);
  const mine=useMemo(()=>direction==='all'?requests:requests.filter(r=>r.direction===direction),[requests,direction]);
  const loadThread=useCallback(async(id,silent=false)=>{
   if(!token||!id)return;
@@ -76,7 +126,10 @@ export default function WorkRequestWorkspace({session,requests=[],loading=false,
    if(!response.ok)throw new Error('This file could not be opened. Please try again.');
    const blob=await response.blob(),url=URL.createObjectURL(blob),type=attachment.mime_type||blob.type||'application/octet-stream';
    if(type.startsWith('image/')||type==='application/pdf'){
-    setViewingAttachment({url,type,name:attachment.file_name||'Shared file'});
+    if(type==='application/pdf'){
+    window.history.pushState({...window.history.state,prolinkAttachmentViewer:true},'','#work-file');
+   }
+   setViewingAttachment({url,type,name:attachment.file_name||'Shared file'});
    }else{
     const link=document.createElement('a');link.href=url;link.download=attachment.file_name||'download';document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
    }
@@ -168,10 +221,10 @@ export default function WorkRequestWorkspace({session,requests=[],loading=false,
    {error&&<p className="work-thread-error" role="alert">{error}</p>}
   </>}
  </section>
- {viewingAttachment&&<div className="work-file-viewer-backdrop" role="presentation" onClick={()=>setViewingAttachment(null)}>
+ {viewingAttachment&&<div className="work-file-viewer-backdrop" role="presentation" onClick={closeAttachmentViewer}>
   <section className="work-file-viewer" role="dialog" aria-modal="true" aria-label={'Viewing '+viewingAttachment.name} onClick={e=>e.stopPropagation()}>
    <header className="work-file-viewer-header"><strong title={viewingAttachment.name}>{viewingAttachment.name}</strong><div><a href={viewingAttachment.url} download={viewingAttachment.name} className="work-file-viewer-download"><Download size={17}/> Download</a><button type="button" onClick={()=>setViewingAttachment(null)} aria-label="Close file viewer"><X size={22}/></button></div></header>
-   <div className="work-file-viewer-content">{viewingAttachment.type==='application/pdf'?<iframe title={viewingAttachment.name} src={viewingAttachment.url}/>:<img src={viewingAttachment.url} alt={viewingAttachment.name}/>}</div>
+   <div className="work-file-viewer-content">{viewingAttachment.type==='application/pdf'?<div className="work-pdf-document"><div className="work-pdf-status" aria-live="polite">{pdfLoading?'Loading PDF…':pdfError}</div><div className="work-pdf-canvas-host" ref={pdfCanvasHost}/></div>:<img src={viewingAttachment.url} alt={viewingAttachment.name}/>}</div>
   </section>
  </div>}
  </main>;
