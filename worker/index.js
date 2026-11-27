@@ -531,9 +531,10 @@ async function unreadNotificationCount(request,env){
     ]);
     let adminReplies=[];
     if(conversations?.[0]?.id){
-      adminReplies=await supabaseRest(auth.config,"/rest/v1/prolink_support_messages?select=id&conversation_id=eq."+encodeURIComponent(conversations[0].id)+"&sender_role=eq.admin&user_read_at=is.null&limit=1000");
+      adminReplies=await supabaseRest(auth.config,"/rest/v1/prolink_support_messages?select=id&conversation_id=eq."+encodeURIComponent(conversations[0].id)+"&sender_role=in.(ai,admin)&user_read_at=is.null&limit=1000");
     }
-    return json({workRequests:(requests||[]).length,adminChat:(adminReplies||[]).length,total:(requests||[]).length+(adminReplies||[]).length});
+    const supportUnread=(adminReplies||[]).length;
+    return json({workRequests:(requests||[]).length,adminChat:supportUnread,supportMessages:supportUnread,total:(requests||[]).length+supportUnread});
   }catch(error){
     console.error("[prolink-notifications] unread_count_failed",{name:error?.name||"Error",message:String(error?.message||"").slice(0,180)});
     return json({error:"Unread notifications could not be loaded."},502);
@@ -1372,7 +1373,7 @@ async function supportMarkRead(request,env){
   try{
     const conversation=await supportConversation(auth.config,auth.user.id);
     const readAt=new Date().toISOString();
-    await supabaseRest(auth.config,"/rest/v1/prolink_support_messages?conversation_id=eq."+encodeURIComponent(conversation.id)+"&sender_role=eq.admin&user_read_at=is.null",{method:"PATCH",headers:{prefer:"return=minimal"},body:JSON.stringify({delivered_at:readAt,user_read_at:readAt})});
+    await supabaseRest(auth.config,"/rest/v1/prolink_support_messages?conversation_id=eq."+encodeURIComponent(conversation.id)+"&sender_role=in.(ai,admin)&user_read_at=is.null",{method:"PATCH",headers:{prefer:"return=minimal"},body:JSON.stringify({delivered_at:readAt,user_read_at:readAt})});
     return json({success:true,read_at:readAt});
   }catch(error){
     console.error("[prolink-support] read_receipt_failed",{name:error?.name||"Error"});
@@ -1513,19 +1514,36 @@ async function supportUserAttachment(request,env){
   }catch(error){return json({error:"Could not open this attachment."},502);}
 }
 
+function supportUnreadConversationCount(messages){
+  return new Set((messages||[]).filter(message=>message.sender_role==="user"&&!message.read_at&&message.conversation_id).map(message=>message.conversation_id)).size;
+}
+async function adminSupportUnread(request,env){
+  const auth=await requireProlinkAdmin(request,env);if(auth.error)return auth.error;
+  try{
+    const unread=await supabaseRest(auth.config,"/rest/v1/prolink_support_messages?select=conversation_id&sender_role=eq.user&read_at=is.null&limit=5000");
+    return json({unreadConversations:supportUnreadConversationCount(unread||[])});
+  }catch(error){
+    console.error("[prolink-support-admin] unread_count_failed",{name:error?.name||"Error"});
+    return json({error:"Support notifications could not be loaded."},502);
+  }
+}
 async function adminSupportInbox(request,env){
   const auth=await requireProlinkAdmin(request,env);if(auth.error)return auth.error;
   try{
     const conversations=await supabaseRest(auth.config,"/rest/v1/prolink_support_conversations?select=*&order=last_message_at.desc&limit=200");
     const ids=(conversations||[]).map(c=>c.user_id).filter(Boolean);
-    const profiles=ids.length?await supabaseRest(auth.config,"/rest/v1/prolink_professional_profiles?select=user_id,full_name,professional_name,category,city,country_name&user_id=in.("+ids.map(encodeURIComponent).join(",")+")"): [];
+    const [profiles,unreadMessages]=await Promise.all([
+      ids.length?supabaseRest(auth.config,"/rest/v1/prolink_professional_profiles?select=user_id,full_name,professional_name,category,city,country_name&user_id=in.("+ids.map(encodeURIComponent).join(",")+")"):[],
+      supabaseRest(auth.config,"/rest/v1/prolink_support_messages?select=conversation_id&sender_role=eq.user&read_at=is.null&limit=5000")
+    ]);
     const profileMap=Object.fromEntries((profiles||[]).map(p=>[p.user_id,p]));
+    const unreadConversationIds=new Set((unreadMessages||[]).map(message=>message.conversation_id));
     const rows=await Promise.all((conversations||[]).map(async c=>{
       const messages=await supabaseRest(auth.config,"/rest/v1/prolink_support_messages?select=id,sender_role,content,attachments,pinned_for_admin,created_at&conversation_id=eq."+encodeURIComponent(c.id)+"&order=created_at.desc&limit=1");
       const p=profileMap[c.user_id]||{};
-      return {...c,display_name:p.professional_name||p.full_name||"ProLink user",profession:p.category||"",location:[p.city,p.country_name].filter(Boolean).join(", "),last_message:messages?.[0]||null};
+      return {...c,has_unread_user_messages:unreadConversationIds.has(c.id),display_name:p.professional_name||p.full_name||"ProLink user",profession:p.category||"",location:[p.city,p.country_name].filter(Boolean).join(", "),last_message:messages?.[0]||null};
     }));
-    return json({conversations:rows});
+    return json({conversations:rows,unread_conversations:supportUnreadConversationCount(unreadMessages||[])});
   }catch(error){console.error("[prolink-support-admin] inbox_failed",{name:error?.name||"Error"});return json({error:"The support inbox could not be loaded."},502);}
 }
 async function adminSupportMessages(request,env){
@@ -1674,6 +1692,7 @@ export default {
     if (url.pathname === "/api/support/request-admin" && request.method === "POST") return supportRequestAdmin(request, env);
     if (url.pathname === "/api/support/attachment" && request.method === "POST") return supportAttachment(request, env);
     if (url.pathname === "/api/support/attachment" && request.method === "GET") return supportUserAttachment(request, env);
+    if (url.pathname === "/api/admin/support/unread" && request.method === "GET") return adminSupportUnread(request, env);
     if (url.pathname === "/api/admin/support/inbox" && request.method === "GET") return adminSupportInbox(request, env);
     if (url.pathname === "/api/admin/support/messages" && request.method === "GET") return adminSupportMessages(request, env);
     if (url.pathname === "/api/admin/support/action" && request.method === "POST") return adminSupportAction(request, env);
@@ -1712,4 +1731,4 @@ export default {
   }
 };
 
-export { supportGreetingReply, supportGreetingPrefix, supportMessageIntent, supportAttachmentCorrectionReply, supportAttachmentCategory, supportAccountLookupChoice, supportAiExtractText, adminDashboard, adminBroadcasts, broadcastEmailHtml };
+export { supportGreetingReply, supportGreetingPrefix, supportMessageIntent, supportAttachmentCorrectionReply, supportAttachmentCategory, supportAccountLookupChoice, supportAiExtractText, supportUnreadConversationCount, adminDashboard, adminBroadcasts, broadcastEmailHtml };
