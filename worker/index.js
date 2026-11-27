@@ -533,7 +533,7 @@ async function unreadNotificationCount(request,env){
     if(conversations?.[0]?.id){
       adminReplies=await supabaseRest(auth.config,"/rest/v1/prolink_support_messages?select=id&conversation_id=eq."+encodeURIComponent(conversations[0].id)+"&sender_role=in.(ai,admin)&user_read_at=is.null&limit=1000");
     }
-    const supportUnread=(adminReplies||[]).length;
+    const supportUnread=supportUnreadIncomingMessageCount(adminReplies||[]);
     return json({workRequests:(requests||[]).length,adminChat:supportUnread,supportMessages:supportUnread,total:(requests||[]).length+supportUnread});
   }catch(error){
     console.error("[prolink-notifications] unread_count_failed",{name:error?.name||"Error",message:String(error?.message||"").slice(0,180)});
@@ -1536,14 +1536,31 @@ async function supportUserAttachment(request,env){
   }catch(error){return json({error:"Could not open this attachment."},502);}
 }
 
-function supportUnreadConversationCount(messages){
-  return new Set((messages||[]).filter(message=>message.sender_role==="user"&&!message.read_at&&message.conversation_id).map(message=>message.conversation_id)).size;
+function supportUnreadUserCount(messages,conversations){
+  const userByConversation=new Map((conversations||[]).filter(row=>row?.id&&row?.user_id).map(row=>[row.id,row.user_id]));
+  const unreadUsers=new Set();
+  for(const message of messages||[]){
+    if(message?.sender_role!=="user"||message.read_at||!message.conversation_id)continue;
+    // Count a person once even if their account has more than one conversation.
+    // If conversation metadata is unavailable, fall back to the conversation ID
+    // so an unread user is never silently omitted from the Admin badge.
+    unreadUsers.add(userByConversation.get(message.conversation_id)||"conversation:"+message.conversation_id);
+  }
+  return unreadUsers.size;
+}
+function supportUnreadIncomingMessageCount(messages){
+  return (messages||[]).filter(message=>
+    ["ai","admin"].includes(message?.sender_role)&&!message.user_read_at
+  ).length;
 }
 async function adminSupportUnread(request,env){
   const auth=await requireProlinkAdmin(request,env);if(auth.error)return auth.error;
   try{
     const unread=await supabaseRest(auth.config,"/rest/v1/prolink_support_messages?select=conversation_id,sender_role,read_at&sender_role=eq.user&read_at=is.null&limit=5000");
-    return json({unreadConversations:supportUnreadConversationCount(unread||[])});
+    const conversationIds=[...new Set((unread||[]).map(message=>message.conversation_id).filter(Boolean))];
+    const conversations=conversationIds.length?await supabaseRest(auth.config,"/rest/v1/prolink_support_conversations?select=id,user_id&id=in.("+conversationIds.map(encodeURIComponent).join(",")+")&limit=5000"):[];
+    const unreadUsers=supportUnreadUserCount(unread||[],conversations||[]);
+    return json({unreadUsers,unreadConversations:unreadUsers});
   }catch(error){
     console.error("[prolink-support-admin] unread_count_failed",{name:error?.name||"Error"});
     return json({error:"Support notifications could not be loaded."},502);
@@ -1565,7 +1582,7 @@ async function adminSupportInbox(request,env){
       const p=profileMap[c.user_id]||{};
       return {...c,has_unread_user_messages:unreadConversationIds.has(c.id),display_name:p.professional_name||p.full_name||"ProLink user",profession:p.category||"",location:[p.city,p.country_name].filter(Boolean).join(", "),last_message:messages?.[0]||null};
     }));
-    return json({conversations:rows,unread_conversations:supportUnreadConversationCount(unreadMessages||[])});
+    return json({conversations:rows,unread_users:supportUnreadUserCount(unreadMessages||[],conversations||[]),unread_conversations:supportUnreadUserCount(unreadMessages||[],conversations||[])});
   }catch(error){console.error("[prolink-support-admin] inbox_failed",{name:error?.name||"Error"});return json({error:"The support inbox could not be loaded."},502);}
 }
 async function adminSupportMessages(request,env){
@@ -1754,4 +1771,4 @@ export default {
   }
 };
 
-export { supportGreetingReply, supportGreetingPrefix, supportMessageIntent, supportAttachmentCorrectionReply, supportAttachmentCategory, supportAccountLookupChoice, supportAiExtractText, supportUnreadConversationCount, adminDashboard, adminBroadcasts, broadcastEmailHtml };
+export { supportGreetingReply, supportGreetingPrefix, supportMessageIntent, supportAttachmentCorrectionReply, supportAttachmentCategory, supportAccountLookupChoice, supportAiExtractText, supportUnreadUserCount, supportUnreadIncomingMessageCount, adminDashboard, adminBroadcasts, broadcastEmailHtml };
