@@ -345,3 +345,10 @@
 .admin-user-chat .admin-user-message-form{margin-top:10px;padding:0;border:0;background:transparent}
 .admin-user-chat .admin-user-message-form textarea{min-height:82px}
 @media(max-width:560px){.admin-user-chat{padding:10px}.admin-user-chat-history{max-height:300px;min-height:130px}.admin-chat-message{max-width:96%}.admin-user-chat-heading{flex-direction:column;gap:6px}}
+
+/* Keep the Admin workspace stable on touch devices: no browser/native pull-to-refresh
+   overscroll chaining, while normal vertical scrolling remains enabled. */
+.admin-shell{overscroll-behavior-y:none;overscroll-behavior:contain;touch-action:pan-y}
+.admin-user-overlay{overscroll-behavior:contain;touch-action:pan-y}
+.admin-user-dialog{overscroll-behavior-y:contain;overscroll-behavior:contain;touch-action:pan-y}
+.admin-user-chat-history{overscroll-behavior-y:contain;overscroll-behavior:contain;touch-action:pan-y;scroll-behavior:auto;-webkit-overflow-scrolling:touch}
