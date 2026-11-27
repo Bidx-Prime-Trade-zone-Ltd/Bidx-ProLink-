@@ -1,5 +1,5 @@
 import React,{useCallback,useEffect,useMemo,useState} from 'react';
-import {MessageCircle,Send,FileText,Receipt,Clock3,Check,CheckCheck,ArrowLeft,LoaderCircle,CalendarDays,MapPin,UserRound,BriefcaseBusiness} from 'lucide-react';
+import {MessageCircle,Send,FileText,Receipt,CheckCheck,ArrowLeft,CalendarDays,MapPin,UserRound,BriefcaseBusiness,Plus,Trash2,Printer} from 'lucide-react';
 import './work-requests.css';
 
 const dateLabel=value=>value?new Date(value+'T00:00:00').toLocaleDateString(): 'Flexible';
