@@ -24,10 +24,11 @@ export default function AdminPortal(){
  // Keep Android/browser Back inside the restricted Admin workspace. The visible
  // Return to ProLink button remains the intentional way to leave this portal.
  useEffect(()=>{
+  try{window.BidxNativeUI?.setAdminPortalOpen?.(true);window.BidxNativeUI?.setHomeScreen?.(false);}catch{}
   const holdAdminRoute=()=>{window.history.pushState({...(window.history.state||{}),prolinkAdminStay:true},'',window.location.href);};
   window.history.pushState({...(window.history.state||{}),prolinkAdminStay:true},'',window.location.href);
   window.addEventListener('popstate',holdAdminRoute);
-  return()=>window.removeEventListener('popstate',holdAdminRoute);
+  return()=>{window.removeEventListener('popstate',holdAdminRoute);try{window.BidxNativeUI?.setAdminPortalOpen?.(false);}catch{}};
  },[]);
 
  const load=async()=>{
