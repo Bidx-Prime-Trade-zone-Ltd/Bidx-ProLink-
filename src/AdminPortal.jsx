@@ -1,6 +1,6 @@
 import React,{useEffect,useMemo,useState} from 'react';
 import {supabase} from './lib/supabase.js';
-import {ShieldCheck,Users,Clock3,CheckCircle2,FileCheck,Search,ArrowLeft,RefreshCw,Check,X,Eye,Globe2,UserRound,CalendarDays,LockKeyhole} from 'lucide-react';
+import {ShieldCheck,Users,Clock3,CheckCircle2,FileCheck,Search,ArrowLeft,RefreshCw,Check,X,Eye,Globe2,UserRound,CalendarDays,LockKeyhole,BriefcaseBusiness,ClipboardCheck,History,MessageCircle,Mail,LayoutDashboard,ChevronRight} from 'lucide-react';
 import SupportInbox from './SupportInbox.jsx';
 import BroadcastManager from './BroadcastManager.jsx';
 
@@ -96,14 +96,31 @@ export default function AdminPortal(){
   ['Approved documents',counts.approvedDocuments,CheckCircle2],
   ['Rejected documents',counts.rejectedDocuments,FileCheck]
  ];
+ const moduleGroups=[
+  {title:'Workspace',items:[
+   {tab:'Users',title:'User directory',description:'View registered accounts and account status',Icon:Users},
+   {tab:'Professional profiles',title:'Professional profiles',description:'Review professional details and published profiles',Icon:UserRound},
+   {tab:'Work Requests',title:'Work requests',description:'View direct requests sent to professionals',Icon:BriefcaseBusiness}
+  ]},
+  {title:'Verification & records',items:[
+   {tab:'Document review',title:'Document review',description:'Inspect submitted documents and make decisions',Icon:FileCheck},
+   {tab:'Profile Change Requests',title:'Profile change requests',description:'Review proposed professional profile updates',Icon:ClipboardCheck},
+   {tab:'Review history',title:'Review history',description:'See completed document review decisions',Icon:History}
+  ]},
+  {title:'Communication',items:[
+   {tab:'Support Inbox',title:'Support inbox',description:'Attend to AI and customer support conversations',Icon:MessageCircle},
+   {tab:'Email broadcasts',title:'Email broadcasts',description:'Prepare and manage ProLink announcements',Icon:Mail}
+  ]}
+ ];
  return <div className="admin-shell">
-  <header className="admin-header"><div><span className="admin-kicker">RESTRICTED · DOCUMENT REVIEW & SUPPORT</span><h1>Bidx ProLink Internal Admin</h1><p className="admin-subtitle">{ADMIN_EMAIL}</p></div><button type="button" onClick={()=>window.location.assign("/")} aria-label="Return to ProLink" title="Return to ProLink"><ArrowLeft size={16}/> Return to ProLink</button></header>
-  <div className="admin-security-note"><LockKeyhole size={16}/><span>Account and professional records are view-only. Authorised Admins can review documents and attend, reply to, and resolve ProLink Support conversations.</span></div>
-  <nav className="admin-tabs">{tabs.map(t=><button key={t} className={tab===t?'active':''} onClick={()=>{setTab(t);setSelected(null);setQuery('');}}>{t}</button>)}</nav>
+  <header className="admin-header"><div className="admin-brand"><span className="admin-brand-mark">P</span><div><span className="admin-kicker">PROLINK · RESTRICTED ADMINISTRATION</span><h1>ProLink Admin Portal</h1><p className="admin-subtitle">{ADMIN_EMAIL}</p></div></div><button className="admin-return-button" type="button" onClick={()=>window.location.assign("/")} aria-label="Return to ProLink" title="Return to ProLink"><ArrowLeft size={17}/> <span>Return to ProLink</span></button></header>
+  <div className="admin-security-note"><LockKeyhole size={16}/><span>Secure internal workspace · Account and professional records are view-only. Authorised administrators can review documents and manage support conversations.</span></div>
+  {tab!=='Overview'&&<div className="admin-page-toolbar"><button type="button" onClick={()=>{setTab('Overview');setSelected(null);setQuery('');}}><ArrowLeft size={16}/> Dashboard overview</button><span><LayoutDashboard size={15}/> {tab}</span></div>}
   {notice&&<p className="admin-notice" role="status">{notice}</p>}
   {!!dashboard.warnings?.length&&<p className="admin-notice admin-warning" role="status">Some dashboard sections could not be loaded: {dashboard.warnings.map(name=>name.replaceAll('_',' ')).join(', ')}. Other figures are still available. Use Refresh to try again.</p>}
   {tab==='Overview'&&<>
-   <div className="admin-metrics">{metrics.map(([name,value,Icon])=><article className="admin-metric" key={name}><Icon size={18}/><span>{name}</span><b className={value==null?'admin-metric-unavailable':''}>{value==null?'Unavailable':value}</b></article>)}</div>
+   <div className="admin-metrics">{metrics.map(([name,value,Icon])=><article className="admin-metric" key={name}><span className="admin-metric-icon"><Icon size={19}/></span><div><span>{name}</span><b className={value==null?'admin-metric-unavailable':''}>{value==null?'Unavailable':value}</b></div></article>)}</div>
+   <div className="admin-module-groups">{moduleGroups.map(group=><section className="admin-module-section" key={group.title}><div className="admin-section-heading"><h2>{group.title}</h2><span>{group.items.length} sections</span></div><div className="admin-module-grid">{group.items.map(item=><button type="button" className="admin-module-card" key={item.tab} onClick={()=>{setTab(item.tab);setSelected(null);setQuery('');}}><span className="admin-module-icon"><item.Icon size={21}/></span><span className="admin-module-copy"><b>{item.title}</b><small>{item.description}</small></span><span className="admin-module-arrow"><ChevronRight size={18}/></span></button>)}</div></section>)}</div>
    <section className="admin-panel"><div className="admin-panel-heading"><div><h2>Pending document reviews</h2><p>Latest submissions requiring an approval decision.</p></div><button onClick={load} disabled={busy}><RefreshCw size={15}/> Refresh</button></div>
     {dashboard.reviews.filter(r=>r.status==='pending').slice(0,8).map(r=><button key={r.id} className="admin-row" onClick={()=>{setSelected(r);setTab('Document review');}}><span><b>{label(r.submitted_data?.document_type||r.section)}</b><small>{r.submitted_data?.document_name||r.user_id}</small></span><em>Pending</em><small>{fmt(r.submitted_at)}</small></button>)}
     {!pending.length&&<p className="admin-empty">There are no pending document reviews.</p>}
