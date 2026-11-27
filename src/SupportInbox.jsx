@@ -87,6 +87,7 @@ export default function SupportInbox(){
   messageRequest.current++;
   selectedIdRef.current=item.id;
   setSelected(item);
+  setItems(current=>current.map(row=>row.id===item.id?{...row,has_unread_user_messages:false}:row));
   setMessages([]);
   setFiles({});
   setNotice('');
@@ -135,7 +136,7 @@ export default function SupportInbox(){
    <div className="admin-panel-heading"><div><h2>Support conversations</h2><p>Open any user to review the complete AI and Admin conversation.</p></div><button type="button" onClick={()=>loadInbox()} disabled={busy}><RefreshCw size={14}/></button></div>
    <label className="admin-search"><Search size={15}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search support users"/></label>
    <div className="admin-support-list">{filtered.map(item=><button type="button" key={item.id} className={'admin-support-row '+(selected?.id===item.id?'active':'')} onClick={()=>selectConversation(item)}>
-    <span className="admin-support-avatar"><Headset size={17}/></span><span className="admin-support-row-copy"><b>{item.display_name}</b><small>{item.profession||item.location||item.user_id}</small><small>{item.last_message?.content||'No messages yet'}</small></span><span className={'admin-support-status '+item.status}>{statusLabel(item.status)}</span>
+    <span className="admin-support-avatar"><Headset size={17}/></span><span className="admin-support-row-copy"><b>{item.display_name}</b><small>{item.profession||item.location||item.user_id}</small><small>{item.last_message?.content||'No messages yet'}</small></span><span className="admin-support-row-meta">{item.has_unread_user_messages&&<b className="admin-support-unread-badge" aria-label="Unread messages from this user">1</b>}<span className={'admin-support-status '+item.status}>{statusLabel(item.status)}</span></span>
    </button>)}{!filtered.length&&<p className="admin-empty">No support conversations found.</p>}</div>
   </div>
   <div className="admin-support-detail">
