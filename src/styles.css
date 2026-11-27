@@ -629,3 +629,7 @@ body.prolink-menu-locked{position:fixed!important;overflow:hidden!important;widt
 .membership-dates small{color:#6b7785;font-size:.8rem}
 .membership-dates strong{color:#183a61;font-size:.95rem}
 @media(max-width:480px){.membership-dates{grid-template-columns:1fr}}
+
+
+/* Touch scrolling safeguards for account/listing pages, including the native WebView. */
+html,body,#root{min-height:100%;height:auto}body{overflow-x:hidden;overflow-y:auto}.app-shell{min-height:100dvh;overflow:visible}.account-page-shell{touch-action:pan-y;overscroll-behavior-y:auto}
