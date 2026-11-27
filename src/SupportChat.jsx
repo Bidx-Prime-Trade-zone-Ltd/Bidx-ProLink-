@@ -181,6 +181,12 @@ export default function SupportChat({session,profile}){
  const statusLabel=status==='admin_attending'?'Admin is attending':status==='admin_requested'?'Admin requested · AI remains available':status==='resolved'?'Resolved · AI available':'AI Assistant is available';
 
  return <>
+  {!open&&unreadMessages>0&&<button type="button" className="prolink-admin-notification" onClick={()=>setOpen(true)} aria-label={unreadMessages+' unread ProLink support messages. Open conversation'}>
+   <span className="prolink-admin-notification-dot" aria-hidden="true"/>
+   <span className="prolink-admin-notification-copy"><b>New ProLink message</b><small>{unreadMessages===1?'You have 1 unread message waiting.':`You have ${unreadMessages} unread messages waiting.`} Tap to open your conversation.</small></span>
+   <span className="prolink-admin-notification-count">{unreadMessages>99?'99+':unreadMessages}</span>
+   <X size={17} className="prolink-admin-notification-close" onClick={event=>{event.stopPropagation();event.currentTarget.closest('button').style.display='none';}}/>
+  </button>}
   {open&&<div className="prolink-support-overlay" aria-hidden="true"/>}
   <button type="button" className={'prolink-support-fab'+(open?' is-open':'')} onClick={()=>setOpen(v=>!v)} aria-label={open?'Close ProLink support':'Chat with ProLink Admin'}>
    {open?<X size={21}/>:<MessageCircle size={21}/>}<span>{open?'Close':'Chat Admin'}</span>{!open&&unreadMessages>0&&<b className="prolink-support-unread-badge" aria-label={unreadMessages+' unread support messages'}>{unreadMessages>99?'99+':unreadMessages}</b>}
