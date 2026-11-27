@@ -19,7 +19,7 @@ create table if not exists public.prolink_work_request_invoices (
   sender_user_id uuid not null references auth.users(id) on delete restrict,
   invoice_date date not null default current_date,
   due_date date,
-  currency text not null default 'USD' check (currency ~ '^[A-Z]{3}),
+  currency text not null default 'USD' check (currency ~ '^[A-Z]{3}$'),
   amount numeric(14,2) not null check (amount > 0),
   quotation text not null check (char_length(trim(quotation)) between 5 and 5000),
   status text not null default 'sent' check (status in ('sent','accepted','declined','paid')),
