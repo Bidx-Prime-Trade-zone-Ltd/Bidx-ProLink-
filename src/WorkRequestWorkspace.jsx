@@ -1,17 +1,28 @@
 import React,{useCallback,useEffect,useMemo,useState} from 'react';
-import {MessageCircle,Send,FileText,Receipt,Clock3,Check,CheckCheck,ArrowLeft,LoaderCircle,CalendarDays,MapPin,UserRound,BriefcaseBusiness} from 'lucide-react';
+import {MessageCircle,Send,FileText,Receipt,CheckCheck,ArrowLeft,CalendarDays,MapPin,UserRound,BriefcaseBusiness,Plus,Trash2,Printer} from 'lucide-react';
 import './work-requests.css';
 
 const dateLabel=value=>value?new Date(value+'T00:00:00').toLocaleDateString(): 'Flexible';
 const money=(amount,currency)=>new Intl.NumberFormat(undefined,{style:'currency',currency:currency||'USD'}).format(Number(amount||0));
 const stamp=value=>value?new Date(value).toLocaleString(): '';
 
+const newInvoiceItem=()=>({key:globalThis.crypto?.randomUUID?.()||String(Date.now()+Math.random()),description:'',quantity:'1',unit:'pcs',unitPrice:''});
+const escapeInvoiceHtml=value=>String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+const printWorkInvoice=(inv,work)=>{
+ const rows=(inv.line_items?.length?inv.line_items:[{description:inv.quotation,quantity:1,unit_price:inv.amount,line_total:inv.amount}]).map(item=>'<tr><td>'+escapeInvoiceHtml(item.description)+'</td><td>'+item.quantity+' '+escapeInvoiceHtml(item.unit||'')+'</td><td>'+money(item.unit_price,inv.currency)+'</td><td>'+money(item.line_total??item.quantity*item.unit_price,inv.currency)+'</td></tr>').join('');
+ const html='<!doctype html><html><head><meta charset="utf-8"><title>Invoice '+escapeInvoiceHtml(inv.invoice_number)+'</title><style>body{font:14px Arial;color:#20364b;margin:35px}h1{color:#145b91}.top{display:flex;justify-content:space-between;border-bottom:3px solid #145b91;padding-bottom:15px}.parties{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin:25px 0}table{width:100%;border-collapse:collapse;margin-top:20px}th,td{text-align:left;padding:10px;border-bottom:1px solid #dce5ed}th{background:#edf4fa}.totals{width:340px;max-width:100%;margin:20px 0 0 auto}.totals div{display:flex;justify-content:space-between;padding:6px}.grand{font-size:18px;font-weight:bold;border-top:2px solid #145b91}.notes{white-space:pre-wrap;margin-top:20px}@media print{body{margin:18mm}}</style></head><body><div class="top"><div><h1>INVOICE</h1><p>Bidx ProLink</p></div><div><b>'+escapeInvoiceHtml(inv.invoice_number)+'</b><p>Invoice date: '+dateLabel(inv.invoice_date)+'</p><p>Due date: '+dateLabel(inv.due_date)+'</p><p>Status: '+escapeInvoiceHtml(inv.status)+'</p></div></div><div class="parties"><div><b>FROM</b><p>'+escapeInvoiceHtml(inv.from_name||'Professional')+'<br>'+escapeInvoiceHtml(inv.from_address||'')+'<br>'+escapeInvoiceHtml(inv.from_contact||'')+'</p></div><div><b>BILL TO</b><p>'+escapeInvoiceHtml(inv.bill_to_name||work?.requester_name||'Customer')+'<br>'+escapeInvoiceHtml(inv.bill_to_address||'')+'</p></div></div><p><b>Job:</b> '+escapeInvoiceHtml(work?.job_description||'Professional service')+'</p><table><thead><tr><th>Description</th><th>Quantity</th><th>Unit price</th><th>Line total</th></tr></thead><tbody>'+rows+'</tbody></table><div class="totals"><div><span>Subtotal</span><b>'+money(inv.subtotal??inv.amount,inv.currency)+'</b></div>'+(Number(inv.discount_amount)>0?'<div><span>Discount</span><b>- '+money(inv.discount_amount,inv.currency)+'</b></div>':'')+(Number(inv.tax_percent)>0?'<div><span>Tax ('+inv.tax_percent+'%)</span><b>'+money(inv.tax_amount,inv.currency)+'</b></div>':'')+'<div class="grand"><span>Total due</span><b>'+money(inv.amount,inv.currency)+'</b></div></div>'+(inv.notes?'<div class="notes"><b>Notes / terms</b><p>'+escapeInvoiceHtml(inv.notes)+'</p></div>':'')+'<script>window.onload=()=>setTimeout(()=>window.print(),300);</script></body></html>';
+ const win=window.open('','_blank');if(!win){alert('Allow pop-ups to print or save this invoice as PDF.');return;}win.document.open();win.document.write(html);win.document.close();
+};
 export default function WorkRequestWorkspace({session,requests=[],loading=false,onRefresh,onUpdate,direction='incoming'}){
  const [active,setActive]=useState(null),[messages,setMessages]=useState([]),[invoices,setInvoices]=useState([]);
  const [draft,setDraft]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
  const [showInvoice,setShowInvoice]=useState(false),[invoiceDate,setInvoiceDate]=useState(new Date().toISOString().slice(0,10));
- const [dueDate,setDueDate]=useState(''),[currency,setCurrency]=useState('USD'),[amount,setAmount]=useState('');
- const [quotation,setQuotation]=useState(''),[invoiceBusy,setInvoiceBusy]=useState(false),[invoiceActionBusy,setInvoiceActionBusy]=useState('');
+ const [dueDate,setDueDate]=useState(''),[currency,setCurrency]=useState('USD');
+ const [items,setItems]=useState([newInvoiceItem()]),[taxPercent,setTaxPercent]=useState('0'),[discountAmount,setDiscountAmount]=useState('0'),[notes,setNotes]=useState('');
+ const [fromName,setFromName]=useState(''),[fromAddress,setFromAddress]=useState(''),[fromContact,setFromContact]=useState(''),[billToName,setBillToName]=useState(''),[billToAddress,setBillToAddress]=useState('');
+ const [invoiceBusy,setInvoiceBusy]=useState(false),[invoiceActionBusy,setInvoiceActionBusy]=useState('');
+ const lineItems=useMemo(()=>items.map(i=>({...i,quantity:Number(i.quantity),unit_price:Number(i.unitPrice),line_total:Math.round(Number(i.quantity)*Number(i.unitPrice)*100)/100})).filter(i=>i.description.trim()&&i.quantity>0&&i.unit_price>=0),[items]);
+ const subtotal=lineItems.reduce((sum,i)=>sum+i.line_total,0),discount=Math.min(Math.max(0,Number(discountAmount)||0),subtotal),tax=Math.round((subtotal-discount)*Math.max(0,Number(taxPercent)||0))/100,total=Math.max(0,Math.round((subtotal-discount+tax)*100)/100);
  const token=session?.access_token;
  const mine=useMemo(()=>requests.filter(r=>r.direction===direction),[requests,direction]);
  const loadThread=useCallback(async(id,silent=false)=>{
@@ -41,12 +52,16 @@ export default function WorkRequestWorkspace({session,requests=[],loading=false,
   finally{setBusy(false);}
  };
  const submitInvoice=async event=>{
-  event.preventDefault();if(!active||invoiceBusy)return;
-  setInvoiceBusy(true);setError('');
+  event.preventDefault();if(!active||invoiceBusy)return;setError('');
+  const payloadItems=lineItems.map(({description,quantity,unit,unit_price,line_total})=>({description:description.trim(),quantity,unit,unit_price,line_total}));
+  if(!payloadItems.length){setError('Add at least one complete invoice item.');return;}
+  if(items.some(i=>!i.description.trim()||!Number(i.quantity)||Number(i.quantity)<=0||i.unitPrice===''||Number(i.unitPrice)<0)){setError('Complete every invoice row or remove unused rows.');return;}
+  if(total<=0){setError('The invoice total must be greater than zero.');return;}
+  setInvoiceBusy(true);
   try{
-   const response=await fetch('/api/work-requests/'+encodeURIComponent(active.id)+'/invoices',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+token},body:JSON.stringify({invoiceDate,dueDate,currency:currency.toUpperCase(),amount,quotation})});
+   const response=await fetch('/api/work-requests/'+encodeURIComponent(active.id)+'/invoices',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+token},body:JSON.stringify({invoiceDate,dueDate,currency:currency.toUpperCase(),lineItems:payloadItems,taxPercent:Number(taxPercent)||0,discountAmount:discount,notes,fromName,fromAddress,fromContact,billToName,billToAddress})});
    const data=await response.json();if(!response.ok)throw new Error(data.error||'Invoice could not be sent.');
-   setShowInvoice(false);setAmount('');setQuotation('');setDueDate('');await loadThread(active.id,true);
+   setShowInvoice(false);setItems([newInvoiceItem()]);setTaxPercent('0');setDiscountAmount('0');setNotes('');setDueDate('');await loadThread(active.id,true);
   }catch(e){setError(e.message||'Invoice could not be sent.');}
   finally{setInvoiceBusy(false);}
  };
@@ -60,7 +75,7 @@ export default function WorkRequestWorkspace({session,requests=[],loading=false,
   finally{setInvoiceActionBusy('');}
  };
  const professional=direction==='incoming';
- return <section className="work-workspace">
+ return <main className="work-request-page-scroll"><section className="work-workspace">
   {!active?<>
    <div className="work-workspace-heading"><div><h1>{professional?'Incoming work requests':'My work requests'}</h1><p>{professional?'Private customer requests sent directly to your professional account.':'Requests you have sent to professionals, including their replies and quotations.'}</p></div><button className="outline-button" type="button" onClick={onRefresh} disabled={loading}>{loading?'Refreshing…':'Refresh requests'}</button></div>
    {loading&&!mine.length?<p className="work-empty">Loading your work requests…</p>:mine.length?mine.map(r=><article className="work-request-card" key={r.id}>
@@ -84,19 +99,30 @@ export default function WorkRequestWorkspace({session,requests=[],loading=false,
     {messages.map(m=><article key={m.id} className={'work-chat-message '+(m.sender_user_id===session?.user?.id?'mine':'theirs')}><b>{m.sender_user_id===session?.user?.id?'You':professional?'Customer':active.professional_name}</b><p>{m.body}</p><small>{stamp(m.created_at)} {m.recipient_read_at&&<CheckCheck size={12}/>}</small></article>)}
     {invoices.map(inv=><article key={inv.id} className="work-invoice-card">
      <div className="work-invoice-head"><Receipt size={19}/><div><b>Invoice {inv.invoice_number}</b><small>Issued {dateLabel(inv.invoice_date)}{inv.due_date?' · Due '+dateLabel(inv.due_date):''}</small></div><span className={'work-status status-'+inv.status}>{inv.status}</span></div>
-     <strong className="work-invoice-amount">{money(inv.amount,inv.currency)}</strong><p className="work-invoice-quotation">{inv.quotation}</p>
-     {inv.sender_user_id!==session?.user?.id&&inv.status==='sent'&&<div className="work-card-actions"><button type="button" className="work-accept" disabled={invoiceActionBusy===inv.id} onClick={()=>invoiceAction(inv.id,'accepted')}>Accept quotation</button><button type="button" className="work-decline" disabled={invoiceActionBusy===inv.id} onClick={()=>invoiceAction(inv.id,'declined')}>Decline</button></div>}
+     <div className="work-invoice-parties"><span><b>From:</b> {inv.from_name||'Professional'} {inv.from_contact&&' · '+inv.from_contact}</span><span><b>Bill to:</b> {inv.bill_to_name||active.requester_name||'Customer'}</span></div>
+     <div className="work-invoice-table-wrap"><table className="work-invoice-table"><thead><tr><th>Item / description</th><th>Qty</th><th>Unit price</th><th>Total</th></tr></thead><tbody>{(inv.line_items?.length?inv.line_items:[{description:inv.quotation,quantity:1,unit_price:inv.amount,line_total:inv.amount}]).map((item,i)=><tr key={i}><td>{item.description}{item.unit?' ('+item.unit+')':''}</td><td>{item.quantity}</td><td>{money(item.unit_price,inv.currency)}</td><td>{money(item.line_total??Number(item.quantity)*Number(item.unit_price),inv.currency)}</td></tr>)}</tbody></table></div>
+     <div className="work-invoice-totals"><div><span>Subtotal</span><b>{money(inv.subtotal??inv.amount,inv.currency)}</b></div>{Number(inv.discount_amount)>0&&<div><span>Discount</span><b>- {money(inv.discount_amount,inv.currency)}</b></div>}{Number(inv.tax_percent)>0&&<div><span>Tax ({inv.tax_percent}%)</span><b>{money(inv.tax_amount,inv.currency)}</b></div>}<div className="work-invoice-grand"><span>Total due</span><b>{money(inv.amount,inv.currency)}</b></div></div>
+     {inv.notes&&<p className="work-invoice-quotation"><b>Notes / payment terms</b><br/>{inv.notes}</p>}
+     <div className="work-card-actions"><button type="button" className="work-open-chat" onClick={()=>printWorkInvoice(inv,active)}><Printer size={16}/> Print / Save PDF</button>{inv.sender_user_id!==session?.user?.id&&inv.status==='sent'&&<><button type="button" className="work-accept" disabled={invoiceActionBusy===inv.id} onClick={()=>invoiceAction(inv.id,'accepted')}>Accept invoice</button><button type="button" className="work-decline" disabled={invoiceActionBusy===inv.id} onClick={()=>invoiceAction(inv.id,'declined')}>Decline</button></>}</div>
      {inv.sender_user_id===session?.user?.id&&<small className="work-invoice-note">Sent to the customer · {inv.recipient_read_at?'Viewed by customer':'Awaiting customer review'}</small>}
     </article>)}
    </div>
    {professional&&active.status==='accepted'&&<div className="work-invoice-toolbar"><button type="button" onClick={()=>setShowInvoice(v=>!v)}><Receipt size={16}/>{showInvoice?'Close invoice form':'Create and send invoice'}</button></div>}
    {showInvoice&&<form className="work-invoice-form" onSubmit={submitInvoice}>
-    <h3>Create invoice / quotation</h3><div className="work-invoice-fields"><label>Invoice date<input type="date" required value={invoiceDate} onChange={e=>setInvoiceDate(e.target.value)}/></label><label>Due date (optional)<input type="date" value={dueDate} onChange={e=>setDueDate(e.target.value)}/></label><label>Currency<input value={currency} onChange={e=>setCurrency(e.target.value.toUpperCase())} maxLength={8} required placeholder="USD"/></label><label>Amount<input type="number" min="0.01" step="0.01" required value={amount} onChange={e=>setAmount(e.target.value)} placeholder="Enter total amount"/></label></div>
-    <label className="work-invoice-quotation-field">Quotation and work breakdown<textarea required minLength={5} maxLength={5000} rows={4} value={quotation} onChange={e=>setQuotation(e.target.value)} placeholder="Describe labour, materials, transport, scope of work and any other charges."/></label>
-    <button className="work-accept" disabled={invoiceBusy}>{invoiceBusy?'Sending invoice…':'Send invoice to customer'}</button>
+    <div className="work-invoice-form-title"><div><span className="work-eyebrow">PROFESSIONAL DOCUMENT</span><h3>Create invoice</h3><p>Add products, materials, labour or services. Totals calculate automatically.</p></div><FileText size={26}/></div>
+    <div className="work-invoice-fields">
+     <label>Invoice date<input type="date" required value={invoiceDate} onChange={e=>setInvoiceDate(e.target.value)}/></label><label>Due date<input type="date" value={dueDate} onChange={e=>setDueDate(e.target.value)}/></label><label>Currency code<input value={currency} onChange={e=>setCurrency(e.target.value.toUpperCase())} maxLength={3} required placeholder="USD"/></label>
+     <label>Professional / business name<input value={fromName} onChange={e=>setFromName(e.target.value)} placeholder="Your name or business"/></label><label>Professional address<input value={fromAddress} onChange={e=>setFromAddress(e.target.value)} placeholder="Business address"/></label><label>Phone or email<input value={fromContact} onChange={e=>setFromContact(e.target.value)} placeholder="Contact details"/></label><label>Customer name<input value={billToName} onChange={e=>setBillToName(e.target.value)} placeholder={active.requester_name||'Customer name'}/></label><label>Customer address<input value={billToAddress} onChange={e=>setBillToAddress(e.target.value)} placeholder="Customer address (optional)"/></label>
+    </div>
+    <div className="work-invoice-items-heading"><div><h4>Items and services</h4><p>Add each product, material, labour charge or service separately.</p></div><button type="button" onClick={()=>setItems(prev=>[...prev,newInvoiceItem()])}><Plus size={16}/> Add item</button></div>
+    <div className="work-invoice-item-list">{items.map((item,index)=><div className="work-invoice-item" key={item.key}><div className="work-invoice-item-top"><b>Item {index+1}</b>{items.length>1&&<button type="button" onClick={()=>setItems(prev=>prev.filter(row=>row.key!==item.key))}><Trash2 size={15}/> Remove</button>}</div><label className="work-item-description">Description<input required value={item.description} onChange={e=>setItems(prev=>prev.map(row=>row.key===item.key?{...row,description:e.target.value}:row))} placeholder="e.g. Electrical breaker, cable, labour"/></label><div className="work-item-fields"><label>Quantity<input type="number" min="0.001" step="0.001" required value={item.quantity} onChange={e=>setItems(prev=>prev.map(row=>row.key===item.key?{...row,quantity:e.target.value}:row))}/></label><label>Unit<input value={item.unit} onChange={e=>setItems(prev=>prev.map(row=>row.key===item.key?{...row,unit:e.target.value}:row))} placeholder="pcs, metre, hour"/></label><label>Unit price<input type="number" min="0" step="0.01" required value={item.unitPrice} onChange={e=>setItems(prev=>prev.map(row=>row.key===item.key?{...row,unitPrice:e.target.value}:row))} placeholder="0.00"/></label></div><div className="work-item-line-total"><span>Line total</span><b>{money((Number(item.quantity)||0)*(Number(item.unitPrice)||0),currency)}</b></div></div>)}</div>
+    <div className="work-invoice-adjustments"><label>Discount amount<input type="number" min="0" step="0.01" value={discountAmount} onChange={e=>setDiscountAmount(e.target.value)}/></label><label>Tax (%)<input type="number" min="0" max="100" step="0.01" value={taxPercent} onChange={e=>setTaxPercent(e.target.value)}/></label></div>
+    <div className="work-invoice-live-total"><div><span>Subtotal</span><b>{money(subtotal,currency)}</b></div><div><span>Discount</span><b>- {money(discount,currency)}</b></div><div><span>Tax</span><b>{money(tax,currency)}</b></div><div className="work-invoice-grand"><span>Grand total</span><b>{money(total,currency)}</b></div></div>
+    <label className="work-invoice-quotation-field">Notes or payment terms<textarea rows={3} maxLength={3000} value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Additional scope, warranty, payment instructions or notes (optional)."/></label>
+    <button className="work-invoice-submit" disabled={invoiceBusy||!lineItems.length}>{invoiceBusy?'Preparing invoice…':'Review and send invoice to customer'}</button>
    </form>}
    <form className="work-thread-composer" onSubmit={send}><textarea rows={2} value={draft} onChange={e=>setDraft(e.target.value)} maxLength={5000} placeholder="Write a message about this job…"/><button type="submit" disabled={!draft.trim()||busy}><Send size={17}/> Send</button></form>
    {error&&<p className="work-thread-error" role="alert">{error}</p>}
   </>}
- </section>;
+ </section></main>;
 }

@@ -653,13 +653,39 @@ async function workRequestThread(request,env,requestId,resource){
       if(work.status!=="accepted")return json({error:"Accept the work request before sending an invoice."},409);
       const body=await request.json();
       const invoiceDate=String(body.invoiceDate||"").trim(),dueDate=String(body.dueDate||"").trim()||null;
-      const currency=String(body.currency||"").trim().toUpperCase(),amount=Number(body.amount),quotation=String(body.quotation||"").trim();
+      const currency=String(body.currency||"").trim().toUpperCase();
+      const inputItems=Array.isArray(body.lineItems)?body.lineItems:[];
+      const taxPercent=Number(body.taxPercent||0),discountInput=Number(body.discountAmount||0);
+      const notes=String(body.notes||"").trim();
+      const fromName=String(body.fromName||"").trim(),fromAddress=String(body.fromAddress||"").trim(),fromContact=String(body.fromContact||"").trim();
+      const billToName=String(body.billToName||"").trim(),billToAddress=String(body.billToAddress||"").trim();
       if(!/^\d{4}-\d{2}-\d{2}$/.test(invoiceDate))return json({error:"Enter a valid invoice date."},400);
       if(dueDate&&!/^\d{4}-\d{2}-\d{2}$/.test(dueDate))return json({error:"Enter a valid due date."},400);
-      if(!/^[A-Z]{3,8}$/.test(currency))return json({error:"Enter a valid currency code."},400);
-      if(!Number.isFinite(amount)||amount<=0||amount>999999999999)return json({error:"Enter a valid invoice amount."},400);
-      if(quotation.length<5||quotation.length>5000)return json({error:"Add a quotation or work breakdown of 5 to 5,000 characters."},400);
-      const rows=await supabaseRest(auth.config,"/rest/v1/prolink_work_request_invoices",{method:"POST",headers:{prefer:"return=representation"},body:JSON.stringify({work_request_id:requestId,sender_user_id:userId,invoice_date:invoiceDate,due_date:dueDate,currency,amount,quotation,status:"sent"})});
+      if(!/^[A-Z]{3}$/.test(currency))return json({error:"Enter a valid three-letter currency code."},400);
+      if(!inputItems.length||inputItems.length>100)return json({error:"Add between 1 and 100 invoice items."},400);
+      if(!Number.isFinite(taxPercent)||taxPercent<0||taxPercent>100)return json({error:"Tax must be between 0 and 100 percent."},400);
+      if(!Number.isFinite(discountInput)||discountInput<0)return json({error:"Enter a valid discount amount."},400);
+      if(notes.length>3000||fromName.length>180||fromAddress.length>500||fromContact.length>180||billToName.length>180||billToAddress.length>500)return json({error:"One or more invoice details are too long."},400);
+      let subtotalCents=0;
+      const lineItems=[];
+      for(const item of inputItems){
+        const description=String(item?.description||"").trim(),unit=String(item?.unit||"").trim();
+        const quantity=Number(item?.quantity),unitPrice=Number(item?.unit_price);
+        if(!description||description.length>300||unit.length>40||!Number.isFinite(quantity)||quantity<=0||quantity>1000000||!Number.isFinite(unitPrice)||unitPrice<0||unitPrice>1000000000)return json({error:"Check every invoice item's description, quantity and unit price."},400);
+        const lineCents=Math.round(quantity*unitPrice*100);
+        if(!Number.isSafeInteger(lineCents)||lineCents<0||lineCents>100000000000000)return json({error:"An invoice item total is outside the supported range."},400);
+        subtotalCents+=lineCents;
+        if(!Number.isSafeInteger(subtotalCents)||subtotalCents>100000000000000)return json({error:"The invoice subtotal is too large."},400);
+        lineItems.push({description,quantity,unit,unit_price:Math.round(unitPrice*100)/100,line_total:lineCents/100});
+      }
+      const discountCents=Math.round(discountInput*100);
+      if(discountCents>subtotalCents)return json({error:"Discount cannot be greater than the invoice subtotal."},400);
+      const taxCents=Math.round((subtotalCents-discountCents)*taxPercent/100);
+      const amountCents=subtotalCents-discountCents+taxCents;
+      if(amountCents<=0)return json({error:"The invoice total must be greater than zero."},400);
+      const quotation=(lineItems.map(item=>item.description+" × "+item.quantity+(item.unit?" "+item.unit:"")).join("; ")+(notes?" — "+notes:"")).slice(0,5000);
+      const invoiceData={work_request_id:requestId,sender_user_id:userId,invoice_date:invoiceDate,due_date:dueDate,currency,amount:amountCents/100,quotation,status:"sent",line_items:lineItems,subtotal:subtotalCents/100,tax_percent:taxPercent,tax_amount:taxCents/100,discount_amount:discountCents/100,notes,from_name:fromName,from_address:fromAddress,from_contact:fromContact,bill_to_name:billToName,bill_to_address:billToAddress};
+      const rows=await supabaseRest(auth.config,"/rest/v1/prolink_work_request_invoices",{method:"POST",headers:{prefer:"return=representation"},body:JSON.stringify(invoiceData)});
       await supabaseRest(auth.config,"/rest/v1/prolink_work_requests?id=eq."+encodeURIComponent(requestId),{method:"PATCH",headers:{prefer:"return=minimal"},body:JSON.stringify({updated_at:new Date().toISOString()})});
       return json({success:true,invoice:rows?.[0]||null,message:"Invoice sent to the customer."},201);
     }
