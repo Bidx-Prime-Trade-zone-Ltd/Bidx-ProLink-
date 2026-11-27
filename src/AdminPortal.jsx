@@ -1,6 +1,6 @@
 import React,{useEffect,useMemo,useState} from 'react';
 import {supabase} from './lib/supabase.js';
-import {ShieldCheck,Users,Clock3,CheckCircle2,FileCheck,Search,LogOut,RefreshCw,Check,X,Eye,Globe2,UserRound,CalendarDays,LockKeyhole} from 'lucide-react';
+import {ShieldCheck,Users,Clock3,CheckCircle2,FileCheck,Search,ArrowLeft,RefreshCw,Check,X,Eye,Globe2,UserRound,CalendarDays,LockKeyhole} from 'lucide-react';
 import SupportInbox from './SupportInbox.jsx';
 import BroadcastManager from './BroadcastManager.jsx';
 
@@ -97,7 +97,7 @@ export default function AdminPortal(){
   ['Rejected documents',counts.rejectedDocuments,FileCheck]
  ];
  return <div className="admin-shell">
-  <header className="admin-header"><div><span className="admin-kicker">RESTRICTED · DOCUMENT REVIEW & SUPPORT</span><h1>Bidx ProLink Internal Admin</h1><p className="admin-subtitle">{ADMIN_EMAIL}</p></div><button onClick={()=>supabase.auth.signOut()}><LogOut size={16}/> Sign out</button></header>
+  <header className="admin-header"><div><span className="admin-kicker">RESTRICTED · DOCUMENT REVIEW & SUPPORT</span><h1>Bidx ProLink Internal Admin</h1><p className="admin-subtitle">{ADMIN_EMAIL}</p></div><button type="button" onClick={()=>window.location.assign("/")} aria-label="Return to ProLink" title="Return to ProLink"><ArrowLeft size={16}/> Return to ProLink</button></header>
   <div className="admin-security-note"><LockKeyhole size={16}/><span>Account and professional records are view-only. Authorised Admins can review documents and attend, reply to, and resolve ProLink Support conversations.</span></div>
   <nav className="admin-tabs">{tabs.map(t=><button key={t} className={tab===t?'active':''} onClick={()=>{setTab(t);setSelected(null);setQuery('');}}>{t}</button>)}</nav>
   {notice&&<p className="admin-notice" role="status">{notice}</p>}
