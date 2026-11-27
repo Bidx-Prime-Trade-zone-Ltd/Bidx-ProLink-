@@ -525,16 +525,29 @@ async function unreadNotificationCount(request,env){
   const auth=await signedInProfileUser(request,env);if(auth.error)return auth.error;
   try{
     const userId=encodeURIComponent(auth.user.id);
-    const [requests,conversations]=await Promise.all([
+    const [requests,allWorkRequests,conversations]=await Promise.all([
       supabaseRest(auth.config,"/rest/v1/prolink_work_requests?select=id&professional_user_id=eq."+userId+"&professional_read_at=is.null&limit=1000"),
+      supabaseRest(auth.config,"/rest/v1/prolink_work_requests?select=id&or=(requester_user_id.eq."+userId+",professional_user_id.eq."+userId+")&limit=1000"),
       supabaseRest(auth.config,"/rest/v1/prolink_support_conversations?select=id&user_id=eq."+userId+"&limit=1")
     ]);
+    const workIds=(allWorkRequests||[]).map(row=>row.id).filter(id=>/^[0-9a-f-]{36}$/i.test(String(id||"")));
+    let unreadWorkMessages=0;
+    if(workIds.length){
+      const workFilter="&work_request_id=in.("+workIds.join(",")+")&sender_user_id=neq."+userId+"&recipient_read_at=is.null&limit=1000";
+      const [messages,invoices,attachments]=await Promise.all([
+        supabaseRest(auth.config,"/rest/v1/prolink_work_request_messages?select=id"+workFilter),
+        supabaseRest(auth.config,"/rest/v1/prolink_work_request_invoices?select=id"+workFilter),
+        supabaseRest(auth.config,"/rest/v1/prolink_work_request_attachments?select=id"+workFilter)
+      ]);
+      unreadWorkMessages=(messages||[]).length+(invoices||[]).length+(attachments||[]).length;
+    }
     let adminReplies=[];
     if(conversations?.[0]?.id){
       adminReplies=await supabaseRest(auth.config,"/rest/v1/prolink_support_messages?select=id&conversation_id=eq."+encodeURIComponent(conversations[0].id)+"&sender_role=in.(ai,admin)&user_read_at=is.null&limit=1000");
     }
     const supportUnread=supportUnreadIncomingMessageCount(adminReplies||[]);
-    return json({workRequests:(requests||[]).length,adminChat:supportUnread,supportMessages:supportUnread,total:(requests||[]).length+supportUnread});
+    const unreadRequests=(requests||[]).length;
+    return json({workRequests:unreadRequests,workMessages:unreadWorkMessages,adminChat:supportUnread,supportMessages:supportUnread,total:unreadRequests+unreadWorkMessages+supportUnread});
   }catch(error){
     console.error("[prolink-notifications] unread_count_failed",{name:error?.name||"Error",message:String(error?.message||"").slice(0,180)});
     return json({error:"Unread notifications could not be loaded."},502);
