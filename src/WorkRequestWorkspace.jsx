@@ -1,5 +1,5 @@
 import React,{useCallback,useEffect,useMemo,useState} from 'react';
-import {MessageCircle,Send,FileText,Receipt,CheckCheck,ArrowLeft,CalendarDays,MapPin,UserRound,BriefcaseBusiness,Plus,Trash2,Printer} from 'lucide-react';
+import {MessageCircle,Send,FileText,Receipt,CheckCheck,ArrowLeft,CalendarDays,MapPin,UserRound,BriefcaseBusiness,Plus,Trash2,Printer,Paperclip,Image as ImageIcon,Download,LoaderCircle} from 'lucide-react';
 import './work-requests.css';
 
 const dateLabel=value=>value?new Date(value+'T00:00:00').toLocaleDateString(): 'Flexible';
@@ -15,8 +15,8 @@ const printWorkInvoice=(inv,work)=>{
  const win=window.open('','_blank');if(!win){alert('Allow pop-ups to view or print this invoice.');return;}win.document.open();win.document.write(html);win.document.close();
 };
 export default function WorkRequestWorkspace({session,requests=[],loading=false,onRefresh,onUpdate,direction='incoming'}){
- const [active,setActive]=useState(null),[messages,setMessages]=useState([]),[invoices,setInvoices]=useState([]);
- const [draft,setDraft]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
+ const [active,setActive]=useState(null),[messages,setMessages]=useState([]),[invoices,setInvoices]=useState([]),[attachments,setAttachments]=useState([]);
+ const [draft,setDraft]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[uploading,setUploading]=useState(false);
  const [showInvoice,setShowInvoice]=useState(false),[invoiceDate,setInvoiceDate]=useState(new Date().toISOString().slice(0,10));
  const [dueDate,setDueDate]=useState(''),[currency,setCurrency]=useState('USD');
  const [items,setItems]=useState([newInvoiceItem()]),[taxPercent,setTaxPercent]=useState('0'),[discountAmount,setDiscountAmount]=useState('0'),[notes,setNotes]=useState('');
@@ -25,14 +25,15 @@ export default function WorkRequestWorkspace({session,requests=[],loading=false,
  const lineItems=useMemo(()=>items.map(i=>({...i,quantity:Number(i.quantity),unit_price:Number(i.unitPrice),line_total:Math.round(Number(i.quantity)*Number(i.unitPrice)*100)/100})).filter(i=>i.description.trim()&&i.quantity>0&&i.unit_price>=0),[items]);
  const subtotal=lineItems.reduce((sum,i)=>sum+i.line_total,0),discount=Math.min(Math.max(0,Number(discountAmount)||0),subtotal),tax=Math.round((subtotal-discount)*Math.max(0,Number(taxPercent)||0))/100,total=Math.max(0,Math.round((subtotal-discount+tax)*100)/100);
  const token=session?.access_token;
- const mine=useMemo(()=>requests.filter(r=>r.direction===direction),[requests,direction]);
+ const fileRef=React.useRef(null);
+ const mine=useMemo(()=>direction==='all'?requests:requests.filter(r=>r.direction===direction),[requests,direction]);
  const loadThread=useCallback(async(id,silent=false)=>{
   if(!token||!id)return;
   if(!silent)setBusy(true);
   try{
    const response=await fetch('/api/work-requests/'+encodeURIComponent(id)+'/conversation',{headers:{authorization:'Bearer '+token}});
    const data=await response.json();if(!response.ok)throw new Error(data.error||'The work conversation could not be loaded.');
-   setMessages(data.messages||[]);setInvoices(data.invoices||[]);if(data.workRequest)setActive(current=>current?.id===id?{...current,...data.workRequest}:current);setError('');
+   setMessages(data.messages||[]);setInvoices(data.invoices||[]);setAttachments(data.attachments||[]);if(data.workRequest)setActive(current=>current?.id===id?{...current,...data.workRequest}:current);setError('');
   }catch(e){if(!silent)setError(e.message||'The conversation could not be loaded.');}
   finally{if(!silent)setBusy(false);}
  },[token]);
@@ -51,6 +52,30 @@ export default function WorkRequestWorkspace({session,requests=[],loading=false,
    setDraft('');await loadThread(active.id,true);
   }catch(e){setError(e.message||'Message could not be sent.');}
   finally{setBusy(false);}
+ };
+ const uploadAttachment=async file=>{
+  if(!file||!active||!token)return;
+  const allowed=['image/jpeg','image/png','image/webp','application/pdf','text/plain','text/csv','application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.ms-excel','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
+  if(!allowed.includes(file.type)){setError('Choose an image, PDF, Word, Excel, CSV or text file.');return;}
+  if(file.size<1||file.size>10485760){setError('Each attachment must be no larger than 10 MB.');return;}
+  setUploading(true);setError('');
+  try{
+   const form=new FormData();form.append('file',file);
+   const response=await fetch('/api/work-requests/'+encodeURIComponent(active.id)+'/attachments',{method:'POST',headers:{authorization:'Bearer '+token},body:form});
+   const data=await response.json();if(!response.ok)throw new Error(data.error||'File could not be sent.');
+   await loadThread(active.id,true);
+  }catch(e){setError(e.message||'File could not be sent.');}
+  finally{setUploading(false);if(fileRef.current)fileRef.current.value='';}
+ };
+ const openAttachment=async attachment=>{
+  try{
+   const response=await fetch('/api/work-requests/'+encodeURIComponent(active.id)+'/attachments/'+encodeURIComponent(attachment.id),{headers:{authorization:'Bearer '+token}});
+   if(!response.ok)throw new Error('This file could not be opened.');
+   const blob=await response.blob(),url=URL.createObjectURL(blob);
+   const opened=window.open(url,'_blank');
+   if(!opened){const link=document.createElement('a');link.href=url;link.download=attachment.file_name;link.click();}
+   setTimeout(()=>URL.revokeObjectURL(url),60000);
+  }catch(e){setError(e.message||'This file could not be opened.');}
  };
  const submitInvoice=async event=>{
   event.preventDefault();if(!active||invoiceBusy)return;setError('');
@@ -75,22 +100,22 @@ export default function WorkRequestWorkspace({session,requests=[],loading=false,
   }catch(e){setError(e.message||'Invoice response could not be saved.');}
   finally{setInvoiceActionBusy('');}
  };
- const professional=direction==='incoming';
+ const professional=(active?.direction||direction)==='incoming';
  return <main className="work-request-page-scroll"><section className="work-workspace">
   {!active?<>
-   <div className="work-workspace-heading"><div><h1>{professional?'Incoming work requests':'My work requests'}</h1><p>{professional?'Private customer requests sent directly to your professional account.':'Requests you have sent to professionals, including their replies and quotations.'}</p></div><button className="outline-button" type="button" onClick={onRefresh} disabled={loading}>{loading?'Refreshing…':'Refresh requests'}</button></div>
+   <div className="work-workspace-heading"><div><h1>{direction==='all'?'Work messages':professional?'Incoming work requests':'My work requests'}</h1><p>{direction==='all'?'Conversations with customers and professionals about work requests, including messages, invoices and shared files.':professional?'Private customer requests sent directly to your professional account.':'Requests you have sent to professionals, including their replies and quotations.'}</p></div><button className="outline-button" type="button" onClick={onRefresh} disabled={loading}>{loading?'Refreshing…':'Refresh requests'}</button></div>
    {loading&&!mine.length?<p className="work-empty">Loading your work requests…</p>:mine.length?mine.map(r=><article className="work-request-card" key={r.id}>
     <div className="work-card-top"><span className="work-eyebrow">DIRECT CUSTOMER REQUEST</span><span className={'work-status status-'+r.status}>{r.status.replaceAll('_',' ')}</span></div>
     <h2>{r.job_description}</h2><div className="work-meta"><span><MapPin size={15}/>{r.job_location}</span><span><CalendarDays size={15}/>Preferred: {dateLabel(r.preferred_date)}</span></div>
     <p className="work-request-date">Submitted {stamp(r.created_at)}</p>
     {!professional&&<p className="work-professional-name"><UserRound size={15}/> Sent to {r.professional_name}</p>}
-    {professional&&<p className="work-received-state">{r.professional_read_at?'You have viewed this request':'New request · Not yet viewed'}</p>}
+    {r.direction==='incoming'&&<p className="work-received-state">{r.professional_read_at?'You have viewed this request':'New request · Not yet viewed'}</p>}
     <div className="work-card-actions">
-     {professional&&r.status==='pending'&&<><button type="button" className="work-accept" onClick={()=>onUpdate(r.id,'accepted')}>Accept request</button><button type="button" className="work-decline" onClick={()=>onUpdate(r.id,'declined')}>Decline</button></>}
-     {!professional&&r.status==='pending'&&<button type="button" className="work-decline" onClick={()=>onUpdate(r.id,'cancelled')}>Cancel request</button>}
+     {r.direction==='incoming'&&r.status==='pending'&&<><button type="button" className="work-accept" onClick={()=>onUpdate(r.id,'accepted')}>Accept request</button><button type="button" className="work-decline" onClick={()=>onUpdate(r.id,'declined')}>Decline</button></>}
+     {r.direction==='outgoing'&&r.status==='pending'&&<button type="button" className="work-decline" onClick={()=>onUpdate(r.id,'cancelled')}>Cancel request</button>}
      <button type="button" className="work-open-chat" onClick={()=>setActive(r)}><MessageCircle size={16}/> Open conversation</button>
     </div>
-   </article>):<div className="work-empty"><BriefcaseBusiness size={28}/><b>{professional?'No incoming requests yet':'You have not sent any work requests yet'}</b><span>When a customer or professional starts a request, it will appear here.</span></div>}
+   </article>):<div className="work-empty"><BriefcaseBusiness size={28}/><b>{direction==='all'?'No work conversations yet':professional?'No incoming requests yet':'You have not sent any work requests yet'}</b><span>When a customer or professional starts a request, it will appear here.</span></div>}
   </>:<>
    <div className="work-thread-heading"><button type="button" onClick={()=>{setActive(null);setShowInvoice(false);setError('');}}><ArrowLeft size={17}/> All requests</button><div><b>{professional?active.requester_name||'Customer':active.professional_name}</b><small>{active.status.toUpperCase()} · Work request conversation</small></div></div>
    <div className="work-thread-job"><span className="work-eyebrow">JOB DETAILS</span><b>{active.job_description}</b><span><MapPin size={14}/>{active.job_location}</span><span><CalendarDays size={14}/>Preferred date: {dateLabel(active.preferred_date)}</span></div>
@@ -98,6 +123,7 @@ export default function WorkRequestWorkspace({session,requests=[],loading=false,
     {busy&&!messages.length&&!invoices.length&&<p className="work-empty">Opening conversation…</p>}
     {!messages.length&&!invoices.length&&!busy&&<p className="work-empty">This is the beginning of your private conversation about this job. Discuss the work, timing and quotation here.</p>}
     {messages.map(m=><article key={m.id} className={'work-chat-message '+(m.sender_user_id===session?.user?.id?'mine':'theirs')}><b>{m.sender_user_id===session?.user?.id?'You':professional?'Customer':active.professional_name}</b><p>{m.body}</p><small>{stamp(m.created_at)} {m.recipient_read_at&&<CheckCheck size={12}/>}</small></article>)}
+    {attachments.map(file=><article key={file.id} className={'work-chat-message work-chat-attachment '+(file.sender_user_id===session?.user?.id?'mine':'theirs')}><b>{file.sender_user_id===session?.user?.id?'You':professional?'Customer':active.professional_name}</b><button type="button" onClick={()=>openAttachment(file)} className="work-attachment-open">{file.kind==='image'?<ImageIcon size={22}/>:<FileText size={22}/>}<span><strong>{file.file_name}</strong><small>{file.mime_type} · {Math.max(1,Math.round(file.file_size/1024))} KB</small></span><Download size={17}/></button>{file.caption&&<p>{file.caption}</p>}<small>{stamp(file.created_at)} {file.recipient_read_at&&<CheckCheck size={12}/>}</small></article>)}
     {invoices.map(inv=><article key={inv.id} className="work-invoice-card">
      <div className="work-invoice-head"><Receipt size={19}/><div><b>Invoice {inv.invoice_number}</b><small>Issued {dateLabel(inv.invoice_date)}{inv.due_date?' · Due '+dateLabel(inv.due_date):''}</small></div><span className={'work-status status-'+inv.status}>{inv.status}</span></div>
      <div className="work-invoice-parties"><span><b>From:</b> {inv.from_name||'Professional'} {inv.from_contact&&' · '+inv.from_contact}</span><span><b>Bill to:</b> {inv.bill_to_name||active.requester_name||'Customer'}</span></div>
@@ -123,7 +149,7 @@ export default function WorkRequestWorkspace({session,requests=[],loading=false,
     <label className="work-invoice-quotation-field">Notes or payment terms<textarea rows={3} maxLength={3000} value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Additional scope, warranty, payment instructions or notes (optional)."/></label>
     <button className="work-invoice-submit" disabled={invoiceBusy||!lineItems.length}>{invoiceBusy?'Preparing invoice…':'Review and send invoice to customer'}</button>
    </form>}
-   <form className="work-thread-composer" onSubmit={send}><textarea rows={2} value={draft} onChange={e=>setDraft(e.target.value)} maxLength={5000} placeholder="Write a message about this job…"/><button type="submit" disabled={!draft.trim()||busy}><Send size={17}/> Send</button></form>
+   <form className="work-thread-composer" onSubmit={send}><textarea rows={2} value={draft} onChange={e=>setDraft(e.target.value)} maxLength={5000} placeholder="Message the customer or professional…"/><input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp,application/pdf,text/plain,text/csv,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden onChange={e=>uploadAttachment(e.target.files?.[0])}/><button type="button" className="work-attach-button" onClick={()=>fileRef.current?.click()} disabled={uploading||busy} aria-label="Attach image or document">{uploading?<LoaderCircle size={17}/>:<Paperclip size={17}/>}<span>{uploading?'Uploading':'Attach'}</span></button><button type="submit" disabled={!draft.trim()||busy||uploading}><Send size={17}/> Send</button></form>
    {error&&<p className="work-thread-error" role="alert">{error}</p>}
   </>}
  </section></main>;
