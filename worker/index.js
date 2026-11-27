@@ -665,7 +665,29 @@ async function adminDashboard(request,env) {
     rejectedDocuments:reviewsResult?reviews.filter(r=>r.status==="rejected").length:null,
     pendingWorkRequests:workRequestsResult?workRequests.filter(r=>r.status==="pending").length:null
   };
+  const profileByUser=Object.fromEntries(profiles.map(profile=>[profile.user_id,profile]));
+  users=users.map(account=>({...account,profile:profileByUser[account.id]||null}));
   return json({counts,users,profiles,reviews,profileChangeRequests,workRequests,warnings,adminEmail:auth.user.email});
+}
+
+async function adminUserMessage(request,env){
+  const auth=await requireProlinkAdmin(request,env);if(auth.error)return auth.error;
+  try{
+    const body=await request.json(),userId=String(body.userId||"").trim(),message=String(body.message||"").trim();
+    if(!/^[0-9a-f-]{36}$/i.test(userId))return json({error:"Select a valid ProLink user."},400);
+    if(!message||message.length>6000)return json({error:"Enter a message of up to 6,000 characters."},400);
+    if(userId===auth.user.id)return json({error:"You cannot message your own Admin account."},400);
+    const conversation=await supportConversation(auth.config,userId);
+    const now=new Date().toISOString();
+    await supabaseRest(auth.config,"/rest/v1/prolink_support_conversations?id=eq."+encodeURIComponent(conversation.id),{
+      method:"PATCH",headers:{prefer:"return=minimal"},body:JSON.stringify({status:"admin_attending",admin_attended_at:conversation.admin_attended_at||now,resolved_at:null,updated_at:now})
+    });
+    const saved=await supportInsertMessage(auth.config,conversation.id,"admin",message,{senderUserId:auth.user.id});
+    return json({success:true,message:saved,conversationId:conversation.id});
+  }catch(error){
+    console.error("[prolink-admin] direct_user_message_failed",{name:error?.name||"Error",message:String(error?.message||"").slice(0,160)});
+    return json({error:"The message could not be delivered. Please retry."},502);
+  }
 }
 
 async function adminReview(request,env) {
@@ -1685,6 +1707,7 @@ export default {
     if (url.pathname === "/api/notifications/unread" && request.method === "GET") return unreadNotificationCount(request, env);
     if (url.pathname === "/api/admin/profile-change" && request.method === "POST") return adminProfileChange(request, env);
     if (url.pathname === "/api/admin/dashboard" && request.method === "GET") return adminDashboard(request, env);
+    if (url.pathname === "/api/admin/users/message" && request.method === "POST") return adminUserMessage(request, env);
     if (url.pathname === "/api/admin/broadcasts" && (request.method === "GET" || request.method === "POST")) return adminBroadcasts(request, env);
     if (url.pathname === "/api/support/messages" && request.method === "GET") return supportMessages(request, env);
     if (url.pathname === "/api/support/read" && request.method === "POST") return supportMarkRead(request, env);
