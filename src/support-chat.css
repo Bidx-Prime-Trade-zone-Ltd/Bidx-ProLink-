@@ -65,3 +65,15 @@ html:has(.prolink-support-overlay),body:has(.prolink-support-overlay){overscroll
 @media(min-width:900px){.prolink-support-fab{bottom:24px}.prolink-support-panel{bottom:88px}}
 
 .prolink-support-unread-badge{position:absolute;top:-7px;right:-6px;min-width:21px;height:21px;padding:0 5px;display:grid;place-items:center;border:2px solid #fff;border-radius:999px;background:#dc3545;color:#fff;font-size:10px;font-weight:900;line-height:1;box-shadow:0 2px 6px rgba(0,0,0,.2)}
+
+/* Prominent unread Admin/AI support alert shown as soon as a signed-in user has unread replies. */
+.prolink-admin-notification{position:fixed;z-index:1200;top:calc(10px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);width:min(620px,calc(100vw - 24px));display:flex;align-items:center;gap:11px;padding:12px 13px;border:1px solid #f0b7bd;border-radius:14px;background:#fff7f7;color:#243b53;text-align:left;box-shadow:0 8px 28px rgba(26,42,60,.2);cursor:pointer;animation:prolink-notification-in .25s ease-out}
+.prolink-admin-notification-dot{width:11px;height:11px;flex:0 0 11px;border-radius:50%;background:#dc3545;box-shadow:0 0 0 4px rgba(220,53,69,.13);animation:prolink-notification-pulse 1.8s infinite}
+.prolink-admin-notification-copy{display:flex;flex:1;min-width:0;flex-direction:column;gap:3px}
+.prolink-admin-notification-copy b{font-size:13px;font-weight:900;color:#9f2431}
+.prolink-admin-notification-copy small{font-size:11px;line-height:1.35;color:#5d6d7e}
+.prolink-admin-notification-count{min-width:27px;height:27px;padding:0 7px;display:grid;place-items:center;border-radius:999px;background:#dc3545;color:white;font-size:12px;font-weight:900}
+.prolink-admin-notification-close{flex:0 0 auto;color:#8794a2}
+@keyframes prolink-notification-pulse{0%,100%{box-shadow:0 0 0 3px rgba(220,53,69,.12)}50%{box-shadow:0 0 0 7px rgba(220,53,69,.04)}}
+@keyframes prolink-notification-in{from{opacity:0;transform:translate(-50%,-10px)}to{opacity:1;transform:translate(-50%,0)}}
+@media(max-width:560px){.prolink-admin-notification{top:calc(8px + env(safe-area-inset-top));width:calc(100vw - 18px);padding:11px 10px;gap:9px}.prolink-admin-notification-copy b{font-size:12px}.prolink-admin-notification-copy small{font-size:10px}}
