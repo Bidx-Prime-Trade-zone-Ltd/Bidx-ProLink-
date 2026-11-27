@@ -683,7 +683,7 @@ async function workRequestThread(request,env,requestId,resource){
       const taxCents=Math.round((subtotalCents-discountCents)*taxPercent/100);
       const amountCents=subtotalCents-discountCents+taxCents;
       if(amountCents<=0)return json({error:"The invoice total must be greater than zero."},400);
-      const quotation=(notes||lineItems.map(item=>item.description+" × "+item.quantity+(item.unit?" "+item.unit:"")).join("; ")).slice(0,5000);
+      const quotation=(lineItems.map(item=>item.description+" × "+item.quantity+(item.unit?" "+item.unit:"")).join("; ")+(notes?" — "+notes:"")).slice(0,5000);
       const invoiceData={work_request_id:requestId,sender_user_id:userId,invoice_date:invoiceDate,due_date:dueDate,currency,amount:amountCents/100,quotation,status:"sent",line_items:lineItems,subtotal:subtotalCents/100,tax_percent:taxPercent,tax_amount:taxCents/100,discount_amount:discountCents/100,notes,from_name:fromName,from_address:fromAddress,from_contact:fromContact,bill_to_name:billToName,bill_to_address:billToAddress};
       const rows=await supabaseRest(auth.config,"/rest/v1/prolink_work_request_invoices",{method:"POST",headers:{prefer:"return=representation"},body:JSON.stringify(invoiceData)});
       await supabaseRest(auth.config,"/rest/v1/prolink_work_requests?id=eq."+encodeURIComponent(requestId),{method:"PATCH",headers:{prefer:"return=minimal"},body:JSON.stringify({updated_at:new Date().toISOString()})});
