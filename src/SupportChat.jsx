@@ -113,20 +113,22 @@ export default function SupportChat({session,profile}){
    const response=await fetch('/api/support/message',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+token},body:JSON.stringify({message,timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone||'Africa/Lagos'})});
    const payload=await response.json();
    if(!response.ok)throw new Error(payload.error||'Your message could not be sent.');
+   const savedUserMessage=(payload.messages||[]).find(item=>item.sender_role==='user');
    const aiMessage=(payload.messages||[]).find(item=>item.sender_role==='ai');
    setAiTyping(Boolean(aiMessage));
    if(aiMessage){
     const remaining=Math.max(0,typingDuration(aiMessage.content)-(Date.now()-started));
     if(remaining)await wait(remaining);
-    // The POST already returns the saved AI message; avoid a second GET round trip.
-    setMessages(current=>{
-     const withoutPending=current.filter(item=>item.id!==localId);
-     if(withoutPending.some(item=>item.id===aiMessage.id))return withoutPending;
-     return [...withoutPending,{...aiMessage}];
-    });
-   }else{
-    setMessages(current=>current.map(item=>item.id===localId?{...item,local_status:'sent'}:item));
    }
+   // Keep the user's persisted message in the local thread as well as the AI
+   // reply. The Admin and user must see the same chronological conversation.
+   setMessages(current=>{
+    const next=current.map(item=>item.id===localId
+     ?(savedUserMessage?{...savedUserMessage,local_status:'sent'}:{...item,local_status:'sent'})
+     :item);
+    if(aiMessage&&!next.some(item=>item.id===aiMessage.id))next.push(aiMessage);
+    return next;
+   });
   }catch(err){
    setMessages(current=>current.filter(item=>item.id!==localId));
    setDraft(message);setError(err.message||'Your message could not be sent.');
