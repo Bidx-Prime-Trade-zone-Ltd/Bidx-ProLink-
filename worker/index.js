@@ -1520,7 +1520,7 @@ function supportUnreadConversationCount(messages){
 async function adminSupportUnread(request,env){
   const auth=await requireProlinkAdmin(request,env);if(auth.error)return auth.error;
   try{
-    const unread=await supabaseRest(auth.config,"/rest/v1/prolink_support_messages?select=conversation_id&sender_role=eq.user&read_at=is.null&limit=5000");
+    const unread=await supabaseRest(auth.config,"/rest/v1/prolink_support_messages?select=conversation_id,sender_role,read_at&sender_role=eq.user&read_at=is.null&limit=5000");
     return json({unreadConversations:supportUnreadConversationCount(unread||[])});
   }catch(error){
     console.error("[prolink-support-admin] unread_count_failed",{name:error?.name||"Error"});
@@ -1534,7 +1534,7 @@ async function adminSupportInbox(request,env){
     const ids=(conversations||[]).map(c=>c.user_id).filter(Boolean);
     const [profiles,unreadMessages]=await Promise.all([
       ids.length?supabaseRest(auth.config,"/rest/v1/prolink_professional_profiles?select=user_id,full_name,professional_name,category,city,country_name&user_id=in.("+ids.map(encodeURIComponent).join(",")+")"):[],
-      supabaseRest(auth.config,"/rest/v1/prolink_support_messages?select=conversation_id&sender_role=eq.user&read_at=is.null&limit=5000")
+      supabaseRest(auth.config,"/rest/v1/prolink_support_messages?select=conversation_id,sender_role,read_at&sender_role=eq.user&read_at=is.null&limit=5000")
     ]);
     const profileMap=Object.fromEntries((profiles||[]).map(p=>[p.user_id,p]));
     const unreadConversationIds=new Set((unreadMessages||[]).map(message=>message.conversation_id));
