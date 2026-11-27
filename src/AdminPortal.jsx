@@ -1,4 +1,4 @@
-import React,{useEffect,useMemo,useState} from 'react';
+import React,{useEffect,useMemo,useRef,useState} from 'react';
 import {supabase} from './lib/supabase.js';
 import {ShieldCheck,Users,Clock3,CheckCircle2,FileCheck,Search,ArrowLeft,RefreshCw,Check,X,Eye,Globe2,UserRound,CalendarDays,LockKeyhole,BriefcaseBusiness,ClipboardCheck,History,MessageCircle,Mail,LayoutDashboard,ChevronRight,Send} from 'lucide-react';
 import SupportInbox from './SupportInbox.jsx';
@@ -16,7 +16,8 @@ export default function AdminPortal(){
  const [notice,setNotice]=useState(''),[busy,setBusy]=useState(false),[documentUrl,setDocumentUrl]=useState('');
  const [documentLoading,setDocumentLoading]=useState(false);
  const [unreadSupportConversations,setUnreadSupportConversations]=useState(0);
- const [selectedUser,setSelectedUser]=useState(null),[userMessage,setUserMessage]=useState(''),[sendingUserMessage,setSendingUserMessage]=useState(false),[userFilter,setUserFilter]=useState('all');
+ const [selectedUser,setSelectedUser]=useState(null),[userMessage,setUserMessage]=useState(''),[sendingUserMessage,setSendingUserMessage]=useState(false),[userConversation,setUserConversation]=useState([]),[userConversationLoading,setUserConversationLoading]=useState(false),[userFilter,setUserFilter]=useState('all');
+ const userChatEndRef=useRef(null);
  const admin=!!user&&String(user.email||'').toLowerCase()===ADMIN_EMAIL;
 
  const load=async()=>{
@@ -86,8 +87,35 @@ export default function AdminPortal(){
  const openUser=(userId,extra={})=>{
   const account=dashboard.users.find(item=>item.id===userId)||{id:userId,email:''};
   const profile=dashboard.profiles.find(item=>item.user_id===userId)||account.profile||null;
-  setSelectedUser({...account,...extra,profile});setUserMessage('');setNotice('');
+  setSelectedUser({...account,...extra,profile});setUserMessage('');setUserConversation([]);setNotice('');
  };
+ const loadUserConversation=async(showLoading=false)=>{
+  if(!selectedUser?.id)return;
+  if(showLoading)setUserConversationLoading(true);
+  try{
+   const {data:{session}}=await supabase.auth.getSession();
+   if(!session?.access_token)throw new Error('Your admin session has expired. Sign in again.');
+   const response=await fetch('/api/admin/users/message?userId='+encodeURIComponent(selectedUser.id),{headers:{authorization:'Bearer '+session.access_token}});
+   const payload=await response.json();if(!response.ok)throw new Error(payload.error||'Conversation could not be loaded.');
+   setUserConversation(payload.messages||[]);
+  }catch(error){setNotice(error.message||'Conversation could not be loaded.');}
+  finally{if(showLoading)setUserConversationLoading(false);}
+ };
+ useEffect(()=>{
+  if(!selectedUser?.id)return;
+  let active=true;
+  const refresh=async()=>{
+   try{
+    const {data:{session}}=await supabase.auth.getSession();if(!session?.access_token)return;
+    const response=await fetch('/api/admin/users/message?userId='+encodeURIComponent(selectedUser.id),{headers:{authorization:'Bearer '+session.access_token}});
+    const payload=await response.json();if(response.ok&&active)setUserConversation(payload.messages||[]);
+   }catch{}
+  };
+  setUserConversationLoading(true);refresh().finally(()=>{if(active)setUserConversationLoading(false);});
+  const timer=setInterval(refresh,5000);
+  return()=>{active=false;clearInterval(timer);};
+ },[selectedUser?.id]);
+ useEffect(()=>{userChatEndRef.current?.scrollIntoView({behavior:'smooth',block:'end'});},[userConversation]);
  const openMetric=name=>{
   setQuery('');
   if(name==='Registered users'){setUserFilter('all');setTab('Users');}
@@ -105,7 +133,8 @@ export default function AdminPortal(){
    const {data:{session}}=await supabase.auth.getSession();
    const response=await fetch('/api/admin/users/message',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+session.access_token},body:JSON.stringify({userId:selectedUser.id,message})});
    const payload=await response.json();if(!response.ok)throw new Error(payload.error||'Message could not be sent.');
-   setUserMessage('');setNotice('Private message sent. It is now in the user’s ProLink Support chat.');
+   if(payload.message)setUserConversation(current=>[...current.filter(item=>item.id!==payload.message.id),payload.message]);
+   setUserMessage('');setNotice('Message sent and saved to this conversation.');
   }catch(error){setNotice(error.message||'Message could not be sent.');}
   finally{setSendingUserMessage(false);}
  };
@@ -212,12 +241,21 @@ export default function AdminPortal(){
      <div><small>Location</small><b>{[selectedUser.profile?.city,selectedUser.profile?.region,selectedUser.profile?.country_name].filter(Boolean).join(', ')||'Not provided'}</b></div>
      <div><small>Last sign-in</small><b>{fmt(selectedUser.last_sign_in_at)}</b></div>
     </div>
-    <form className="admin-user-message-form" onSubmit={sendUserMessage}>
-     <h3><MessageCircle size={18}/> Send private message</h3>
-     <p>Your message will be delivered to this user's existing ProLink Support chat. The user will receive an in-app unread notification.</p>
-     <textarea rows="4" maxLength="6000" value={userMessage} onChange={event=>setUserMessage(event.target.value)} placeholder="Write a message about the account, profile, verification or another issue…" required/>
-     <div className="admin-user-message-actions"><small>{userMessage.length}/6000</small><button type="submit" disabled={sendingUserMessage||!userMessage.trim()}>{sendingUserMessage?'Sending…':<><Send size={15}/> Send to user</>}</button></div>
-    </form>
+    <section className="admin-user-chat">
+     <div className="admin-user-chat-heading"><div><h3><MessageCircle size={18}/> Conversation with user</h3><p>Messages stay in this ProLink Support conversation. Keep this window open to continue chatting; close it with × when finished.</p></div><span className="admin-chat-live">Live · 5s refresh</span></div>
+     <div className="admin-user-chat-history" aria-live="polite">
+      {userConversationLoading&&!userConversation.length?<p className="admin-chat-state">Loading conversation…</p>:userConversation.length?userConversation.map(message=><article key={message.id||message.created_at+message.content} className={'admin-chat-message '+(message.sender_role==='admin'?'from-admin':message.sender_role==='user'?'from-user':'from-ai')}>
+       <div className="admin-chat-message-meta"><b>{message.sender_role==='admin'?'You · Admin':message.sender_role==='user'?'User':'ProLink AI'}</b><time>{fmt(message.created_at)}</time></div>
+       <p>{message.content}</p>
+       {message.sender_role==='admin'&&<small className="admin-chat-receipt">{message.user_read_at?'Seen':message.delivered_at?'Delivered':'Sent'}</small>}
+      </article>):<p className="admin-chat-state">No messages in this conversation yet. Send the first message below.</p>}
+      <div ref={userChatEndRef}/>
+     </div>
+     <form className="admin-user-message-form" onSubmit={sendUserMessage}>
+      <textarea rows="3" maxLength="6000" value={userMessage} onChange={event=>setUserMessage(event.target.value)} placeholder="Write a message…" required/>
+      <div className="admin-user-message-actions"><small>{userMessage.length}/6000</small><button type="submit" disabled={sendingUserMessage||!userMessage.trim()}>{sendingUserMessage?'Sending…':<><Send size={15}/> Send message</>}</button></div>
+     </form>
+    </section>
    </section>
   </div>}
   <footer className="admin-footer"><ShieldCheck size={15}/> Bidx ProLink · Internal document review and customer support · User records remain read-only</footer>
