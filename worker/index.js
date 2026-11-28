@@ -959,7 +959,7 @@ async function adminDashboard(request,env) {
   };
   const profileByUser=Object.fromEntries(profiles.map(profile=>[profile.user_id,profile]));
   const recruitmentRolesByUser=new Map(users.filter(user=>user.recruitmentRoles?.length).map(user=>[user.id,[...user.recruitmentRoles]]));
-  recruitmentRegistrations.forEach(row=>{if(!recruitmentRolesByUser.has(row.user_id))recruitmentRolesByUser.set(row.user_id,[]);recruitmentRolesByUser.get(row.user_id).push(row.account_type);});
+  recruitmentRegistrations.forEach(row=>{if(!recruitmentRolesByUser.has(row.user_id))recruitmentRolesByUser.set(row.user_id,[]);const roles=recruitmentRolesByUser.get(row.user_id);if(!roles.includes(row.account_type))roles.push(row.account_type);});
   employerProfiles.forEach(row=>{if(!recruitmentRolesByUser.has(row.user_id))recruitmentRolesByUser.set(row.user_id,[]);if(!recruitmentRolesByUser.get(row.user_id).includes("employer"))recruitmentRolesByUser.get(row.user_id).push("employer");});
   jobSeekerProfiles.forEach(row=>{if(!recruitmentRolesByUser.has(row.user_id))recruitmentRolesByUser.set(row.user_id,[]);if(!recruitmentRolesByUser.get(row.user_id).includes("job_seeker"))recruitmentRolesByUser.get(row.user_id).push("job_seeker");});
   users=users.map(account=>({...account,profile:profileByUser[account.id]||null,recruitmentRoles:recruitmentRolesByUser.get(account.id)||[]}));
