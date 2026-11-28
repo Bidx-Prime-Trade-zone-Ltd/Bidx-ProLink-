@@ -754,16 +754,33 @@ async function recruitmentWorkspace(request,env){
   const base="/rest/v1/";
   try{
     if(request.method==="GET"){
-      const [employers,seekers,jobs]=await Promise.all([
+      const [employers,seekers,jobs,registrations]=await Promise.all([
         supabaseRest(auth.config,base+"prolink_employer_profiles?select=*&user_id=eq."+encodeURIComponent(auth.user.id)+"&limit=1"),
         supabaseRest(auth.config,base+"prolink_job_seeker_profiles?select=*&user_id=eq."+encodeURIComponent(auth.user.id)+"&limit=1"),
-        supabaseRest(auth.config,base+"prolink_jobs?select=*&employer_user_id=eq."+encodeURIComponent(auth.user.id)+"&order=submitted_at.desc&limit=100")
+        supabaseRest(auth.config,base+"prolink_jobs?select=*&employer_user_id=eq."+encodeURIComponent(auth.user.id)+"&order=submitted_at.desc&limit=100"),
+        supabaseRest(auth.config,base+"prolink_recruitment_registrations?select=account_type,registered_at&user_id=eq."+encodeURIComponent(auth.user.id)+"&order=registered_at.asc")
       ]);
-      return json({employer:employers?.[0]||null,jobSeeker:seekers?.[0]||null,jobs:jobs||[]});
+      // Preserve recruitment intent for existing accounts that already submitted a
+      // corresponding profile before role registration tracking was introduced.
+      const knownRoles=new Set((registrations||[]).map(row=>row.account_type));
+      const legacyRoles=[];
+      if(employers?.[0]&&!knownRoles.has("employer"))legacyRoles.push({user_id:auth.user.id,account_type:"employer"});
+      if(seekers?.[0]&&!knownRoles.has("job_seeker"))legacyRoles.push({user_id:auth.user.id,account_type:"job_seeker"});
+      if(legacyRoles.length){
+        await supabaseRest(auth.config,base+"prolink_recruitment_registrations?on_conflict=user_id,account_type",{method:"POST",headers:{prefer:"resolution=ignore-duplicates,return=minimal"},body:JSON.stringify(legacyRoles)});
+      }
+      const roles=[...new Set([...(registrations||[]).map(row=>row.account_type),...legacyRoles.map(row=>row.account_type)])];
+      return json({employer:employers?.[0]||null,jobSeeker:seekers?.[0]||null,jobs:jobs||[],registrations:roles});
     }
     if(request.method!=="POST")return json({error:"Method not allowed."},405);
     const body=await request.json(),kind=String(body.kind||""),action=String(body.action||"");
     const now=new Date().toISOString(),userId=auth.user.id;
+    if(kind==="register"){
+      const accountType=String(body.account_type||"");
+      if(!["employer","job_seeker"].includes(accountType))return json({error:"Choose whether you are registering as an employer or a job seeker."},400);
+      const saved=await supabaseRest(auth.config,base+"prolink_recruitment_registrations?on_conflict=user_id,account_type",{method:"POST",headers:{prefer:"resolution=merge-duplicates,return=representation"},body:JSON.stringify({user_id:userId,account_type:accountType,updated_at:now})});
+      return json({success:true,registration:saved?.[0]||{user_id:userId,account_type:accountType},message:accountType==="employer"?"Employer account registered. You can now submit your company profile for approval.":"Job-seeker account registered. You can now create your profile for approval."},201);
+    }
     if(action==="close_job"){
       const id=String(body.id||"");
       if(!/^[0-9a-f-]{36}$/i.test(id))return json({error:"Select a valid job."},400);
@@ -872,14 +889,15 @@ async function adminDashboard(request,env) {
       return null;
     }
   };
-  const [profilesResult,reviewsResult,profileChangeRequestsResult,workRequestsResult,employerProfilesResult,jobSeekerProfilesResult,jobsResult]=await Promise.all([
+  const [profilesResult,reviewsResult,profileChangeRequestsResult,workRequestsResult,employerProfilesResult,jobSeekerProfilesResult,jobsResult,recruitmentRegistrationsResult]=await Promise.all([
     readRows("professional_profiles","/rest/v1/prolink_professional_profiles?select=*&order=approved_at.desc&limit=5000"),
     readRows("document_reviews","/rest/v1/prolink_review_records?select=*&order=submitted_at.desc&limit=5000"),
     readRows("profile_change_requests","/rest/v1/prolink_profile_change_requests?select=*&order=requested_at.desc&limit=1000"),
     readRows("work_requests","/rest/v1/prolink_work_requests?select=*&order=created_at.desc&limit=5000"),
     readRows("employer_profiles","/rest/v1/prolink_employer_profiles?select=*&order=submitted_at.desc&limit=5000"),
     readRows("job_seeker_profiles","/rest/v1/prolink_job_seeker_profiles?select=*&order=submitted_at.desc&limit=5000"),
-    readRows("jobs","/rest/v1/prolink_jobs?select=*&order=submitted_at.desc&limit=5000")
+    readRows("jobs","/rest/v1/prolink_jobs?select=*&order=submitted_at.desc&limit=5000"),
+    readRows("recruitment_registrations","/rest/v1/prolink_recruitment_registrations?select=user_id,account_type,registered_at&order=registered_at.desc&limit=10000")
   ]);
   let users=[],usersAvailable=true;
   try{
@@ -897,7 +915,13 @@ async function adminDashboard(request,env) {
   const todayFormatter=new Intl.DateTimeFormat("en-CA",{timeZone:"Africa/Lagos",year:"numeric",month:"2-digit",day:"2-digit"});
   const today=todayFormatter.format(new Date());
   const newUsersToday=users.filter(user=>user.created_at&&todayFormatter.format(new Date(user.created_at))===today).length;
-  const profiles=profilesResult||[],reviews=reviewsResult||[],profileChangeRequests=profileChangeRequestsResult||[],workRequests=workRequestsResult||[],employerProfiles=employerProfilesResult||[],jobSeekerProfiles=jobSeekerProfilesResult||[],jobs=jobsResult||[];
+  const profiles=profilesResult||[],reviews=reviewsResult||[],profileChangeRequests=profileChangeRequestsResult||[],workRequests=workRequestsResult||[],employerProfiles=employerProfilesResult||[],jobSeekerProfiles=jobSeekerProfilesResult||[],jobs=jobsResult||[],recruitmentRegistrations=recruitmentRegistrationsResult||[];
+  const employerAccountIds=new Set(recruitmentRegistrations.filter(row=>row.account_type==="employer").map(row=>row.user_id));
+  const jobSeekerAccountIds=new Set(recruitmentRegistrations.filter(row=>row.account_type==="job_seeker").map(row=>row.user_id));
+  // Count legacy profile owners too, so existing approved/pending profile holders
+  // remain represented even if they predate explicit role registration.
+  employerProfiles.forEach(row=>employerAccountIds.add(row.user_id));
+  jobSeekerProfiles.forEach(row=>jobSeekerAccountIds.add(row.user_id));
   const counts={
     totalUsers:usersAvailable?users.length:null,
     newUsersToday:usersAvailable?newUsersToday:null,
@@ -907,8 +931,10 @@ async function adminDashboard(request,env) {
     approvedDocuments:reviewsResult?reviews.filter(r=>r.status==="approved").length:null,
     rejectedDocuments:reviewsResult?reviews.filter(r=>r.status==="rejected").length:null,
     pendingWorkRequests:workRequestsResult?workRequests.filter(r=>r.status==="pending").length:null,
+    employerAccounts:recruitmentRegistrationsResult&&employerProfilesResult?employerAccountIds.size:null,
     employerProfiles:employerProfilesResult?employerProfiles.length:null,
     pendingEmployerProfiles:employerProfilesResult?employerProfiles.filter(r=>r.status==="pending").length:null,
+    jobSeekerAccounts:recruitmentRegistrationsResult&&jobSeekerProfilesResult?jobSeekerAccountIds.size:null,
     jobSeekerProfiles:jobSeekerProfilesResult?jobSeekerProfiles.length:null,
     activeJobSeekers:jobSeekerProfilesResult?jobSeekerProfiles.filter(r=>r.status==="approved"&&r.seeking_status==="active").length:null,
     pendingJobSeekerProfiles:jobSeekerProfilesResult?jobSeekerProfiles.filter(r=>r.status==="pending").length:null,
@@ -917,8 +943,12 @@ async function adminDashboard(request,env) {
     closedJobs:jobsResult?jobs.filter(r=>r.status==="closed").length:null
   };
   const profileByUser=Object.fromEntries(profiles.map(profile=>[profile.user_id,profile]));
-  users=users.map(account=>({...account,profile:profileByUser[account.id]||null}));
-  return json({counts,users,profiles,reviews,profileChangeRequests,workRequests,employerProfiles,jobSeekerProfiles,jobs,warnings,adminEmail:auth.user.email});
+  const recruitmentRolesByUser=new Map();
+  recruitmentRegistrations.forEach(row=>{if(!recruitmentRolesByUser.has(row.user_id))recruitmentRolesByUser.set(row.user_id,[]);recruitmentRolesByUser.get(row.user_id).push(row.account_type);});
+  employerProfiles.forEach(row=>{if(!recruitmentRolesByUser.has(row.user_id))recruitmentRolesByUser.set(row.user_id,[]);if(!recruitmentRolesByUser.get(row.user_id).includes("employer"))recruitmentRolesByUser.get(row.user_id).push("employer");});
+  jobSeekerProfiles.forEach(row=>{if(!recruitmentRolesByUser.has(row.user_id))recruitmentRolesByUser.set(row.user_id,[]);if(!recruitmentRolesByUser.get(row.user_id).includes("job_seeker"))recruitmentRolesByUser.get(row.user_id).push("job_seeker");});
+  users=users.map(account=>({...account,profile:profileByUser[account.id]||null,recruitmentRoles:recruitmentRolesByUser.get(account.id)||[]}));
+  return json({counts,users,profiles,reviews,profileChangeRequests,workRequests,employerProfiles,jobSeekerProfiles,jobs,recruitmentRegistrations,warnings,adminEmail:auth.user.email});
 }
 
 async function adminUserMessage(request,env){
