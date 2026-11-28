@@ -824,6 +824,7 @@ async function adminRecruitmentAction(request,env){
   try{
     const body=await request.json(),kind=String(body.kind||""),id=String(body.id||""),action=String(body.action||""),reason=String(body.reason||"").trim();
     if(!["employer","job_seeker","job"].includes(kind)||!["approve","reject","close"].includes(action))return json({error:"Choose a valid recruitment review action."},400);
+    if(action==="close"&&kind!=="job")return json({error:"Only a job posting can be closed from this action."},400);
     if(action==="reject"&&reason.length<3)return json({error:"A rejection reason is required."},400);
     const table=kind==="employer"?"prolink_employer_profiles":kind==="job_seeker"?"prolink_job_seeker_profiles":"prolink_jobs";
     const key=kind==="job"?"id":"user_id";
@@ -841,6 +842,15 @@ async function adminRecruitmentAction(request,env){
     else if(action==="reject")Object.assign(patch,{status:"rejected"});
     else Object.assign(patch,{status:"closed",closed_at:now});
     const changed=await supabaseRest(auth.config,"/rest/v1/"+table+"?"+key+"=eq."+encodeURIComponent(id),{method:"PATCH",headers:{prefer:"return=representation"},body:JSON.stringify(patch)});
+    const recipient=kind==="job"?row.employer_user_id:row.user_id;
+    const subject=action==="approve"?(kind==="job"?"Your job has been approved and published":"Your ProLink profile has been approved"):action==="reject"?"Your ProLink submission needs attention":"Your job posting has been closed";
+    const messageBody=action==="reject"?"Admin feedback: "+reason:action==="approve"?(kind==="job"?"Your job is now live on ProLink job listings.":"Your profile has been approved."): "Your job is no longer visible in public listings.";
+    try{
+      await supabaseRest(auth.config,"/rest/v1/prolink_admin_messages",{method:"POST",headers:{prefer:"return=minimal"},body:JSON.stringify({sender_user_id:auth.user.id,recipient_user_id:recipient,subject,body:messageBody})});
+    }catch(error){console.error("[prolink-recruitment] decision_notification_failed",{kind,name:error?.name||"Error"});}
+    try{
+      await supabaseRest(auth.config,"/rest/v1/prolink_admin_audit",{method:"POST",headers:{prefer:"return=minimal"},body:JSON.stringify({admin_user_id:auth.user.id,action:"recruitment_"+kind+"_"+action,target_user_id:recipient,section:"recruitment",reason:action==="reject"?reason:null,details:{record_id:id,kind,status:patch.status}})});
+    }catch(error){console.error("[prolink-recruitment] audit_write_failed",{kind,name:error?.name||"Error"});}
     return json({success:true,record:changed?.[0]||null,message:action==="approve"?(kind==="job"?"Job approved and published.":"Profile approved."):action==="reject"?"Submission rejected.":"Job closed."});
   }catch(error){
     console.error("[prolink-recruitment] admin_action_failed",{name:error?.name||"Error",message:String(error?.message||"").slice(0,180)});
