@@ -644,3 +644,8 @@ html,body,#root{min-height:100%;height:auto}body{overflow-x:hidden;overflow-y:au
 .document-requirements-panel .document-required small{line-height:1.5}
 
 .country-rule-review-note{display:block!important;padding:8px 10px;border-radius:7px;background:#fff7e8;color:#825515!important;border:1px solid #f1dfb8;font-weight:600}
+
+.professional-document-metadata{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px}
+.professional-document-metadata input{width:100%;min-width:0;border:1px solid #e6edf5;border-radius:8px;padding:9px 10px;background:#fff;color:#0e2d5c;font:inherit;font-size:11px}
+.professional-document-metadata label{display:flex;flex-direction:column;gap:5px;color:#64748b;font-size:10px}
+@media(max-width:520px){.professional-document-metadata{grid-template-columns:1fr}}
