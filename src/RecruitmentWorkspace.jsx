@@ -7,18 +7,30 @@ const emptySeeker={full_name:'',headline:'',skills:'',experience:'',bio:'',count
 const emptyJob={title:'',description:'',requirements:'',location:'',country_name:'',employment_type:'full_time',workplace_type:'onsite',salary_min:'',salary_max:'',currency:''};
 
 export default function RecruitmentWorkspace({session,onBack}){
- const [section,setSection]=useState('employer'),[data,setData]=useState({employer:null,jobSeeker:null,jobs:[]}),[publicJobs,setPublicJobs]=useState([]);
+ const [section,setSection]=useState('choose'),[data,setData]=useState({employer:null,jobSeeker:null,jobs:[],registrations:[]}),[publicJobs,setPublicJobs]=useState([]),[registeredRoles,setRegisteredRoles]=useState([]);
  const [employer,setEmployer]=useState(emptyEmployer),[seeker,setSeeker]=useState(emptySeeker),[job,setJob]=useState(emptyJob);
  const [busy,setBusy]=useState(false),[loading,setLoading]=useState(true),[notice,setNotice]=useState('');
  const token=session?.access_token;
  const load=async()=>{
   if(!token)return;
   setLoading(true);
-  try{const response=await fetch('/api/recruitment',{headers:{authorization:'Bearer '+token}});const payload=await response.json();if(!response.ok)throw new Error(payload.error||'Recruitment workspace could not load.');setData(payload);const publicResponse=await fetch('/api/recruitment/jobs');const publicPayload=await publicResponse.json();if(publicResponse.ok)setPublicJobs(publicPayload.jobs||[]);if(payload.employer)setEmployer({...emptyEmployer,...payload.employer});if(payload.jobSeeker)setSeeker({...emptySeeker,...payload.jobSeeker,skills:(payload.jobSeeker.skills||[]).join(', ')});}
+  try{const response=await fetch('/api/recruitment',{headers:{authorization:'Bearer '+token}});const payload=await response.json();if(!response.ok)throw new Error(payload.error||'Recruitment workspace could not load.');setData(payload);const roles=Array.isArray(payload.registrations)?payload.registrations:[];setRegisteredRoles(roles);setSection(current=>current==='choose'?(roles.includes('employer')?'employer':roles.includes('job_seeker')?'seeker':'choose'):current);const publicResponse=await fetch('/api/recruitment/jobs');const publicPayload=await publicResponse.json();if(publicResponse.ok)setPublicJobs(publicPayload.jobs||[]);if(payload.employer)setEmployer({...emptyEmployer,...payload.employer});if(payload.jobSeeker)setSeeker({...emptySeeker,...payload.jobSeeker,skills:(payload.jobSeeker.skills||[]).join(', ')});}
   catch(error){setNotice(error.message||'Recruitment workspace could not load.');}
   finally{setLoading(false);}
  };
  useEffect(()=>{load();},[token]);
+ const registerRole=async(accountType)=>{
+  setBusy(true);setNotice('');
+  try{
+   const response=await fetch('/api/recruitment',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+token},body:JSON.stringify({kind:'register',account_type:accountType})});
+   const payload=await response.json();if(!response.ok)throw new Error(payload.error||'Your recruitment account could not be registered.');
+   setRegisteredRoles(current=>current.includes(accountType)?current:[...current,accountType]);
+   setSection(accountType==='employer'?'employer':'seeker');
+   setNotice(payload.message||'Your recruitment account is ready.');
+   await load();
+  }catch(error){setNotice(error.message||'Your recruitment account could not be registered.');}
+  finally{setBusy(false);}
+ };
  const submit=async(kind,values)=>{
   setBusy(true);setNotice('');
   try{const response=await fetch('/api/recruitment',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+token},body:JSON.stringify({kind,...values})});const payload=await response.json();if(!response.ok)throw new Error(payload.error||'Your submission could not be saved.');setNotice(payload.message||'Submitted successfully.');await load();}
@@ -39,13 +51,16 @@ export default function RecruitmentWorkspace({session,onBack}){
   <h1>Employment workspace</h1>
   <p className="lead">Create an employer or job-seeker profile. Company profiles and candidate profiles are reviewed before they become active. Every vacancy is separately reviewed before publication.</p>
   {notice&&<p className="recruitment-notice" role="status">{notice}</p>}
-  <div className="recruitment-tabs">
-   <button className={section==='employer'?'active':''} onClick={()=>setSection('employer')}><Building2 size={17}/> Employer profile</button>
-   <button className={section==='jobs'?'active':''} onClick={()=>setSection('jobs')}><BriefcaseBusiness size={17}/> Post a job</button>
-   <button className={section==='seeker'?'active':''} onClick={()=>setSection('seeker')}><Users size={17}/> Job-seeker profile</button><button className={section==='find'?'active':''} onClick={()=>setSection('find')}><BriefcaseBusiness size={17}/> Find jobs</button>
-  </div>
+  {registeredRoles.length>0&&<div className="recruitment-tabs">
+   {registeredRoles.includes('employer')&&<><button className={section==='employer'?'active':''} onClick={()=>setSection('employer')}><Building2 size={17}/> Employer profile</button><button className={section==='jobs'?'active':''} onClick={()=>setSection('jobs')}><BriefcaseBusiness size={17}/> Post a job</button></>}
+   {registeredRoles.includes('job_seeker')&&<button className={section==='seeker'?'active':''} onClick={()=>setSection('seeker')}><Users size={17}/> Job-seeker profile</button>}
+   <button className={section==='find'?'active':''} onClick={()=>setSection('find')}><BriefcaseBusiness size={17}/> Find jobs</button>
+   <button type="button" onClick={()=>setSection('choose')}><PlusCircle size={16}/> Add another role</button>
+  </div>}
   {loading?<p className="recruitment-loading">Loading your employment records…</p>:<>
-   {section==='employer'&&<section className="recruitment-card"><div className="recruitment-card-heading"><div><h2>Company / employer profile</h2><p>Submit your organisation details for review. Approval is required before posting vacancies.</p></div>{data.employer&&stateBadge(data.employer.status)}</div>
+   {section==='choose'&&<section className="recruitment-card"><h2>How would you like to use ProLink employment?</h2><p>Register your account as an employer if you want to hire people, or as a job seeker if you are looking for work. You can add both roles to the same account. Registration is recorded immediately; profile and job submissions are reviewed separately.</p><div className="recruitment-role-options"><button type="button" disabled={busy||registeredRoles.includes('employer')} onClick={()=>registerRole('employer')}><Building2 size={24}/><b>{registeredRoles.includes('employer')?'Employer already registered':'I am an employer'}</b><span>Hire workers, create a company profile and submit vacancies for approval.</span></button><button type="button" disabled={busy||registeredRoles.includes('job_seeker')} onClick={()=>registerRole('job_seeker')}><Users size={24}/><b>{registeredRoles.includes('job_seeker')?'Job seeker already registered':'I am looking for a job'}</b><span>Register as a candidate and create a profile for employer discovery.</span></button></div></section>}
+
+   {section==='employer'&&registeredRoles.includes('employer')&&<section className="recruitment-card"><div className="recruitment-card-heading"><div><h2>Company / employer profile</h2><p>Submit your organisation details for review. Approval is required before posting vacancies.</p></div>{data.employer&&stateBadge(data.employer.status)}</div>
     <form className="recruitment-form" onSubmit={e=>{e.preventDefault();submit('employer',employer);}}>
      <label>Company / organisation name<input required value={employer.company_name} onChange={e=>setEmployer({...employer,company_name:e.target.value})}/></label>
      <div className="recruitment-form-grid"><label>Registration number (optional)<input value={employer.registration_number||''} onChange={e=>setEmployer({...employer,registration_number:e.target.value})}/></label><label>Industry<input value={employer.industry||''} onChange={e=>setEmployer({...employer,industry:e.target.value})}/></label>
@@ -56,7 +71,7 @@ export default function RecruitmentWorkspace({session,onBack}){
      <button className="primary-button" disabled={busy}>{busy?'Submitting…':data.employer?'Resubmit company profile for review':'Submit company profile'}</button>
     </form>
    </section>}
-   {section==='jobs'&&<><section className="recruitment-card"><div className="recruitment-card-heading"><div><h2>Post a vacancy</h2><p>Jobs are not public until Admin approval.</p></div>{data.employer&&stateBadge(data.employer.status)}</div>
+   {section==='jobs'&&registeredRoles.includes('employer')&&<><section className="recruitment-card"><div className="recruitment-card-heading"><div><h2>Post a vacancy</h2><p>Jobs are not public until Admin approval.</p></div>{data.employer&&stateBadge(data.employer.status)}</div>
     {!data.employer||data.employer.status!=='approved'?<div className="recruitment-callout"><Lock size={18}/><span>Your employer company profile must be approved before you can submit a job.</span><button type="button" onClick={()=>setSection('employer')}>Open employer profile</button></div>:<form className="recruitment-form" onSubmit={e=>{e.preventDefault();submit('job',job);setJob(emptyJob);}}>
      <label>Job title<input required minLength="3" value={job.title} onChange={e=>setJob({...job,title:e.target.value})}/></label><label>Job description<textarea required minLength="20" rows="5" value={job.description} onChange={e=>setJob({...job,description:e.target.value})}/></label><label>Requirements<textarea rows="4" value={job.requirements} onChange={e=>setJob({...job,requirements:e.target.value})}/></label>
      <div className="recruitment-form-grid"><label>Work location<input value={job.location} onChange={e=>setJob({...job,location:e.target.value})}/></label><label>Country<input value={job.country_name} onChange={e=>setJob({...job,country_name:e.target.value})}/></label>
@@ -66,7 +81,7 @@ export default function RecruitmentWorkspace({session,onBack}){
     </form>}
    </section><section className="recruitment-card"><h2>Your job postings</h2>{data.jobs.length?data.jobs.map(item=><article className="recruitment-job-row" key={item.id}><div><b>{item.title}</b><small>{item.location||item.country_name||'Location not supplied'} · {stateBadge(item.status)}</small>{item.review_reason&&<small className="recruitment-review-reason">Admin feedback: {item.review_reason}</small>}</div>{item.status==='live'&&<button type="button" disabled={busy} onClick={()=>close('close_job',item.id)}>Close job</button>}</article>):<p>You have not posted any jobs yet.</p>}</section></>}
    {section==='find'&&<section className="recruitment-card"><h2>Live job vacancies</h2><p>Only jobs approved by ProLink Admin appear here. Closed or pending jobs are not shown.</p>{publicJobs.length?publicJobs.map(item=><article className="recruitment-public-job" key={item.id}><div><b>{item.title}</b><small>{[item.location,item.country_name,item.employment_type?.replaceAll('_',' ')].filter(Boolean).join(' · ')}</small><p>{item.description}</p>{(item.salary_min!=null||item.salary_max!=null)&&<small>Salary: {item.currency||''} {item.salary_min??'—'} – {item.salary_max??'—'}</small>}</div></article>):<p className="recruitment-loading">There are no live job vacancies at the moment.</p>}</section>}
-   {section==='seeker'&&<section className="recruitment-card"><div className="recruitment-card-heading"><div><h2>Job-seeker profile</h2><p>Make your profile available to employers after Admin review. Close it when you are no longer looking for work.</p></div>{data.jobSeeker&&stateBadge(data.jobSeeker.status)}</div>
+   {section==='seeker'&&registeredRoles.includes('job_seeker')&&<section className="recruitment-card"><div className="recruitment-card-heading"><div><h2>Job-seeker profile</h2><p>Make your profile available to employers after Admin review. Close it when you are no longer looking for work.</p></div>{data.jobSeeker&&stateBadge(data.jobSeeker.status)}</div>
     <form className="recruitment-form" onSubmit={e=>{e.preventDefault();submit('job_seeker',seeker);}}>
      <label>Full name<input required value={seeker.full_name} onChange={e=>setSeeker({...seeker,full_name:e.target.value})}/></label><label>Professional headline<input value={seeker.headline||''} onChange={e=>setSeeker({...seeker,headline:e.target.value})}/></label><label>Skills (separate with commas)<input value={seeker.skills||''} onChange={e=>setSeeker({...seeker,skills:e.target.value})}/></label><label>Experience<textarea rows="3" value={seeker.experience||''} onChange={e=>setSeeker({...seeker,experience:e.target.value})}/></label><label>About you<textarea rows="4" value={seeker.bio||''} onChange={e=>setSeeker({...seeker,bio:e.target.value})}/></label>
      <div className="recruitment-form-grid"><label>Country<input value={seeker.country_name||''} onChange={e=>setSeeker({...seeker,country_name:e.target.value})}/></label><label>State / region<input value={seeker.region||''} onChange={e=>setSeeker({...seeker,region:e.target.value})}/></label><label>City<input value={seeker.city||''} onChange={e=>setSeeker({...seeker,city:e.target.value})}/></label></div>
