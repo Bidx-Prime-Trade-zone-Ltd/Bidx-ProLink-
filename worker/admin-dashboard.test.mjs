@@ -43,6 +43,9 @@ test("admin dashboard returns real counts from the ProLink account and review ta
     if(url.includes("/rest/v1/prolink_employer_profiles"))return jsonResponse([]);
     if(url.includes("/rest/v1/prolink_job_seeker_profiles"))return jsonResponse([]);
     if(url.includes("/rest/v1/prolink_jobs"))return jsonResponse([]);
+    if(url.includes("/rest/v1/prolink_employer_profiles"))return jsonResponse([]);
+    if(url.includes("/rest/v1/prolink_job_seeker_profiles"))return jsonResponse([]);
+    if(url.includes("/rest/v1/prolink_jobs"))return jsonResponse([]);
     if(url.includes("/rest/v1/prolink_work_requests"))return jsonResponse([]);
     if(url.includes("/auth/v1/admin/users?page=1"))return jsonResponse({users:userRows});
     throw new Error("Unexpected request: "+url);
