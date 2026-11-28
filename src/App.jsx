@@ -860,7 +860,7 @@ function App() {
             <b>{requirement.title} {requirement.required?'*':'(if applicable)'}</b>
             <small>{requirement.description}</small>
             {requirement.authority&&<small><b>Relevant authority:</b> {requirement.authority}</small>}
-            <small>{requirement.jurisdictionNote}</small>
+            <small>{requirement.jurisdictionNote}</small>{requirement.jurisdictionStatus==="country_specific_review_required"&&<small className="country-rule-review-note">Country-specific regulator confirmation pending — Admin review required</small>}
             <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" capture="environment" onChange={e=>setProfessionalDocumentFiles(p=>({...p,[requirement.id]:e.target.files?.[0]||null}))}/>
             {professionalDocumentFiles[requirement.id]&&<small>Selected: {professionalDocumentFiles[requirement.id].name}</small>}
           </div>)}
