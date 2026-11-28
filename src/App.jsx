@@ -45,6 +45,7 @@ const getProfessionalCredentialGuidance = iso3 => PROFESSIONAL_CREDENTIAL_GUIDAN
 import AuthModal from './AuthModal.jsx';
 import { TermsContent, PrivacyContent, ProfessionalPolicyContent } from './LegalPages.jsx';
 import { PROFESSION_GROUPS, ALL_PROFESSIONS } from './professions.js';
+import { getProfessionalDocumentRequirements } from './professionalRequirements.js';
 import { INITIAL_COUNTRIES, COUNTRY_BY_CODE } from './globalCountries.js';
 import { loadCountryAdministrativeHierarchy } from './lib/countryAdministrativeHierarchy.js';
 import { supabase } from './lib/supabase.js';
@@ -389,7 +390,9 @@ function App() {
   const [workingIdFile,setWorkingIdFile] = useState(null);
   const [competencyFile,setCompetencyFile] = useState(null);
   const [extraSkillFile,setExtraSkillFile] = useState(null);
+  const [professionalDocumentFiles,setProfessionalDocumentFiles] = useState({});
   const [joinSaving, setJoinSaving] = useState(false);
+  const professionalDocumentRequirements = useMemo(() => getProfessionalDocumentRequirements(joinData.country_iso3, joinData.category, joinData.subcategory), [joinData.country_iso3, joinData.category, joinData.subcategory]);
   // Discover only country-specific, structurally checked levels; the first unavailable level remains manual.
   const onboardingSelectedNames = [
     joinData.region,joinData.district,joinData.city,joinData.local_area,
@@ -849,8 +852,20 @@ function App() {
         <label className="form-label">Years of experience *<select value={joinData.experience} onChange={e=>setJoinData(p=>({...p,experience:e.target.value}))}><option value="">Select experience</option><option>Less than 1 year</option><option>1–2 years</option><option>3–5 years</option><option>6–10 years</option><option>More than 10 years</option></select></label>
         <label className="form-label wide-field">Skills and services offered *<textarea rows="3" value={joinData.skills} onChange={e=>setJoinData(p=>({...p,skills:e.target.value}))} placeholder="List the services and skills you provide"/></label>
         <label className="form-label wide-field">About your professional work<textarea rows="3" value={joinData.about} onChange={e=>setJoinData(p=>({...p,about:e.target.value}))} placeholder="Describe your experience and work"/></label>
-        <div className="document-required wide-field"><b>Competency / trade-test / skills certificate *</b><small>Upload a certificate of competency, trade-test certificate, apprenticeship completion certificate, professional qualification or another relevant document proving your skills. This is reviewed manually by Prolink Admin.</small><small className="country-document-guidance">{getProfessionalCredentialGuidance(joinData.country_iso3)}</small><input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" capture="environment" onChange={e=>setCompetencyFile(e.target.files?.[0]||null)}/>{competencyFile&&<small>Selected: {competencyFile.name}</small>}</div>
-        <div className="document-required wide-field"><b>Additional skills document (optional)</b><small>Upload another certificate, licence or supporting document if applicable.</small><input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" capture="environment" onChange={e=>setExtraSkillFile(e.target.files?.[0]||null)}/>{extraSkillFile&&<small>Selected: {extraSkillFile.name}</small>}</div>
+        <section className="document-requirements-panel wide-field">
+          <h3>Documents required for {joinData.subcategory || 'your profession'}</h3>
+          <p>Requirements shown below are based on your registered country ({joinData.country_name || 'selected country'}) and selected profession. Upload only the evidence relevant to this work.</p>
+          <div className="country-document-guidance">{getProfessionalCredentialGuidance(joinData.country_iso3)}</div>
+          {professionalDocumentRequirements.map(requirement=><div className="document-required" key={requirement.id}>
+            <b>{requirement.title} {requirement.required?'*':'(if applicable)'}</b>
+            <small>{requirement.description}</small>
+            {requirement.authority&&<small><b>Relevant authority:</b> {requirement.authority}</small>}
+            <small>{requirement.jurisdictionNote}</small>
+            <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" capture="environment" onChange={e=>setProfessionalDocumentFiles(p=>({...p,[requirement.id]:e.target.files?.[0]||null}))}/>
+            {professionalDocumentFiles[requirement.id]&&<small>Selected: {professionalDocumentFiles[requirement.id].name}</small>}
+          </div>)}
+          <small>Accepted: JPEG, PNG, WebP or PDF. Maximum 10 MB per document. Documents are reviewed individually by ProLink Admin.</small>
+        </section>
         <label className="form-label">Business phone<input type="tel" inputMode="numeric" value={joinData.business_phone||''} onChange={e=>setJoinData(p=>({...p,business_phone:e.target.value.replace(/\D/g,'').slice(0,15)}))} placeholder="Business contact number"/></label>
         <label className="form-label">Business email<input type="email" value={joinData.business_email||''} onChange={e=>setJoinData(p=>({...p,business_email:e.target.value}))} placeholder="Separate business email (optional)"/></label>
         <label className="form-label">Website (optional)<input type="url" value={joinData.website||''} onChange={e=>setJoinData(p=>({...p,website:e.target.value}))} placeholder="https://"/></label>
@@ -875,9 +890,9 @@ function App() {
           notify('Personal details and working ID submitted for manual review.');
           setJoinStep(2);return;
         }
-        if(!joinData.business_name.trim()||!joinData.category||!joinData.subcategory||!joinData.experience||!joinData.skills.trim()||!competencyFile||competencyFile.size>10485760||!['image/jpeg','image/png','image/webp','application/pdf'].includes(competencyFile.type)||(extraSkillFile&&(extraSkillFile.size>10485760||!['image/jpeg','image/png','image/webp','application/pdf'].includes(extraSkillFile.type)))){notify('Complete your professional details and upload a competency or trade-test certificate.');return;}
+        const missingRequired=professionalDocumentRequirements.filter(r=>r.required&&!professionalDocumentFiles[r.id]);const invalidDocument=professionalDocumentRequirements.map(r=>professionalDocumentFiles[r.id]).filter(Boolean).find(file=>file.size>10485760||!['image/jpeg','image/png','image/webp','application/pdf'].includes(file.type));if(!joinData.business_name.trim()||!joinData.category||!joinData.subcategory||!joinData.experience||!joinData.skills.trim()||missingRequired.length||invalidDocument){notify(missingRequired.length?'Please upload: '+missingRequired.map(r=>r.title).join(', '):invalidDocument?'Each document must be JPEG, PNG, WebP or PDF and no larger than 10 MB.':'Complete your professional details.');return;}
         setJoinSaving(true);
-        const businessPayload={title:joinData.title,full_name:joinData.full_name.trim(),administrative_levels:joinData.administrative_levels||[],date_of_birth:`${joinData.dob_year}-${joinData.dob_month}-${joinData.dob_day}`,country_code:joinData.country_code,country_iso3:joinData.country_iso3,country_name:joinData.country_name,region:joinData.region,district:joinData.district,city:joinData.city,local_area:joinData.local_area,phone:joinData.phone,whatsapp:joinData.whatsapp,professional_name:joinData.business_name.trim(),category:joinData.category,subcategory:joinData.subcategory,experience:joinData.experience,skills:joinData.skills,about:joinData.about,business_phone:joinData.business_phone||'',business_email:joinData.business_email||'',website:joinData.website||'',business_address:joinData.business_address||'',professional_onboarding_status:'submitted_for_review',business_review_status:'pending',manual_document_review_required:true,professional_documents_pending_review:true};
+        const businessPayload={title:joinData.title,full_name:joinData.full_name.trim(),administrative_levels:joinData.administrative_levels||[],date_of_birth:`${joinData.dob_year}-${joinData.dob_month}-${joinData.dob_day}`,country_code:joinData.country_code,country_iso3:joinData.country_iso3,country_name:joinData.country_name,region:joinData.region,district:joinData.district,city:joinData.city,local_area:joinData.local_area,phone:joinData.phone,whatsapp:joinData.whatsapp,professional_name:joinData.business_name.trim(),category:joinData.category,subcategory:joinData.subcategory,experience:joinData.experience,skills:joinData.skills,about:joinData.about,business_phone:joinData.business_phone||'',business_email:joinData.business_email||'',website:joinData.website||'',business_address:joinData.business_address||'',professional_onboarding_status:'submitted_for_review',business_review_status:'pending',manual_document_review_required:true,professional_documents_pending_review:true,professional_document_country_iso3:joinData.country_iso3,professional_document_country_name:joinData.country_name,professional_document_family:professionalDocumentRequirements[0]?.professionFamily||'general',professional_document_requirements:professionalDocumentRequirements.map(({id,documentType,title,required,conditional,authority,jurisdictionNote,evidenceRoute})=>({id,document_type:documentType,title,required,conditional,authority,jurisdiction_note:jurisdictionNote,evidence_route:evidenceRoute,status:'pending'}))};
         const {error}=await supabase.auth.updateUser({data:{...profile,...businessPayload}});
         if(error){setJoinSaving(false);notify('We could not save your professional information. Please try again.');return;}
         const {error:businessReviewError}=await supabase.from('prolink_review_records').insert({user_id:session.user.id,section:'professional_profile',status:'pending',submitted_data:businessPayload});
@@ -890,11 +905,11 @@ function App() {
           if(!response.ok)throw new Error(result.error||'Professional document upload failed.');
           return result.path;
         };
-        try{await uploadDocument(competencyFile,'competency_certificate');if(extraSkillFile)await uploadDocument(extraSkillFile,'additional_skill_document');if(portraitFile){if(!['image/jpeg','image/png','image/webp'].includes(portraitFile.type)||portraitFile.size>5242880)throw new Error('Portrait must be JPEG, PNG or WebP and no larger than 5 MB.');const pp=session.user.id+'/portrait-'+crypto.randomUUID()+'.'+(portraitFile.type==='image/png'?'png':portraitFile.type==='image/webp'?'webp':'jpg');const {error:pe}=await supabase.storage.from('prolink-profile-portraits').upload(pp,portraitFile,{upsert:false,contentType:portraitFile.type});if(pe)throw pe;const {error:pr}=await supabase.from('prolink_profile_media').upsert({user_id:session.user.id,portrait_path:pp,updated_at:new Date().toISOString()},{onConflict:'user_id'});if(pr)throw pr;}
+        try{for(const requirement of professionalDocumentRequirements){const file=professionalDocumentFiles[requirement.id];if(file){const path=await uploadDocument(file,requirement.documentType);const entry=businessPayload.professional_document_requirements.find(item=>item.id===requirement.id);if(entry)entry.file_name=file.name;}}if(extraSkillFile)await uploadDocument(extraSkillFile,'additional_skill_document');if(portraitFile){if(!['image/jpeg','image/png','image/webp'].includes(portraitFile.type)||portraitFile.size>5242880)throw new Error('Portrait must be JPEG, PNG or WebP and no larger than 5 MB.');const pp=session.user.id+'/portrait-'+crypto.randomUUID()+'.'+(portraitFile.type==='image/png'?'png':portraitFile.type==='image/webp'?'webp':'jpg');const {error:pe}=await supabase.storage.from('prolink-profile-portraits').upload(pp,portraitFile,{upsert:false,contentType:portraitFile.type});if(pe)throw pe;const {error:pr}=await supabase.from('prolink_profile_media').upsert({user_id:session.user.id,portrait_path:pp,updated_at:new Date().toISOString()},{onConflict:'user_id'});if(pr)throw pr;}
         }catch(uploadError){setJoinSaving(false);notify('Your profile was saved, but a certificate could not be submitted: '+uploadError.message);return;}
         setJoinSaving(false);
         setProfile(p=>({...p,...businessPayload}));
-        setShowJoin(false);setJoinStep(1);setWorkingIdFile(null);setCompetencyFile(null);setExtraSkillFile(null);
+        setShowJoin(false);setJoinStep(1);setWorkingIdFile(null);setCompetencyFile(null);setExtraSkillFile(null);setProfessionalDocumentFiles({});
         notify('Your professional profile and skill documents have been submitted for manual Admin review.');
       }}>{joinSaving?'Saving…':joinStep===1?'Submit legal details':'Submit professional details'} <ChevronRight size={15}/></button></div>
       <small className="legal-copy">All personal details, working ID cards and skills certificates are reviewed manually by Prolink Admin. No national ID lookup or automated identity verification is used.</small>
