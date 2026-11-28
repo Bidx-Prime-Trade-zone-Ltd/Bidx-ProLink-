@@ -391,6 +391,7 @@ function App() {
   const [competencyFile,setCompetencyFile] = useState(null);
   const [extraSkillFile,setExtraSkillFile] = useState(null);
   const [professionalDocumentFiles,setProfessionalDocumentFiles] = useState({});
+  const [professionalDocumentMetadata,setProfessionalDocumentMetadata] = useState({});
   const [joinSaving, setJoinSaving] = useState(false);
   const professionalDocumentRequirements = useMemo(() => getProfessionalDocumentRequirements(joinData.country_iso3, joinData.category, joinData.subcategory), [joinData.country_iso3, joinData.category, joinData.subcategory]);
   // Discover only country-specific, structurally checked levels; the first unavailable level remains manual.
@@ -861,7 +862,7 @@ function App() {
             <small>{requirement.description}</small>
             {requirement.authority&&<small><b>Relevant authority:</b> {requirement.authority}</small>}
             <small>{requirement.jurisdictionNote}</small>{requirement.jurisdictionStatus==="country_specific_review_required"&&<small className="country-rule-review-note">Country-specific regulator confirmation pending — Admin review required</small>}
-            <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" capture="environment" onChange={e=>setProfessionalDocumentFiles(p=>({...p,[requirement.id]:e.target.files?.[0]||null}))}/>
+            <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" capture="environment" onChange={e=>setProfessionalDocumentFiles(p=>({...p,[requirement.id]:e.target.files?.[0]||null}))}/>{requirement.collectReference&&<div className="professional-document-metadata"><input aria-label="Licence or registration number" value={professionalDocumentMetadata[requirement.id]?.reference||""} onChange={e=>setProfessionalDocumentMetadata(p=>({...p,[requirement.id]:{...p[requirement.id],reference:e.target.value}}))} placeholder="Licence / registration / certificate number (if shown)"/><label>Expiry date (if applicable)<input type="date" value={professionalDocumentMetadata[requirement.id]?.expiry||""} onChange={e=>setProfessionalDocumentMetadata(p=>({...p,[requirement.id]:{...p[requirement.id],expiry:e.target.value}}))}/></label></div>}
             {professionalDocumentFiles[requirement.id]&&<small>Selected: {professionalDocumentFiles[requirement.id].name}</small>}
           </div>)}
           <small>Accepted: JPEG, PNG, WebP or PDF. Maximum 10 MB per document. Documents are reviewed individually by ProLink Admin.</small>
@@ -901,7 +902,7 @@ function App() {
           if(!file)return null;
           const form=new FormData();form.append('file',file);form.append('document_type',type);form.append('country_code',joinData.country_code);
           form.append('profession_category',joinData.category);form.append('profession_name',joinData.subcategory);
-          if(requirement){form.append('requirement_id',requirement.id);form.append('requirement_title',requirement.title);form.append('issuing_authority',requirement.authority||'');}
+          if(requirement){form.append('requirement_id',requirement.id);form.append('requirement_title',requirement.title);form.append('issuing_authority',requirement.authority||'');const metadata=professionalDocumentMetadata[requirement.id]||{};form.append('document_reference',metadata.reference||'');form.append('document_expiry',metadata.expiry||'');}
           const response=await fetch('/api/verification/document',{method:'POST',headers:{authorization:'Bearer '+session.access_token},body:form});
           const result=await response.json().catch(()=>({}));
           if(!response.ok)throw new Error(result.error||'Professional document upload failed.');
