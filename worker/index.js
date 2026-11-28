@@ -391,7 +391,8 @@ async function verificationDocumentUpload(request,env){
   try{form=await request.formData();}catch{return json({error:"The document upload request could not be read. Please select the file again."},400);}
   const file=form.get("file");
   const type=String(form.get("document_type")||"");
-  const allowedTypes=new Set(["working_id","competency_certificate","additional_skill_document"]);\n  const isProfessionDocument=/^professional_[a-z0-9_]{2,64}$/.test(type);
+  const allowedTypes=new Set(["working_id","competency_certificate","additional_skill_document"]);
+  const isProfessionDocument=/^professional_[a-z0-9_]{2,64}$/.test(type);
   const allowedMime=new Set(["image/jpeg","image/png","image/webp","application/pdf"]);
   if(!file||typeof file.arrayBuffer!=="function"||!allowedTypes.has(type)&&!isProfessionDocument)return json({error:"Choose a valid professional document."},400);
   if(!allowedMime.has(file.type))return json({error:"Only JPEG, PNG, WebP and PDF documents are accepted."},400);
