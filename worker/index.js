@@ -749,6 +749,115 @@ async function workRequestThread(request,env,requestId,resource,attachmentId=nul
   }
 }
 
+async function recruitmentWorkspace(request,env){
+  const auth=await signedInProfileUser(request,env);if(auth.error)return auth.error;
+  const base="/rest/v1/";
+  try{
+    if(request.method==="GET"){
+      const [employers,seekers,jobs]=await Promise.all([
+        supabaseRest(auth.config,base+"prolink_employer_profiles?select=*&user_id=eq."+encodeURIComponent(auth.user.id)+"&limit=1"),
+        supabaseRest(auth.config,base+"prolink_job_seeker_profiles?select=*&user_id=eq."+encodeURIComponent(auth.user.id)+"&limit=1"),
+        supabaseRest(auth.config,base+"prolink_jobs?select=*&employer_user_id=eq."+encodeURIComponent(auth.user.id)+"&order=submitted_at.desc&limit=100")
+      ]);
+      return json({employer:employers?.[0]||null,jobSeeker:seekers?.[0]||null,jobs:jobs||[]});
+    }
+    if(request.method!=="POST")return json({error:"Method not allowed."},405);
+    const body=await request.json(),kind=String(body.kind||""),action=String(body.action||"");
+    const now=new Date().toISOString(),userId=auth.user.id;
+    if(action==="close_job"){
+      const id=String(body.id||"");
+      if(!/^[0-9a-f-]{36}$/i.test(id))return json({error:"Select a valid job."},400);
+      const rows=await supabaseRest(auth.config,base+"prolink_jobs?select=id,status& id=eq.".replace(" ","")+encodeURIComponent(id)+"&employer_user_id=eq."+encodeURIComponent(userId)+"&limit=1");
+      if(!rows?.length)return json({error:"Job not found in your employer account."},404);
+      if(rows[0].status==="closed")return json({success:true,message:"This job is already closed."});
+      const changed=await supabaseRest(auth.config,base+"prolink_jobs?id=eq."+encodeURIComponent(id)+"&employer_user_id=eq."+encodeURIComponent(userId),{method:"PATCH",headers:{prefer:"return=representation"},body:JSON.stringify({status:"closed",closed_at:now,updated_at:now})});
+      return json({success:true,job:changed?.[0]||null,message:"Job closed. It is no longer visible in public job listings."});
+    }
+    if(action==="close_job_seeker"){
+      const changed=await supabaseRest(auth.config,base+"prolink_job_seeker_profiles?user_id=eq."+encodeURIComponent(userId),{method:"PATCH",headers:{prefer:"return=representation"},body:JSON.stringify({seeking_status:"closed",closed_at:now,updated_at:now})});
+      if(!changed?.length)return json({error:"Create a job-seeker profile before closing it."},404);
+      return json({success:true,jobSeeker:changed[0],message:"Your job-seeker profile is closed and no longer appears in active job-seeker listings."});
+    }
+    if(kind==="employer"){
+      const company_name=String(body.company_name||"").trim();
+      if(company_name.length<2)return json({error:"Enter your registered company or organisation name."},400);
+      const record={user_id:userId,company_name,registration_number:String(body.registration_number||"").trim().slice(0,100)||null,industry:String(body.industry||"").trim().slice(0,120)||null,website:String(body.website||"").trim().slice(0,240)||null,description:String(body.description||"").trim().slice(0,5000)||null,contact_email:String(body.contact_email||auth.user.email||"").trim().slice(0,254)||null,phone:String(body.phone||"").trim().slice(0,60)||null,country_name:String(body.country_name||"").trim().slice(0,120)||null,region:String(body.region||"").trim().slice(0,120)||null,city:String(body.city||"").trim().slice(0,120)||null,address:String(body.address||"").trim().slice(0,500)||null,status:"pending",review_reason:null,submitted_at:now,reviewed_at:null,reviewed_by:null,updated_at:now};
+      const saved=await supabaseRest(auth.config,base+"prolink_employer_profiles?on_conflict=user_id",{method:"POST",headers:{prefer:"resolution=merge-duplicates,return=representation"},body:JSON.stringify(record)});
+      return json({success:true,employer:saved?.[0]||record,message:"Company profile submitted for Admin approval."},201);
+    }
+    if(kind==="job_seeker"){
+      const full_name=String(body.full_name||"").trim();
+      if(full_name.length<2)return json({error:"Enter your full name."},400);
+      const record={user_id:userId,full_name,headline:String(body.headline||"").trim().slice(0,180)||null,skills:Array.isArray(body.skills)?body.skills.map(x=>String(x).trim()).filter(Boolean).slice(0,40):String(body.skills||"").split(",").map(x=>x.trim()).filter(Boolean).slice(0,40),experience:String(body.experience||"").trim().slice(0,2000)||null,bio:String(body.bio||"").trim().slice(0,5000)||null,country_name:String(body.country_name||"").trim().slice(0,120)||null,region:String(body.region||"").trim().slice(0,120)||null,city:String(body.city||"").trim().slice(0,120)||null,status:"pending",seeking_status:"active",review_reason:null,submitted_at:now,reviewed_at:null,reviewed_by:null,closed_at:null,updated_at:now};
+      const saved=await supabaseRest(auth.config,base+"prolink_job_seeker_profiles?on_conflict=user_id",{method:"POST",headers:{prefer:"resolution=merge-duplicates,return=representation"},body:JSON.stringify(record)});
+      return json({success:true,jobSeeker:saved?.[0]||record,message:"Your job-seeker profile has been submitted for Admin review."},201);
+    }
+    if(kind==="job"){
+      const employer=await supabaseRest(auth.config,base+"prolink_employer_profiles?select=status&user_id=eq."+encodeURIComponent(userId)+"&limit=1");
+      if(employer?.[0]?.status!=="approved")return json({error:"Your company profile must be approved before you can submit a job."},409);
+      const title=String(body.title||"").trim(),description=String(body.description||"").trim();
+      if(title.length<3||description.length<20)return json({error:"Enter a job title and a description of at least 20 characters."},400);
+      const salaryMin=body.salary_min===""||body.salary_min==null?null:Number(body.salary_min),salaryMax=body.salary_max===""||body.salary_max==null?null:Number(body.salary_max);
+      if((salaryMin!==null&&(!Number.isFinite(salaryMin)||salaryMin<0))||(salaryMax!==null&&(!Number.isFinite(salaryMax)||salaryMax<0))||(salaryMin!==null&&salaryMax!==null&&salaryMax<salaryMin))return json({error:"Enter a valid salary range."},400);
+      const record={employer_user_id:userId,title,description,requirements:String(body.requirements||"").trim().slice(0,5000)||null,location:String(body.location||"").trim().slice(0,200)||null,country_name:String(body.country_name||"").trim().slice(0,120)||null,employment_type:String(body.employment_type||"full_time"),workplace_type:String(body.workplace_type||"onsite"),salary_min:salaryMin,salary_max:salaryMax,currency:String(body.currency||"").trim().slice(0,8)||null,status:"pending",submitted_at:now,updated_at:now};
+      const saved=await supabaseRest(auth.config,base+"prolink_jobs",{method:"POST",headers:{prefer:"return=representation"},body:JSON.stringify(record)});
+      return json({success:true,job:saved?.[0]||record,message:"Job submitted. It will appear publicly only after Admin approval."},201);
+    }
+    return json({error:"Choose a valid recruitment action."},400);
+  }catch(error){
+    console.error("[prolink-recruitment] workspace_failed",{name:error?.name||"Error",message:String(error?.message||"").slice(0,180)});
+    return json({error:error?.message||"Recruitment information could not be saved."},502);
+  }
+}
+
+async function publicRecruitmentJobs(request,env){
+  const config=adminConfig(env);
+  if(!config.url||!config.anonKey)return json({error:"Job listings are temporarily unavailable."},503);
+  try{
+    const rows=await supabaseRest({...config,serviceKey:config.serviceKey||config.anonKey},"/rest/v1/prolink_jobs?select=id,title,description,requirements,location,country_name,employment_type,workplace_type,salary_min,salary_max,currency,published_at&status=eq.live&order=published_at.desc&limit=1000");
+    return json({jobs:rows||[]});
+  }catch(error){return json({error:"Job listings are temporarily unavailable."},502);}
+}
+
+async function adminRecruitmentAction(request,env){
+  const auth=await requireProlinkAdmin(request,env);if(auth.error)return auth.error;
+  try{
+    const body=await request.json(),kind=String(body.kind||""),id=String(body.id||""),action=String(body.action||""),reason=String(body.reason||"").trim();
+    if(!["employer","job_seeker","job"].includes(kind)||!["approve","reject","close"].includes(action))return json({error:"Choose a valid recruitment review action."},400);
+    if(action==="close"&&kind!=="job")return json({error:"Only a job posting can be closed from this action."},400);
+    if(action==="reject"&&reason.length<3)return json({error:"A rejection reason is required."},400);
+    const table=kind==="employer"?"prolink_employer_profiles":kind==="job_seeker"?"prolink_job_seeker_profiles":"prolink_jobs";
+    const key=kind==="job"?"id":"user_id";
+    if(!id)return json({error:"The record identifier is required."},400);
+    const rows=await supabaseRest(auth.config,"/rest/v1/"+table+"?select=*&"+key+"=eq."+encodeURIComponent(id)+"&limit=1");
+    const row=rows?.[0];if(!row)return json({error:"Recruitment record not found."},404);
+    if(action==="approve"&&row.status!=="pending")return json({error:"Only pending records can be approved."},409);
+    if(action==="reject"&&row.status!=="pending")return json({error:"Only pending records can be rejected."},409);
+    if(kind==="job"&&action==="approve"){
+      const employer=await supabaseRest(auth.config,"/rest/v1/prolink_employer_profiles?select=status&user_id=eq."+encodeURIComponent(row.employer_user_id)+"&limit=1");
+      if(employer?.[0]?.status!=="approved")return json({error:"Approve the employer company profile before approving this job."},409);
+    }
+    const now=new Date().toISOString(),patch={updated_at:now,reviewed_at:now,reviewed_by:auth.user.id,review_reason:action==="reject"?reason:null};
+    if(action==="approve")Object.assign(patch,kind==="job"?{status:"live",published_at:now}:{status:"approved"});
+    else if(action==="reject")Object.assign(patch,{status:"rejected"});
+    else Object.assign(patch,{status:"closed",closed_at:now});
+    const changed=await supabaseRest(auth.config,"/rest/v1/"+table+"?"+key+"=eq."+encodeURIComponent(id),{method:"PATCH",headers:{prefer:"return=representation"},body:JSON.stringify(patch)});
+    const recipient=kind==="job"?row.employer_user_id:row.user_id;
+    const subject=action==="approve"?(kind==="job"?"Your job has been approved and published":"Your ProLink profile has been approved"):action==="reject"?"Your ProLink submission needs attention":"Your job posting has been closed";
+    const messageBody=action==="reject"?"Admin feedback: "+reason:action==="approve"?(kind==="job"?"Your job is now live on ProLink job listings.":"Your profile has been approved."): "Your job is no longer visible in public listings.";
+    try{
+      await supabaseRest(auth.config,"/rest/v1/prolink_admin_messages",{method:"POST",headers:{prefer:"return=minimal"},body:JSON.stringify({sender_user_id:auth.user.id,recipient_user_id:recipient,subject,body:messageBody})});
+    }catch(error){console.error("[prolink-recruitment] decision_notification_failed",{kind,name:error?.name||"Error"});}
+    try{
+      await supabaseRest(auth.config,"/rest/v1/prolink_admin_audit",{method:"POST",headers:{prefer:"return=minimal"},body:JSON.stringify({admin_user_id:auth.user.id,action:"recruitment_"+kind+"_"+action,target_user_id:recipient,section:"recruitment",reason:action==="reject"?reason:null,details:{record_id:id,kind,status:patch.status}})});
+    }catch(error){console.error("[prolink-recruitment] audit_write_failed",{kind,name:error?.name||"Error"});}
+    return json({success:true,record:changed?.[0]||null,message:action==="approve"?(kind==="job"?"Job approved and published.":"Profile approved."):action==="reject"?"Submission rejected.":"Job closed."});
+  }catch(error){
+    console.error("[prolink-recruitment] admin_action_failed",{name:error?.name||"Error",message:String(error?.message||"").slice(0,180)});
+    return json({error:error?.message||"The recruitment review could not be saved."},502);
+  }
+}
+
 async function adminDashboard(request,env) {
   const auth=await requireProlinkAdmin(request,env);if(auth.error)return auth.error;
   const {config}=auth;
@@ -763,11 +872,14 @@ async function adminDashboard(request,env) {
       return null;
     }
   };
-  const [profilesResult,reviewsResult,profileChangeRequestsResult,workRequestsResult]=await Promise.all([
+  const [profilesResult,reviewsResult,profileChangeRequestsResult,workRequestsResult,employerProfilesResult,jobSeekerProfilesResult,jobsResult]=await Promise.all([
     readRows("professional_profiles","/rest/v1/prolink_professional_profiles?select=*&order=approved_at.desc&limit=5000"),
     readRows("document_reviews","/rest/v1/prolink_review_records?select=*&order=submitted_at.desc&limit=5000"),
     readRows("profile_change_requests","/rest/v1/prolink_profile_change_requests?select=*&order=requested_at.desc&limit=1000"),
-    readRows("work_requests","/rest/v1/prolink_work_requests?select=*&order=created_at.desc&limit=5000")
+    readRows("work_requests","/rest/v1/prolink_work_requests?select=*&order=created_at.desc&limit=5000"),
+    readRows("employer_profiles","/rest/v1/prolink_employer_profiles?select=*&order=submitted_at.desc&limit=5000"),
+    readRows("job_seeker_profiles","/rest/v1/prolink_job_seeker_profiles?select=*&order=submitted_at.desc&limit=5000"),
+    readRows("jobs","/rest/v1/prolink_jobs?select=*&order=submitted_at.desc&limit=5000")
   ]);
   let users=[],usersAvailable=true;
   try{
@@ -785,7 +897,7 @@ async function adminDashboard(request,env) {
   const todayFormatter=new Intl.DateTimeFormat("en-CA",{timeZone:"Africa/Lagos",year:"numeric",month:"2-digit",day:"2-digit"});
   const today=todayFormatter.format(new Date());
   const newUsersToday=users.filter(user=>user.created_at&&todayFormatter.format(new Date(user.created_at))===today).length;
-  const profiles=profilesResult||[],reviews=reviewsResult||[],profileChangeRequests=profileChangeRequestsResult||[],workRequests=workRequestsResult||[];
+  const profiles=profilesResult||[],reviews=reviewsResult||[],profileChangeRequests=profileChangeRequestsResult||[],workRequests=workRequestsResult||[],employerProfiles=employerProfilesResult||[],jobSeekerProfiles=jobSeekerProfilesResult||[],jobs=jobsResult||[];
   const counts={
     totalUsers:usersAvailable?users.length:null,
     newUsersToday:usersAvailable?newUsersToday:null,
@@ -794,11 +906,19 @@ async function adminDashboard(request,env) {
     pendingReviews:reviewsResult?reviews.filter(r=>r.status==="pending").length:null,
     approvedDocuments:reviewsResult?reviews.filter(r=>r.status==="approved").length:null,
     rejectedDocuments:reviewsResult?reviews.filter(r=>r.status==="rejected").length:null,
-    pendingWorkRequests:workRequestsResult?workRequests.filter(r=>r.status==="pending").length:null
+    pendingWorkRequests:workRequestsResult?workRequests.filter(r=>r.status==="pending").length:null,
+    employerProfiles:employerProfilesResult?employerProfiles.length:null,
+    pendingEmployerProfiles:employerProfilesResult?employerProfiles.filter(r=>r.status==="pending").length:null,
+    jobSeekerProfiles:jobSeekerProfilesResult?jobSeekerProfiles.length:null,
+    activeJobSeekers:jobSeekerProfilesResult?jobSeekerProfiles.filter(r=>r.status==="approved"&&r.seeking_status==="active").length:null,
+    pendingJobSeekerProfiles:jobSeekerProfilesResult?jobSeekerProfiles.filter(r=>r.status==="pending").length:null,
+    pendingJobs:jobsResult?jobs.filter(r=>r.status==="pending").length:null,
+    liveJobs:jobsResult?jobs.filter(r=>r.status==="live").length:null,
+    closedJobs:jobsResult?jobs.filter(r=>r.status==="closed").length:null
   };
   const profileByUser=Object.fromEntries(profiles.map(profile=>[profile.user_id,profile]));
   users=users.map(account=>({...account,profile:profileByUser[account.id]||null}));
-  return json({counts,users,profiles,reviews,profileChangeRequests,workRequests,warnings,adminEmail:auth.user.email});
+  return json({counts,users,profiles,reviews,profileChangeRequests,workRequests,employerProfiles,jobSeekerProfiles,jobs,warnings,adminEmail:auth.user.email});
 }
 
 async function adminUserMessage(request,env){
@@ -1862,6 +1982,9 @@ export default {
     if (url.pathname === "/api/auth/password-change/confirm" && request.method === "GET") return passwordChangeConfirm(request, env);
     if (url.pathname === "/api/geography" && request.method === "GET") return geography(request, ctx);
     if (url.pathname === "/api/location/reverse" && request.method === "GET") return reverseGeocode(request, env);
+    if (url.pathname === "/api/recruitment" && ["GET","POST"].includes(request.method)) return recruitmentWorkspace(request, env);
+    if (url.pathname === "/api/recruitment/jobs" && request.method === "GET") return publicRecruitmentJobs(request, env);
+    if (url.pathname === "/api/admin/recruitment" && request.method === "POST") return adminRecruitmentAction(request, env);
     if (url.pathname === "/api/profile/change-status" && request.method === "GET") return profileChangeStatus(request, env);
     if (url.pathname === "/api/profile/change-request" && request.method === "POST") return profileChangeRequest(request, env);
     const workThreadMatch=url.pathname.match(/^\/api\/work-requests\/([0-9a-f-]{36})\/(conversation|messages|invoices|attachments)(?:\/([0-9a-f-]{36}))?$/i);
