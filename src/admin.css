@@ -398,3 +398,10 @@
 .recruitment-job-row button,.recruitment-close-profile{border:1px solid #efdbbf;border-radius:9px;background:#fff5e7;color:#875a18;padding:9px 12px;font-weight:800}
 .recruitment-loading{padding:30px;text-align:center;color:#718096}
 @media(max-width:600px){.recruitment-card{padding:14px}.recruitment-card-heading{flex-direction:column}.recruitment-form-grid{grid-template-columns:1fr}.recruitment-tabs{display:grid;grid-template-columns:1fr}.recruitment-tabs button{justify-content:flex-start}.recruitment-form .primary-button{width:100%}.recruitment-job-row{align-items:flex-start;flex-direction:column}}
+
+
+.recruitment-public-job{padding:15px 0;border-bottom:1px solid #e8eef5}
+.recruitment-public-job>div{display:grid;gap:7px}
+.recruitment-public-job b{font-size:15px;color:#173b64}
+.recruitment-public-job small{font-size:11px;color:#6d7f94}
+.recruitment-public-job p{margin:0;color:#52657d;font-size:13px;line-height:1.55;white-space:pre-wrap}
