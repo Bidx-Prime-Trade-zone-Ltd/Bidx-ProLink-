@@ -1,17 +1,17 @@
 import React,{useEffect,useMemo,useRef,useState} from 'react';
 import {supabase} from './lib/supabase.js';
-import {ShieldCheck,Users,Clock3,CheckCircle2,FileCheck,Search,ArrowLeft,RefreshCw,Check,X,Eye,Globe2,UserRound,CalendarDays,LockKeyhole,BriefcaseBusiness,Building2,ClipboardCheck,History,MessageCircle,Mail,LayoutDashboard,ChevronRight,Send} from 'lucide-react';
+import {ShieldCheck,Users,Clock3,CheckCircle2,FileCheck,Search,ArrowLeft,RefreshCw,Check,X,Eye,Globe2,UserRound,CalendarDays,LockKeyhole,BriefcaseBusiness,ClipboardCheck,History,MessageCircle,Mail,LayoutDashboard,ChevronRight,Send} from 'lucide-react';
 import SupportInbox from './SupportInbox.jsx';
 import BroadcastManager from './BroadcastManager.jsx';
 
 const ADMIN_EMAIL='ojepaamedu@gmail.com';
-const tabs=['Overview','Users','Professional profiles','Work Requests','Employers','Job approvals','Job seekers','Live jobs','Closed jobs','Document review','Profile Change Requests','Review history','Support Inbox','Email broadcasts'];
+const tabs=['Overview','Users','Professional profiles','Work Requests','Document review','Profile Change Requests','Review history','Support Inbox','Email broadcasts'];
 const fmt=value=>value?new Date(value).toLocaleString():'—';
 const label=value=>String(value||'').replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase());
 
 export default function AdminPortal(){
  const [user,setUser]=useState(null),[ready,setReady]=useState(false),[tab,setTab]=useState('Overview');
- const [dashboard,setDashboard]=useState({counts:{},users:[],profiles:[],reviews:[],profileChangeRequests:[],workRequests:[],employerProfiles:[],jobSeekerProfiles:[],jobs:[],warnings:[]});
+ const [dashboard,setDashboard]=useState({counts:{},users:[],profiles:[],reviews:[],profileChangeRequests:[],workRequests:[],warnings:[]});
  const [query,setQuery]=useState(''),[selected,setSelected]=useState(null),[reason,setReason]=useState('');
  const [notice,setNotice]=useState(''),[busy,setBusy]=useState(false),[documentUrl,setDocumentUrl]=useState('');
  const [documentLoading,setDocumentLoading]=useState(false);
@@ -40,7 +40,7 @@ export default function AdminPortal(){
    const response=await fetch('/api/admin/dashboard',{headers:{authorization:'Bearer '+session.access_token}});
    const payload=await response.json();
    if(!response.ok)throw new Error(payload.error||'Dashboard could not be loaded.');
-   setDashboard({counts:payload.counts||{},users:payload.users||[],profiles:payload.profiles||[],reviews:payload.reviews||[],profileChangeRequests:payload.profileChangeRequests||[],workRequests:payload.workRequests||[],employerProfiles:payload.employerProfiles||[],jobSeekerProfiles:payload.jobSeekerProfiles||[],jobs:payload.jobs||[],warnings:payload.warnings||[]});
+   setDashboard({counts:payload.counts||{},users:payload.users||[],profiles:payload.profiles||[],reviews:payload.reviews||[],profileChangeRequests:payload.profileChangeRequests||[],workRequests:payload.workRequests||[],warnings:payload.warnings||[]});
   }catch(error){setNotice(error.message||'Dashboard could not be loaded.');}
   finally{setBusy(false);}
  };
@@ -135,11 +135,6 @@ export default function AdminPortal(){
   if(name==='Registered users'){setUserFilter('all');setTab('Users');}
   else if(name==='New users today'){setUserFilter('today');setTab('Users');}
   else if(name==='Professional profiles')setTab('Professional profiles');
-  else if(name==='Employers'||name==='Pending employer profiles')setTab('Employers');
-  else if(name==='Job seekers'||name==='Active job seekers'||name==='Pending job-seeker profiles')setTab('Job seekers');
-  else if(name==='Jobs awaiting approval')setTab('Job approvals');
-  else if(name==='Live jobs')setTab('Live jobs');
-  else if(name==='Closed jobs')setTab('Closed jobs');
   else if(name==='Documents awaiting review')setTab('Document review');
   else if(name==='Approved documents'||name==='Rejected documents')setTab('Review history');
   setSelected(null);
@@ -166,30 +161,6 @@ export default function AdminPortal(){
   catch(error){setNotice(error.message||'Profile change review failed.');}finally{setBusy(false);}
  };
 
- const recruitmentAct=async(kind,id,action)=>{
-  const rejectionReason=action==='reject'?window.prompt('Enter the reason for rejecting this submission:',''):null;
-  if(action==='reject'&&!String(rejectionReason||'').trim()){setNotice('A rejection reason is required.');return;}
-  if(action==='close'&&!window.confirm('Close this job? It will be removed from public listings.'))return;
-  setBusy(true);setNotice('');
-  try{
-   const {data:{session}}=await supabase.auth.getSession();
-   const response=await fetch('/api/admin/recruitment',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+session.access_token},body:JSON.stringify({kind,id,action,reason:rejectionReason||''})});
-   const payload=await response.json();if(!response.ok)throw new Error(payload.error||'Recruitment action failed.');
-   setNotice(payload.message||'Recruitment decision saved.');await load();
-  }catch(error){setNotice(error.message||'Recruitment action failed.');}
-  finally{setBusy(false);}
- };
- const recruitmentRows=(rows,kind,actions=[])=> <div className="admin-recruitment-list">{rows.map(row=><article className="admin-recruitment-row" key={row.id||row.user_id}>
-  <div className="admin-recruitment-row-main"><b>{kind==='employer'?row.company_name:kind==='job_seeker'?row.full_name:row.title}</b>
-   <small>{kind==='employer'?[row.industry,row.country_name,row.city].filter(Boolean).join(' · '):kind==='job_seeker'?[row.headline,row.country_name,row.city].filter(Boolean).join(' · '):[row.location,row.employment_type,row.country_name].filter(Boolean).join(' · ')}</small>
-   {kind==='job'&&<p>{String(row.description||'').slice(0,420)}</p>}
-   {kind==='employer'&&<small>Contact: {row.contact_email||'—'} · {row.phone||'—'} · Registration: {row.registration_number||'Not supplied'}</small>}
-   {kind==='job_seeker'&&<small>Skills: {(row.skills||[]).join(', ')||'Not supplied'} · Seeking: {label(row.seeking_status)}</small>}
-   <small>Submitted: {fmt(row.submitted_at)} · Status: <b className={'admin-status '+row.status}>{label(row.status)}</b>{row.review_reason?' · '+row.review_reason:''}</small>
-  </div>
-  <div className="admin-recruitment-actions">{actions.filter(action=>action==='approve'||action==='reject'?row.status==='pending':action==='close'?row.status==='live':false).map(action=><button key={action} type="button" disabled={busy} className={'admin-recruitment-action '+action} onClick={()=>recruitmentAct(kind,row.id||row.user_id,action)}>{action==='approve'?'Approve':action==='reject'?'Reject':'Close job'}</button>)}</div>
- </article>)}{!rows.length&&<p className="admin-empty">No records in this section.</p>}</div>;
-
  const act=async action=>{
   if(!selected)return;
   if(action==='reject'&&!reason.trim()){setNotice('Enter a reason before rejecting this document.');return;}
@@ -212,14 +183,6 @@ export default function AdminPortal(){
   ['Registered users',counts.totalUsers,Users],
   ['New users today',counts.newUsersToday,CalendarDays],
   ['Professional profiles',counts.professionalProfiles,UserRound],
-  ['Employers',counts.employerProfiles,Building2],
-  ['Pending employer profiles',counts.pendingEmployerProfiles,Clock3],
-  ['Job seekers',counts.jobSeekerProfiles,Users],
-  ['Active job seekers',counts.activeJobSeekers,UserRound],
-  ['Pending job-seeker profiles',counts.pendingJobSeekerProfiles,Clock3],
-  ['Jobs awaiting approval',counts.pendingJobs,ClipboardCheck],
-  ['Live jobs',counts.liveJobs,BriefcaseBusiness],
-  ['Closed jobs',counts.closedJobs,FileCheck],
   ['Documents awaiting review',counts.pendingDocuments,Clock3],
   ['Approved documents',counts.approvedDocuments,CheckCircle2],
   ['Rejected documents',counts.rejectedDocuments,FileCheck]
@@ -228,12 +191,7 @@ export default function AdminPortal(){
   {title:'Workspace',items:[
    {tab:'Users',title:'User directory',description:'View registered accounts and account status',Icon:Users},
    {tab:'Professional profiles',title:'Professional profiles',description:'Review professional details and published profiles',Icon:UserRound},
-   {tab:'Work Requests',title:'Work requests',description:'View direct requests sent to professionals',Icon:BriefcaseBusiness},
-   {tab:'Employers',title:'Employer profiles',description:'Review company registrations and approve employers',Icon:Building2},
-   {tab:'Job approvals',title:'Job approval queue',description:'Review every vacancy before it becomes public',Icon:ClipboardCheck},
-   {tab:'Job seekers',title:'Job-seeker profiles',description:'Review candidate profiles and active job seekers',Icon:Users},
-   {tab:'Live jobs',title:'Live jobs',description:'Monitor published vacancies and close jobs when required',Icon:BriefcaseBusiness},
-   {tab:'Closed jobs',title:'Closed jobs',description:'Retain closed vacancies for audit and records',Icon:FileCheck}
+   {tab:'Work Requests',title:'Work requests',description:'View direct requests sent to professionals',Icon:BriefcaseBusiness}
   ]},
   {title:'Verification & records',items:[
    {tab:'Document review',title:'Document review',description:'Inspect submitted documents and make decisions',Icon:FileCheck},
@@ -283,11 +241,6 @@ export default function AdminPortal(){
   {tab==='Review history'&&<section className="admin-panel"><div className="admin-panel-heading"><div><h2>Document review history</h2><p>Audit view of completed approval decisions.</p></div><label className="admin-search"><Search size={15}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search history"/></label></div>
    <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Document</th><th>Applicant ID</th><th>Decision</th><th>Submitted</th><th>Reviewed</th><th>Reason</th></tr></thead><tbody>{reviews.filter(r=>r.status!=='pending').map(r=><tr key={r.id}><td>{label(r.submitted_data?.document_type||r.section)}</td><td><button type="button" className="admin-user-link" onClick={()=>openUser(r.user_id)}>{r.user_id}</button></td><td><span className={'admin-status '+r.status}>{label(r.status)}</span></td><td>{fmt(r.submitted_at)}</td><td>{fmt(r.reviewed_at)}</td><td>{r.review_reason||'—'}</td></tr>)}</tbody></table></div>
   </section>}
-  {tab==='Employers'&&<section className="admin-panel"><div className="admin-panel-heading"><div><h2>Employer / company profiles</h2><p>{counts.pendingEmployerProfiles??0} awaiting approval · {counts.employerProfiles??0} total employers. Approve a company profile before its owner can submit jobs.</p></div><button onClick={load} disabled={busy}><RefreshCw size={15}/> Refresh</button></div>{recruitmentRows((dashboard.employerProfiles||[]).filter(r=>!query||((r.company_name+' '+r.contact_email+' '+r.country_name).toLowerCase().includes(query.toLowerCase()))),'employer',['approve','reject'])}</section>}
-  {tab==='Job approvals'&&<section className="admin-panel"><div className="admin-panel-heading"><div><h2>Jobs awaiting approval</h2><p>Each job is reviewed separately. Approval publishes it to public job listings.</p></div><button onClick={load} disabled={busy}><RefreshCw size={15}/> Refresh</button></div>{recruitmentRows((dashboard.jobs||[]).filter(r=>r.status==='pending'),'job',['approve','reject'])}</section>}
-  {tab==='Job seekers'&&<section className="admin-panel"><div className="admin-panel-heading"><div><h2>Job-seeker profiles</h2><p>{counts.activeJobSeekers??0} approved and actively seeking · {counts.pendingJobSeekerProfiles??0} awaiting review.</p></div><button onClick={load} disabled={busy}><RefreshCw size={15}/> Refresh</button></div>{recruitmentRows((dashboard.jobSeekerProfiles||[]),'job_seeker',['approve','reject'])}</section>}
-  {tab==='Live jobs'&&<section className="admin-panel"><div className="admin-panel-heading"><div><h2>Live jobs</h2><p>Approved jobs currently visible to job seekers.</p></div><button onClick={load} disabled={busy}><RefreshCw size={15}/> Refresh</button></div>{recruitmentRows((dashboard.jobs||[]).filter(r=>r.status==='live'),'job',['close'])}</section>}
-  {tab==='Closed jobs'&&<section className="admin-panel"><div className="admin-panel-heading"><div><h2>Closed jobs</h2><p>Closed jobs are retained for administration and removed from public listings.</p></div><button onClick={load} disabled={busy}><RefreshCw size={15}/> Refresh</button></div>{recruitmentRows((dashboard.jobs||[]).filter(r=>r.status==='closed'),'job',[])}</section>}
   {tab==='Support Inbox'&&<SupportInbox/>}
   {tab==='Email broadcasts'&&<BroadcastManager/>}
   {selectedUser&&<div className="admin-user-overlay" role="presentation" onMouseDown={event=>{if(event.target===event.currentTarget)setSelectedUser(null);}}>
