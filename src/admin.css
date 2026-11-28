@@ -352,3 +352,49 @@
 .admin-user-overlay{overscroll-behavior:contain;touch-action:pan-y}
 .admin-user-dialog{overscroll-behavior-y:contain;overscroll-behavior:contain;touch-action:pan-y}
 .admin-user-chat-history{overscroll-behavior-y:contain;overscroll-behavior:contain;touch-action:pan-y;scroll-behavior:auto;-webkit-overflow-scrolling:touch}
+
+
+/* Recruitment administration cards and queues */
+.admin-recruitment-list{display:grid;gap:10px;margin-top:14px}
+.admin-recruitment-row{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;padding:14px;border:1px solid #e1e9f2;border-radius:12px;background:#fff}
+.admin-recruitment-row-main{display:grid;gap:6px;min-width:0}
+.admin-recruitment-row-main>b{font-size:14px;color:#173b64}
+.admin-recruitment-row-main>small{font-size:11px;line-height:1.45;color:#6d7f94;overflow-wrap:anywhere}
+.admin-recruitment-row-main>p{margin:0;color:#52657d;font-size:12px;line-height:1.5;white-space:pre-wrap}
+.admin-recruitment-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:7px;flex:0 0 auto}
+.admin-recruitment-action{border:1px solid #d5e2ef;border-radius:8px;background:#edf4fc;color:#174b7d;padding:8px 11px;font-size:11px;font-weight:800;cursor:pointer}
+.admin-recruitment-action.approve{background:#e9f6ee;color:#17633c;border-color:#cce8d7}
+.admin-recruitment-action.reject{background:#fff0ef;color:#9b3832;border-color:#f1d5d2}
+.admin-recruitment-action.close{background:#fff6e8;color:#875a18;border-color:#f0dfc1}
+.admin-recruitment-action:disabled{opacity:.5;cursor:not-allowed}
+.admin-status{display:inline-flex;border-radius:20px;padding:3px 8px;font-size:10px;font-weight:800;background:#edf2f8;color:#52647b}
+.admin-status.pending{background:#fff4dd;color:#885d16}.admin-status.approved,.admin-status.live{background:#e6f5ec;color:#1c7046}.admin-status.rejected{background:#fff0ef;color:#a23e36}.admin-status.closed{background:#edf1f5;color:#64748b}
+@media(max-width:560px){.admin-recruitment-row{flex-direction:column}.admin-recruitment-actions{justify-content:flex-start;width:100%}.admin-recruitment-actions button{flex:1}}
+/* Employer and job-seeker self-service workspace */
+.recruitment-workspace{padding-top:22px;padding-bottom:60px}
+.recruitment-back{display:inline-flex;align-items:center;gap:7px;margin-bottom:18px;border:1px solid #dce6f1;border-radius:9px;background:#fff;color:#1d568d;padding:9px 12px;font-weight:800}
+.recruitment-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:22px 0}
+.recruitment-tabs button{display:inline-flex;align-items:center;gap:7px;border:1px solid #dce6f1;border-radius:10px;background:#fff;color:#36536f;padding:11px 14px;font-weight:800}
+.recruitment-tabs button.active{background:#eaf3fc;border-color:#b9d1e9;color:#14578e}
+.recruitment-card{margin:14px 0;padding:20px;border:1px solid #e0e8f1;border-radius:16px;background:#fff;box-shadow:0 5px 18px rgba(22,48,83,.045)}
+.recruitment-card h2{margin:0 0 6px;color:#173b64;font-size:18px}
+.recruitment-card p{color:#718096;font-size:13px;line-height:1.55}
+.recruitment-card-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:16px}
+.recruitment-card-heading p{margin:0}
+.recruitment-status{display:inline-flex;align-items:center;border-radius:20px;padding:5px 9px;background:#edf2f8;color:#52647b;font-size:10px;font-weight:850;white-space:nowrap}
+.recruitment-status.pending{background:#fff4dd;color:#885d16}.recruitment-status.approved,.recruitment-status.live{background:#e6f5ec;color:#1c7046}.recruitment-status.rejected{background:#fff0ef;color:#a23e36}.recruitment-status.closed{background:#edf1f5;color:#64748b}
+.recruitment-form{display:grid;gap:13px}
+.recruitment-form label{display:grid;gap:6px;color:#40556d;font-size:12px;font-weight:800}
+.recruitment-form input,.recruitment-form textarea,.recruitment-form select{box-sizing:border-box;width:100%;min-height:44px;border:1px solid #d6e0eb;border-radius:9px;background:#fff;color:#17345d;padding:11px 12px;font:inherit;font-size:13px}
+.recruitment-form textarea{resize:vertical;line-height:1.5}
+.recruitment-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.recruitment-form .primary-button{justify-self:start;min-width:210px}
+.recruitment-notice{padding:12px 14px;border:1px solid #cbdced;border-radius:10px;background:#eff6fd;color:#1b527f;font-size:13px}
+.recruitment-callout{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:14px;border:1px solid #dce7f3;border-radius:11px;background:#f3f8fd;color:#36536f;font-size:13px}
+.recruitment-callout button{border:0;border-radius:8px;background:#1c5f96;color:#fff;padding:9px 12px;font-weight:800}
+.recruitment-review-reason{color:#a23e36!important;font-size:12px!important}
+.recruitment-job-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 0;border-bottom:1px solid #edf1f5}
+.recruitment-job-row>div{display:grid;gap:6px}.recruitment-job-row small{font-size:11px;color:#6d7f94}
+.recruitment-job-row button,.recruitment-close-profile{border:1px solid #efdbbf;border-radius:9px;background:#fff5e7;color:#875a18;padding:9px 12px;font-weight:800}
+.recruitment-loading{padding:30px;text-align:center;color:#718096}
+@media(max-width:600px){.recruitment-card{padding:14px}.recruitment-card-heading{flex-direction:column}.recruitment-form-grid{grid-template-columns:1fr}.recruitment-tabs{display:grid;grid-template-columns:1fr}.recruitment-tabs button{justify-content:flex-start}.recruitment-form .primary-button{width:100%}.recruitment-job-row{align-items:flex-start;flex-direction:column}}
