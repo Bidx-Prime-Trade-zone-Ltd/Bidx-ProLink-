@@ -633,3 +633,12 @@ body.prolink-menu-locked{position:fixed!important;overflow:hidden!important;widt
 
 /* Touch scrolling safeguards for account/listing pages, including the native WebView. */
 html,body,#root{min-height:100%;height:auto}body{overflow-x:hidden;overflow-y:auto}.app-shell{min-height:100dvh;overflow:visible}.account-page-shell{touch-action:pan-y;overscroll-behavior-y:auto}
+
+/* Profession- and country-specific onboarding document checklist */
+.document-requirements-panel{border:1px solid #dce6f2;border-radius:12px;padding:14px;margin:8px 0 14px;background:#f8fbff}
+.document-requirements-panel>h3{margin:0 0 6px;color:#0e2d5c;font-size:14px}
+.document-requirements-panel>p{margin:0 0 10px;color:#63748b;font-size:11px;line-height:1.5}
+.document-requirements-panel>.country-document-guidance{display:block;padding:9px 10px;margin-bottom:10px;border-radius:8px;background:#eef4fb;color:#385879;font-size:10px;line-height:1.5}
+.document-requirements-panel .document-required{background:#fff}
+.document-requirements-panel .document-required b{font-size:12px}
+.document-requirements-panel .document-required small{line-height:1.5}
