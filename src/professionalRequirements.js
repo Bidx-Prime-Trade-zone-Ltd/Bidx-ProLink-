@@ -107,7 +107,7 @@ const FAMILY_RULES = {
   nursing: [
     ["primary_qualification", "Nursing / midwifery qualification", "Upload your recognised nursing or midwifery qualification."],
     ["professional_registration", "Nursing / midwifery registration", "Upload current registration or licence from the competent nursing regulator where required.", true],
-    ["practice_authority", "Current practice licence", "Upload current practising evidence where your jurisdiction requires renewal."]
+    ["practice_authority", "Current practice licence", "Upload current practising evidence where your jurisdiction requires renewal.", true]
   ],
   pharmacy: [
     ["primary_qualification", "Pharmacy qualification", "Upload your recognised pharmacy degree or diploma."],
