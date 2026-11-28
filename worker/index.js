@@ -796,6 +796,8 @@ async function recruitmentWorkspace(request,env){
       return json({success:true,jobSeeker:changed[0],message:"Your job-seeker profile is closed and no longer appears in active job-seeker listings."});
     }
     if(kind==="employer"){
+      const role=await supabaseRest(auth.config,base+"prolink_recruitment_registrations?select=account_type&user_id=eq."+encodeURIComponent(userId)+"&account_type=eq.employer&limit=1");
+      if(!role?.length)return json({error:"Register this account as an employer before submitting a company profile."},409);
       const company_name=String(body.company_name||"").trim();
       if(company_name.length<2)return json({error:"Enter your registered company or organisation name."},400);
       const record={user_id:userId,company_name,registration_number:String(body.registration_number||"").trim().slice(0,100)||null,industry:String(body.industry||"").trim().slice(0,120)||null,website:String(body.website||"").trim().slice(0,240)||null,description:String(body.description||"").trim().slice(0,5000)||null,contact_email:String(body.contact_email||auth.user.email||"").trim().slice(0,254)||null,phone:String(body.phone||"").trim().slice(0,60)||null,country_name:String(body.country_name||"").trim().slice(0,120)||null,region:String(body.region||"").trim().slice(0,120)||null,city:String(body.city||"").trim().slice(0,120)||null,address:String(body.address||"").trim().slice(0,500)||null,status:"pending",review_reason:null,submitted_at:now,reviewed_at:null,reviewed_by:null,updated_at:now};
@@ -803,6 +805,8 @@ async function recruitmentWorkspace(request,env){
       return json({success:true,employer:saved?.[0]||record,message:"Company profile submitted for Admin approval."},201);
     }
     if(kind==="job_seeker"){
+      const role=await supabaseRest(auth.config,base+"prolink_recruitment_registrations?select=account_type&user_id=eq."+encodeURIComponent(userId)+"&account_type=eq.job_seeker&limit=1");
+      if(!role?.length)return json({error:"Register this account as a job seeker before submitting a candidate profile."},409);
       const full_name=String(body.full_name||"").trim();
       if(full_name.length<2)return json({error:"Enter your full name."},400);
       const record={user_id:userId,full_name,headline:String(body.headline||"").trim().slice(0,180)||null,skills:Array.isArray(body.skills)?body.skills.map(x=>String(x).trim()).filter(Boolean).slice(0,40):String(body.skills||"").split(",").map(x=>x.trim()).filter(Boolean).slice(0,40),experience:String(body.experience||"").trim().slice(0,2000)||null,bio:String(body.bio||"").trim().slice(0,5000)||null,country_name:String(body.country_name||"").trim().slice(0,120)||null,region:String(body.region||"").trim().slice(0,120)||null,city:String(body.city||"").trim().slice(0,120)||null,status:"pending",seeking_status:"active",review_reason:null,submitted_at:now,reviewed_at:null,reviewed_by:null,closed_at:null,updated_at:now};
@@ -810,6 +814,8 @@ async function recruitmentWorkspace(request,env){
       return json({success:true,jobSeeker:saved?.[0]||record,message:"Your job-seeker profile has been submitted for Admin review."},201);
     }
     if(kind==="job"){
+      const role=await supabaseRest(auth.config,base+"prolink_recruitment_registrations?select=account_type&user_id=eq."+encodeURIComponent(userId)+"&account_type=eq.employer&limit=1");
+      if(!role?.length)return json({error:"Register this account as an employer before submitting a job."},409);
       const employer=await supabaseRest(auth.config,base+"prolink_employer_profiles?select=status&user_id=eq."+encodeURIComponent(userId)+"&limit=1");
       if(employer?.[0]?.status!=="approved")return json({error:"Your company profile must be approved before you can submit a job."},409);
       const title=String(body.title||"").trim(),description=String(body.description||"").trim();
