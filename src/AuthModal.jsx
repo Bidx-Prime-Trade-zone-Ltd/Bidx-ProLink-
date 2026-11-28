@@ -12,6 +12,7 @@ export default function AuthModal({ onClose }) {
   const [showConfirmPassword,setShowConfirmPassword]=useState(false);
   const [acceptedTerms,setAcceptedTerms]=useState(false);
   const [countryCode,setCountryCode]=useState('');
+  const [recruitmentRole,setRecruitmentRole]=useState('none');
   const [busy,setBusy]=useState(false);
   const [busyLabel,setBusyLabel]=useState('');
   const [message,setMessage]=useState('');
@@ -55,7 +56,7 @@ export default function AuthModal({ onClose }) {
       if(mode==='Create account'){
         const selectedCountry=INITIAL_COUNTRIES.find(country=>country.code===countryCode);
         if(!selectedCountry)throw new Error('Select a valid supported country.');
-        const {data,error:e}=await supabase.auth.signUp({email:email.trim(),password,options:{emailRedirectTo:authRedirectUrl(),data:{home_country_code:selectedCountry.code,home_country_iso3:selectedCountry.iso3,home_country_name:selectedCountry.name,country_code:selectedCountry.code,country_iso3:selectedCountry.iso3,country_name:selectedCountry.name,preferred_language:selectedCountry.language||'en'}}});
+        const {data,error:e}=await supabase.auth.signUp({email:email.trim(),password,options:{emailRedirectTo:authRedirectUrl(),data:{home_country_code:selectedCountry.code,home_country_iso3:selectedCountry.iso3,home_country_name:selectedCountry.name,country_code:selectedCountry.code,country_iso3:selectedCountry.iso3,country_name:selectedCountry.name,preferred_language:selectedCountry.language||'en',recruitment_roles:recruitmentRole==='both'?['employer','job_seeker']:recruitmentRole==='none'?[]:[recruitmentRole]}}});
         if(e)throw e;
         if(data.session){setMessage('Account created. Opening ProLink…');}
         else{setMessage('Confirmation email sent. Confirm your email, then return here to sign in.');setBusy(false);setBusyLabel('');}
@@ -128,6 +129,8 @@ export default function AuthModal({ onClose }) {
       const selectedCountry=INITIAL_COUNTRIES.find(country=>country.code===countryCode);
       if(!selectedCountry){setError('Select your home country before creating your account.');return;}
       localStorage.setItem('prolink-pending-home-country',JSON.stringify({home_country_code:selectedCountry.code,home_country_iso3:selectedCountry.iso3,home_country_name:selectedCountry.name,preferred_language:selectedCountry.language||'en'}));
+      const roles=recruitmentRole==='both'?['employer','job_seeker']:recruitmentRole==='none'?[]:[recruitmentRole];
+      if(roles.length)localStorage.setItem('prolink-pending-recruitment-roles',JSON.stringify(roles));else localStorage.removeItem('prolink-pending-recruitment-roles');
     }
     setBusy(true);setBusyLabel('Connecting to Google…');setError('');setMessage('');
     try{
@@ -156,7 +159,7 @@ export default function AuthModal({ onClose }) {
       <p>{signedIn?'Your sign-in is complete. Taking you into ProLink now.':'Sign in or create an account to continue.'}</p>
       {(busy||signedIn)&&<div className="auth-progress" role="status"><span className="auth-progress-track"><i/></span><b>{signedIn?'Loading your account…':busyLabel}</b></div>}
       {!signedIn&&!busy&&<>
-        {mode==='Create account'&&<label className="form-label">Home country *<select required value={countryCode} onChange={e=>setCountryCode(e.target.value)}><option value="">Select your country</option>{INITIAL_COUNTRIES.map(country=><option key={country.code} value={country.code}>{country.name}</option>)}</select><small>Your country will be permanently attached to this account.</small></label>}
+        {mode==='Create account'&&<><label className="form-label">Home country *<select required value={countryCode} onChange={e=>setCountryCode(e.target.value)}><option value="">Select your country</option>{INITIAL_COUNTRIES.map(country=><option key={country.code} value={country.code}>{country.name}</option>)}</select><small>Your country will be permanently attached to this account.</small></label><label className="form-label">Employment account type (optional)<select value={recruitmentRole} onChange={e=>setRecruitmentRole(e.target.value)}><option value="none">Not registering for employment yet</option><option value="job_seeker">I am looking for a job</option><option value="employer">I want to hire / post jobs</option><option value="both">Both — I want to hire and find work</option></select><small>This records your employment role immediately. You can complete your job-seeker or company profile later.</small></label></>}
         {mode!=='Forgot password'&&mode!=='Reset password'&&<button className="google-button" type="button" onClick={google}><span className="google-g">G</span> Continue with Google</button>}
         {mode!=='Forgot password'&&mode!=='Reset password'&&<div className="or-divider"><span>or continue with email</span></div>}
         <form onSubmit={submit} autoComplete="on" method="post">
