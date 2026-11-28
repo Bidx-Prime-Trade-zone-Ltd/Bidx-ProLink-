@@ -170,6 +170,8 @@ export function getProfessionalDocumentRequirements(countryIso3, group, professi
   const authority = authorityFor(iso3, family);
   const definitions = FAMILY_RULES[family] || FAMILY_RULES.general;
   const countryKnownAuthority = Boolean(authority);
+  const authorityRequirementIndex = family === "driving" ? 2 : 1;
+  const jurisdictionRegulated = REGULATED_GROUPS.has(group);
   return definitions.map(([id, title, description, conditional], index) => ({
     id,
     documentType: "professional_" + id,
@@ -180,7 +182,7 @@ export function getProfessionalDocumentRequirements(countryIso3, group, professi
     countryIso3: iso3,
     countryName,
     professionFamily: family,
-    authority: index === 1 ? authority : null,
+    authority: index === authorityRequirementIndex ? authority : null,
     jurisdictionNote: "Requirements are assessed under " + countryName + " rules. Where the occupation is not legally regulated, upload the relevant competence evidence instead of an unavailable statutory licence.",
     evidenceRoute: ["creative","technology","general","skilled_trade"].includes(family) ? "qualification_or_practical_evidence" : "formal_qualification_and_regulatory_evidence",
     reviewStatus: "pending"
