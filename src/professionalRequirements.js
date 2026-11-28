@@ -183,7 +183,8 @@ export function getProfessionalDocumentRequirements(countryIso3, group, professi
     countryName,
     professionFamily: family,
     authority: index === authorityRequirementIndex ? authority : null,
-    jurisdictionNote: "Requirements are assessed under " + countryName + " rules. Where the occupation is not legally regulated, upload the relevant competence evidence instead of an unavailable statutory licence.",
+    jurisdictionStatus: authority ? "country_authority_configured" : "country_specific_review_required",
+    jurisdictionNote: authority ? "Requirements are assessed under " + countryName + " rules. Where the occupation is not legally regulated, upload the relevant competence evidence instead of an unavailable statutory licence." : "The exact regulator and local licence rules for this profession in " + countryName + " still require official confirmation. Submit the primary qualification or practical competence evidence; ProLink Admin must confirm local rules before marking this profession verified.",
     evidenceRoute: ["creative","technology","general","skilled_trade"].includes(family) ? "qualification_or_practical_evidence" : "formal_qualification_and_regulatory_evidence",
     reviewStatus: "pending"
   }));
