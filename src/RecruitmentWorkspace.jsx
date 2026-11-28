@@ -7,14 +7,14 @@ const emptySeeker={full_name:'',headline:'',skills:'',experience:'',bio:'',count
 const emptyJob={title:'',description:'',requirements:'',location:'',country_name:'',employment_type:'full_time',workplace_type:'onsite',salary_min:'',salary_max:'',currency:''};
 
 export default function RecruitmentWorkspace({session,onBack}){
- const [section,setSection]=useState('employer'),[data,setData]=useState({employer:null,jobSeeker:null,jobs:[]});
+ const [section,setSection]=useState('employer'),[data,setData]=useState({employer:null,jobSeeker:null,jobs:[]}),[publicJobs,setPublicJobs]=useState([]);
  const [employer,setEmployer]=useState(emptyEmployer),[seeker,setSeeker]=useState(emptySeeker),[job,setJob]=useState(emptyJob);
  const [busy,setBusy]=useState(false),[loading,setLoading]=useState(true),[notice,setNotice]=useState('');
  const token=session?.access_token;
  const load=async()=>{
   if(!token)return;
   setLoading(true);
-  try{const response=await fetch('/api/recruitment',{headers:{authorization:'Bearer '+token}});const payload=await response.json();if(!response.ok)throw new Error(payload.error||'Recruitment workspace could not load.');setData(payload);if(payload.employer)setEmployer({...emptyEmployer,...payload.employer});if(payload.jobSeeker)setSeeker({...emptySeeker,...payload.jobSeeker,skills:(payload.jobSeeker.skills||[]).join(', ')});}
+  try{const response=await fetch('/api/recruitment',{headers:{authorization:'Bearer '+token}});const payload=await response.json();if(!response.ok)throw new Error(payload.error||'Recruitment workspace could not load.');setData(payload);const publicResponse=await fetch('/api/recruitment/jobs');const publicPayload=await publicResponse.json();if(publicResponse.ok)setPublicJobs(publicPayload.jobs||[]);if(payload.employer)setEmployer({...emptyEmployer,...payload.employer});if(payload.jobSeeker)setSeeker({...emptySeeker,...payload.jobSeeker,skills:(payload.jobSeeker.skills||[]).join(', ')});}
   catch(error){setNotice(error.message||'Recruitment workspace could not load.');}
   finally{setLoading(false);}
  };
@@ -42,7 +42,7 @@ export default function RecruitmentWorkspace({session,onBack}){
   <div className="recruitment-tabs">
    <button className={section==='employer'?'active':''} onClick={()=>setSection('employer')}><Building2 size={17}/> Employer profile</button>
    <button className={section==='jobs'?'active':''} onClick={()=>setSection('jobs')}><BriefcaseBusiness size={17}/> Post a job</button>
-   <button className={section==='seeker'?'active':''} onClick={()=>setSection('seeker')}><Users size={17}/> Job-seeker profile</button>
+   <button className={section==='seeker'?'active':''} onClick={()=>setSection('seeker')}><Users size={17}/> Job-seeker profile</button><button className={section==='find'?'active':''} onClick={()=>setSection('find')}><BriefcaseBusiness size={17}/> Find jobs</button>
   </div>
   {loading?<p className="recruitment-loading">Loading your employment records…</p>:<>
    {section==='employer'&&<section className="recruitment-card"><div className="recruitment-card-heading"><div><h2>Company / employer profile</h2><p>Submit your organisation details for review. Approval is required before posting vacancies.</p></div>{data.employer&&stateBadge(data.employer.status)}</div>
@@ -65,6 +65,7 @@ export default function RecruitmentWorkspace({session,onBack}){
      <button className="primary-button" disabled={busy}>{busy?'Submitting…':'Submit job for approval'}</button>
     </form>}
    </section><section className="recruitment-card"><h2>Your job postings</h2>{data.jobs.length?data.jobs.map(item=><article className="recruitment-job-row" key={item.id}><div><b>{item.title}</b><small>{item.location||item.country_name||'Location not supplied'} · {stateBadge(item.status)}</small>{item.review_reason&&<small className="recruitment-review-reason">Admin feedback: {item.review_reason}</small>}</div>{item.status==='live'&&<button type="button" disabled={busy} onClick={()=>close('close_job',item.id)}>Close job</button>}</article>):<p>You have not posted any jobs yet.</p>}</section></>}
+   {section==='find'&&<section className="recruitment-card"><h2>Live job vacancies</h2><p>Only jobs approved by ProLink Admin appear here. Closed or pending jobs are not shown.</p>{publicJobs.length?publicJobs.map(item=><article className="recruitment-public-job" key={item.id}><div><b>{item.title}</b><small>{[item.location,item.country_name,item.employment_type?.replaceAll('_',' ')].filter(Boolean).join(' · ')}</small><p>{item.description}</p>{(item.salary_min!=null||item.salary_max!=null)&&<small>Salary: {item.currency||''} {item.salary_min??'—'} – {item.salary_max??'—'}</small>}</div></article>):<p className="recruitment-loading">There are no live job vacancies at the moment.</p>}</section>}
    {section==='seeker'&&<section className="recruitment-card"><div className="recruitment-card-heading"><div><h2>Job-seeker profile</h2><p>Make your profile available to employers after Admin review. Close it when you are no longer looking for work.</p></div>{data.jobSeeker&&stateBadge(data.jobSeeker.status)}</div>
     <form className="recruitment-form" onSubmit={e=>{e.preventDefault();submit('job_seeker',seeker);}}>
      <label>Full name<input required value={seeker.full_name} onChange={e=>setSeeker({...seeker,full_name:e.target.value})}/></label><label>Professional headline<input value={seeker.headline||''} onChange={e=>setSeeker({...seeker,headline:e.target.value})}/></label><label>Skills (separate with commas)<input value={seeker.skills||''} onChange={e=>setSeeker({...seeker,skills:e.target.value})}/></label><label>Experience<textarea rows="3" value={seeker.experience||''} onChange={e=>setSeeker({...seeker,experience:e.target.value})}/></label><label>About you<textarea rows="4" value={seeker.bio||''} onChange={e=>setSeeker({...seeker,bio:e.target.value})}/></label>
