@@ -75,6 +75,30 @@ const COUNTRY_AUTHORITIES = {
 };
 
 const FAMILY_RULES = {
+  veterinary: [
+    ["veterinary_qualification", "Veterinary qualification", "Upload your recognised veterinary medicine or veterinary science qualification."],
+    ["professional_registration", "Veterinary registration", "Upload registration with the competent veterinary statutory body where required.", true]
+  ],
+  optometry: [
+    ["optometry_qualification", "Optometry qualification", "Upload your recognised optometry qualification."],
+    ["professional_registration", "Optometry registration", "Upload current registration or licence where required.", true]
+  ],
+  laboratory: [
+    ["laboratory_qualification", "Medical laboratory qualification", "Upload your recognised medical laboratory science or laboratory technology qualification."],
+    ["professional_registration", "Laboratory professional registration", "Upload registration with the competent statutory body where required.", true]
+  ],
+  physiotherapy: [
+    ["physiotherapy_qualification", "Physiotherapy qualification", "Upload your recognised physiotherapy qualification."],
+    ["professional_registration", "Physiotherapy registration", "Upload current registration or licence where required.", true]
+  ],
+  psychology: [
+    ["psychology_qualification", "Psychology qualification", "Upload your psychology qualification relevant to the services you offer."],
+    ["professional_registration", "Psychology registration / practice authority", "Upload statutory registration or practice authorisation where required for your psychology specialty.", true]
+  ],
+  architecture: [
+    ["architecture_qualification", "Architecture qualification", "Upload your recognised architecture degree or professional qualification."],
+    ["professional_registration", "Architect registration", "Upload registration or practising authorisation where required to offer regulated architectural services.", true]
+  ],
   medical: [
     ["primary_qualification", "Primary professional qualification", "Upload your recognised medical, dental or relevant clinical degree/diploma."],
     ["professional_registration", "Professional registration", "Upload registration or licensing evidence from the competent health-profession regulator, if registration is required for your role.", true],
@@ -150,7 +174,13 @@ const COUNTRY_LABELS = Object.fromEntries(INITIAL_COUNTRIES.map(c => [c.iso3, c.
 function professionFamily(group, profession) {
   const g = String(group || "").toLowerCase();
   const p = String(profession || "").toLowerCase();
-  if (/veterinarian|veterinary/.test(p)) return "veterinary";\n  if (/optometrist/.test(p)) return "optometry";\n  if (/medical laboratory/.test(p)) return "laboratory";\n  if (/physiotherapist/.test(p)) return "physiotherapy";\n  if (/psychologist/.test(p)) return "psychology";\n  if (/architect/.test(p)) return "architecture";\n  if (/doctor|physician|surgeon|dentist|pharmacist|dietitian|nutritionist/.test(p)) return p.includes("pharmac") ? "pharmacy" : "medical";
+  if (/veterinarian|veterinary/.test(p)) return "veterinary";
+  if (/optometrist/.test(p)) return "optometry";
+  if (/medical laboratory/.test(p)) return "laboratory";
+  if (/physiotherapist/.test(p)) return "physiotherapy";
+  if (/psychologist/.test(p)) return "psychology";
+  if (/architect/.test(p)) return "architecture";
+  if (/doctor|physician|surgeon|dentist|pharmacist|dietitian|nutritionist/.test(p)) return p.includes("pharmac") ? "pharmacy" : "medical";
   if (/nurse|midwife/.test(p)) return "nursing";
   if (/driver|chauffeur|dispatch rider|delivery driver|truck driver/.test(p)) return "driving";
   if (/teacher|tutor|educator|instructor|lecturer|trainer/.test(p) || g.includes("education")) return "teaching";
