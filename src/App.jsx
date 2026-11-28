@@ -897,15 +897,17 @@ function App() {
         if(error){setJoinSaving(false);notify('We could not save your professional information. Please try again.');return;}
         const {error:businessReviewError}=await supabase.from('prolink_review_records').insert({user_id:session.user.id,section:'professional_profile',status:'pending',submitted_data:businessPayload});
         if(businessReviewError){setJoinSaving(false);notify('Your profile details were saved, but the review record could not be created. Please retry.');return;}
-        const uploadDocument=async(file,type)=>{
+        const uploadDocument=async(file,type,requirement)=>{
           if(!file)return null;
           const form=new FormData();form.append('file',file);form.append('document_type',type);form.append('country_code',joinData.country_code);
+          form.append('profession_category',joinData.category);form.append('profession_name',joinData.subcategory);
+          if(requirement){form.append('requirement_id',requirement.id);form.append('requirement_title',requirement.title);form.append('issuing_authority',requirement.authority||'');}
           const response=await fetch('/api/verification/document',{method:'POST',headers:{authorization:'Bearer '+session.access_token},body:form});
           const result=await response.json().catch(()=>({}));
           if(!response.ok)throw new Error(result.error||'Professional document upload failed.');
           return result.path;
         };
-        try{for(const requirement of professionalDocumentRequirements){const file=professionalDocumentFiles[requirement.id];if(file){const path=await uploadDocument(file,requirement.documentType);const entry=businessPayload.professional_document_requirements.find(item=>item.id===requirement.id);if(entry)entry.file_name=file.name;}}if(extraSkillFile)await uploadDocument(extraSkillFile,'additional_skill_document');if(portraitFile){if(!['image/jpeg','image/png','image/webp'].includes(portraitFile.type)||portraitFile.size>5242880)throw new Error('Portrait must be JPEG, PNG or WebP and no larger than 5 MB.');const pp=session.user.id+'/portrait-'+crypto.randomUUID()+'.'+(portraitFile.type==='image/png'?'png':portraitFile.type==='image/webp'?'webp':'jpg');const {error:pe}=await supabase.storage.from('prolink-profile-portraits').upload(pp,portraitFile,{upsert:false,contentType:portraitFile.type});if(pe)throw pe;const {error:pr}=await supabase.from('prolink_profile_media').upsert({user_id:session.user.id,portrait_path:pp,updated_at:new Date().toISOString()},{onConflict:'user_id'});if(pr)throw pr;}
+        try{for(const requirement of professionalDocumentRequirements){const file=professionalDocumentFiles[requirement.id];if(file){await uploadDocument(file,requirement.documentType,requirement);const entry=businessPayload.professional_document_requirements.find(item=>item.id===requirement.id);if(entry)entry.file_name=file.name;}}if(extraSkillFile)await uploadDocument(extraSkillFile,'additional_skill_document');if(portraitFile){if(!['image/jpeg','image/png','image/webp'].includes(portraitFile.type)||portraitFile.size>5242880)throw new Error('Portrait must be JPEG, PNG or WebP and no larger than 5 MB.');const pp=session.user.id+'/portrait-'+crypto.randomUUID()+'.'+(portraitFile.type==='image/png'?'png':portraitFile.type==='image/webp'?'webp':'jpg');const {error:pe}=await supabase.storage.from('prolink-profile-portraits').upload(pp,portraitFile,{upsert:false,contentType:portraitFile.type});if(pe)throw pe;const {error:pr}=await supabase.from('prolink_profile_media').upsert({user_id:session.user.id,portrait_path:pp,updated_at:new Date().toISOString()},{onConflict:'user_id'});if(pr)throw pr;}
         }catch(uploadError){setJoinSaving(false);notify('Your profile was saved, but a certificate could not be submitted: '+uploadError.message);return;}
         setJoinSaving(false);
         setProfile(p=>({...p,...businessPayload}));
