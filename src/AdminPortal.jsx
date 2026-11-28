@@ -1,6 +1,6 @@
 import React,{useEffect,useMemo,useRef,useState} from 'react';
 import {supabase} from './lib/supabase.js';
-import {ShieldCheck,Users,Clock3,CheckCircle2,FileCheck,Search,ArrowLeft,RefreshCw,Check,X,Eye,Globe2,UserRound,CalendarDays,LockKeyhole,BriefcaseBusiness,ClipboardCheck,History,MessageCircle,Mail,LayoutDashboard,ChevronRight,Send} from 'lucide-react';
+import {ShieldCheck,Users,Clock3,CheckCircle2,FileCheck,Search,ArrowLeft,RefreshCw,Check,X,Eye,Globe2,UserRound,CalendarDays,LockKeyhole,BriefcaseBusiness,Building2,ClipboardCheck,History,MessageCircle,Mail,LayoutDashboard,ChevronRight,Send} from 'lucide-react';
 import SupportInbox from './SupportInbox.jsx';
 import BroadcastManager from './BroadcastManager.jsx';
 
