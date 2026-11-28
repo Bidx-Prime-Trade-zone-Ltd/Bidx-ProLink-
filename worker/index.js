@@ -946,7 +946,10 @@ async function adminDashboard(request,env) {
     approvedDocuments:reviewsResult?reviews.filter(r=>r.status==="approved").length:null,
     rejectedDocuments:reviewsResult?reviews.filter(r=>r.status==="rejected").length:null,
     pendingWorkRequests:workRequestsResult?workRequests.filter(r=>r.status==="pending").length:null,
-    // Registration intent is stored in Auth user_metadata at signup as well as in the\n    // registration table. Do not hide valid account counts merely because one\n    // optional profile/registration table is temporarily unavailable.\n    employerAccounts:usersAvailable||recruitmentRegistrationsResult||employerProfilesResult?employerAccountIds.size:null,
+    // Registration intent is stored in Auth user_metadata at signup as well as in the
+    // registration table. Do not hide valid account counts merely because one
+    // optional profile/registration table is temporarily unavailable.
+    employerAccounts:usersAvailable||recruitmentRegistrationsResult||employerProfilesResult?employerAccountIds.size:null,
     employerProfiles:employerProfilesResult?employerProfiles.length:null,
     pendingEmployerProfiles:employerProfilesResult?employerProfiles.filter(r=>r.status==="pending").length:null,
     jobSeekerAccounts:usersAvailable||recruitmentRegistrationsResult||jobSeekerProfilesResult?jobSeekerAccountIds.size:null,
