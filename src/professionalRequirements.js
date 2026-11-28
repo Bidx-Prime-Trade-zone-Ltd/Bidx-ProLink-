@@ -20,7 +20,12 @@ const COUNTRY_AUTHORITIES = {
     driving: "Federal Road Safety Corps (FRSC) / relevant state licensing authority",
     legal: "Legal Practitioners Disciplinary Committee / Supreme Court enrolment",
     engineering: "Council for the Regulation of Engineering in Nigeria (COREN)",
-    accounting: "ICAN or ANAN, as applicable"
+    accounting: "ICAN or ANAN, as applicable",
+    optometry: "Optometrists and Dispensing Opticians Registration Board of Nigeria",
+    laboratory: "Medical Laboratory Science Council of Nigeria",
+    physiotherapy: "Medical Rehabilitation Therapists Board of Nigeria",
+    veterinary: "Veterinary Council of Nigeria",
+    architecture: "Architects Registration Council of Nigeria (ARCON)"
   },
   GHA: {
     medical: "Medical and Dental Council Ghana",
@@ -31,7 +36,11 @@ const COUNTRY_AUTHORITIES = {
     driving: "Driver and Vehicle Licensing Authority (DVLA)",
     legal: "General Legal Council",
     engineering: "Engineering Council Ghana",
-    accounting: "Institute of Chartered Accountants Ghana"
+    accounting: "Institute of Chartered Accountants Ghana",
+    laboratory: "Allied Health Professions Council Ghana",
+    physiotherapy: "Allied Health Professions Council Ghana",
+    veterinary: "Veterinary Council of Ghana",
+    architecture: "Architects Registration Council Ghana"
   },
   KEN: {
     medical: "Kenya Medical Practitioners and Dentists Council (KMPDC)",
@@ -42,7 +51,10 @@ const COUNTRY_AUTHORITIES = {
     driving: "National Transport and Safety Authority (NTSA)",
     legal: "Law Society of Kenya / Advocates Complaints Commission",
     engineering: "Engineers Board of Kenya",
-    accounting: "Institute of Certified Public Accountants of Kenya"
+    accounting: "Institute of Certified Public Accountants of Kenya",
+    laboratory: "Kenya Medical Laboratory Technicians and Technologists Board",
+    veterinary: "Kenya Veterinary Board",
+    architecture: "Board of Registration of Architects and Quantity Surveyors"
   },
   ZAF: {
     medical: "Health Professions Council of South Africa (HPCSA)",
@@ -53,7 +65,12 @@ const COUNTRY_AUTHORITIES = {
     driving: "Driving licence authority and relevant PrDP issuing authority",
     legal: "Legal Practice Council",
     engineering: "Engineering Council of South Africa (ECSA)",
-    accounting: "South African Institute of Chartered Accountants (SAICA), where applicable"
+    accounting: "South African Institute of Chartered Accountants (SAICA), where applicable",
+    optometry: "Health Professions Council of South Africa (HPCSA)",
+    laboratory: "Health Professions Council of South Africa (HPCSA)",
+    physiotherapy: "Health Professions Council of South Africa (HPCSA)",
+    veterinary: "South African Veterinary Council",
+    architecture: "South African Council for the Architectural Profession (SACAP)"
   }
 };
 
@@ -133,7 +150,7 @@ const COUNTRY_LABELS = Object.fromEntries(INITIAL_COUNTRIES.map(c => [c.iso3, c.
 function professionFamily(group, profession) {
   const g = String(group || "").toLowerCase();
   const p = String(profession || "").toLowerCase();
-  if (/doctor|physician|surgeon|dentist|optometrist|medical laboratory|pharmacist|psychologist|physiotherapist|dietitian|nutritionist/.test(p)) return p.includes("pharmac") ? "pharmacy" : p.includes("dentist") ? "medical" : "medical";
+  if (/veterinarian|veterinary/.test(p)) return "veterinary";\n  if (/optometrist/.test(p)) return "optometry";\n  if (/medical laboratory/.test(p)) return "laboratory";\n  if (/physiotherapist/.test(p)) return "physiotherapy";\n  if (/psychologist/.test(p)) return "psychology";\n  if (/architect/.test(p)) return "architecture";\n  if (/doctor|physician|surgeon|dentist|pharmacist|dietitian|nutritionist/.test(p)) return p.includes("pharmac") ? "pharmacy" : "medical";
   if (/nurse|midwife/.test(p)) return "nursing";
   if (/driver|chauffeur|dispatch rider|delivery driver|truck driver/.test(p)) return "driving";
   if (/teacher|tutor|educator|instructor|lecturer|trainer/.test(p) || g.includes("education")) return "teaching";
@@ -152,7 +169,7 @@ function professionFamily(group, profession) {
 
 function authorityFor(countryIso3, family) {
   const authorities = COUNTRY_AUTHORITIES[countryIso3] || {};
-  if (["medical","nursing","pharmacy"].includes(family)) return authorities[family] || null;
+  if (["medical","nursing","pharmacy","veterinary","optometry","laboratory","physiotherapy","psychology","architecture"].includes(family)) return authorities[family] || null;
   if (family === "teaching") return authorities.teaching || null;
   if (family === "driving") return authorities.driving || null;
   if (family === "electrical") return authorities.electrical || null;
