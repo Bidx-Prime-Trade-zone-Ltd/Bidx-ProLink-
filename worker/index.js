@@ -391,9 +391,9 @@ async function verificationDocumentUpload(request,env){
   try{form=await request.formData();}catch{return json({error:"The document upload request could not be read. Please select the file again."},400);}
   const file=form.get("file");
   const type=String(form.get("document_type")||"");
-  const allowedTypes=new Set(["working_id","competency_certificate","additional_skill_document"]);
+  const allowedTypes=new Set(["working_id","competency_certificate","additional_skill_document"]);\n  const isProfessionDocument=/^professional_[a-z0-9_]{2,64}$/.test(type);
   const allowedMime=new Set(["image/jpeg","image/png","image/webp","application/pdf"]);
-  if(!file||typeof file.arrayBuffer!=="function"||!allowedTypes.has(type))return json({error:"Choose a valid professional document."},400);
+  if(!file||typeof file.arrayBuffer!=="function"||!allowedTypes.has(type)&&!isProfessionDocument)return json({error:"Choose a valid professional document."},400);
   if(!allowedMime.has(file.type))return json({error:"Only JPEG, PNG, WebP and PDF documents are accepted."},400);
   if(file.size<1||file.size>10485760)return json({error:"Each professional document must be no larger than 10 MB."},400);
   const userId=auth.user.id;
@@ -412,7 +412,7 @@ async function verificationDocumentUpload(request,env){
     try{
       const inserted=await supabaseRest(auth.config,"/rest/v1/prolink_review_records",{method:"POST",headers:{prefer:"return=representation"},body:JSON.stringify({
         user_id:userId,section:"supporting_document",status:"pending",document_path:key,
-        submitted_data:{document_type:type,document_name:file.name,mime_type:file.type,country_code:lockedCountry.home_country_code,country_iso3:lockedCountry.home_country_iso3,country_name:lockedCountry.home_country_name,storage_provider:"cloudflare_r2"}
+        submitted_data:{document_type:type,document_name:file.name,mime_type:file.type,country_code:lockedCountry.home_country_code,country_iso3:lockedCountry.home_country_iso3,country_name:lockedCountry.home_country_name,profession_category:String(form.get("profession_category")||"").slice(0,120),profession_name:String(form.get("profession_name")||"").slice(0,160),requirement_title:String(form.get("requirement_title")||"").slice(0,180),requirement_id:String(form.get("requirement_id")||"").slice(0,100),issuing_authority:String(form.get("issuing_authority")||"").slice(0,200),storage_provider:"cloudflare_r2"}
       })});
       record=Array.isArray(inserted)?inserted[0]:null;
       if(!record?.id)throw new Error("The document review record could not be saved.");
