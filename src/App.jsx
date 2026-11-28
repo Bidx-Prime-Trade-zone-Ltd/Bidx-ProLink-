@@ -235,8 +235,6 @@ function App() {
     return () => subscription.unsubscribe();
   }, []);
   useEffect(()=>{
-    let active=true;
-  useEffect(()=>{
     if(!session?.user?.id)return;
     let active=true;
     (async()=>{
@@ -261,6 +259,8 @@ function App() {
     })();
     return()=>{active=false;};
   },[session?.user?.id]);
+  useEffect(()=>{
+    let active=true;
     if(!session?.user?.id){setAccountCountry(null);setAccountCountryLoading(false);return()=>{active=false;};}
     setAccountCountry(null);setAccountCountryLoading(true);setCountryGateError('');
     (async()=>{
