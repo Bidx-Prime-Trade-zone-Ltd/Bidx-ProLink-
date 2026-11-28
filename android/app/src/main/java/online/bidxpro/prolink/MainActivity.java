@@ -237,6 +237,13 @@ public class MainActivity extends Activity {
                 if (filePathCallback != null) filePathCallback.onReceiveValue(null);
                 filePathCallback = callback;
                 Intent intent = params.createIntent();
+                // WebView's default intent does not consistently mark multi-select
+                // requests for every Android gallery provider. Preserve the web
+                // input's multiple attribute so the picker can return all photos.
+                if (params.getMode() == FileChooserParams.MODE_OPEN_MULTIPLE) {
+                    intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+                }
+                intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
                 try { startActivityForResult(intent, FILE_CHOOSER_REQUEST); }
                 catch (ActivityNotFoundException e) { filePathCallback = null; Toast.makeText(MainActivity.this, "No file picker available", Toast.LENGTH_SHORT).show(); return false; }
                 return true;
@@ -413,9 +420,33 @@ public class MainActivity extends Activity {
             return;
         }
         if (requestCode == FILE_CHOOSER_REQUEST && filePathCallback != null) {
-            Uri[] results = WebChromeClient.FileChooserParams.parseResult(resultCode, data);
-            filePathCallback.onReceiveValue(results);
+            Uri[] results = null;
+            if (resultCode == RESULT_OK && data != null) {
+                // Android Photo Picker / Google Photos may return selected
+                // items in ClipData instead of Intent.getData(). Collect both
+                // shapes and avoid dropping a valid multi-photo selection.
+                java.util.ArrayList<Uri> selectedUris = new java.util.ArrayList<>();
+                android.content.ClipData clipData = data.getClipData();
+                if (clipData != null) {
+                    for (int i = 0; i < clipData.getItemCount(); i++) {
+                        Uri uri = clipData.getItemAt(i).getUri();
+                        if (uri != null && !selectedUris.contains(uri)) selectedUris.add(uri);
+                    }
+                }
+                Uri singleUri = data.getData();
+                if (singleUri != null && !selectedUris.contains(singleUri)) selectedUris.add(singleUri);
+
+                if (!selectedUris.isEmpty()) {
+                    results = selectedUris.toArray(new Uri[0]);
+                } else {
+                    // Retain Android WebView's standard handling for providers
+                    // that return their URI in another supported result format.
+                    results = WebChromeClient.FileChooserParams.parseResult(resultCode, data);
+                }
+            }
+            ValueCallback<Uri[]> callback = filePathCallback;
             filePathCallback = null;
+            callback.onReceiveValue(results);
         }
     }
 
