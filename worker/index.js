@@ -762,14 +762,19 @@ async function recruitmentWorkspace(request,env){
       ]);
       // Preserve recruitment intent for existing accounts that already submitted a
       // corresponding profile before role registration tracking was introduced.
+      const metadataRoles=Array.isArray(auth.user.user_metadata?.recruitment_roles)?auth.user.user_metadata.recruitment_roles.filter(role=>["employer","job_seeker"].includes(role)):[];
       const knownRoles=new Set((registrations||[]).map(row=>row.account_type));
+      const missingMetadataRoles=metadataRoles.filter(role=>!knownRoles.has(role));
+      if(missingMetadataRoles.length){
+        await supabaseRest(auth.config,base+"prolink_recruitment_registrations?on_conflict=user_id,account_type",{method:"POST",headers:{prefer:"resolution=ignore-duplicates,return=minimal"},body:JSON.stringify(missingMetadataRoles.map(account_type=>({user_id:auth.user.id,account_type})))});
+      }
       const legacyRoles=[];
       if(employers?.[0]&&!knownRoles.has("employer"))legacyRoles.push({user_id:auth.user.id,account_type:"employer"});
       if(seekers?.[0]&&!knownRoles.has("job_seeker"))legacyRoles.push({user_id:auth.user.id,account_type:"job_seeker"});
       if(legacyRoles.length){
         await supabaseRest(auth.config,base+"prolink_recruitment_registrations?on_conflict=user_id,account_type",{method:"POST",headers:{prefer:"resolution=ignore-duplicates,return=minimal"},body:JSON.stringify(legacyRoles)});
       }
-      const roles=[...new Set([...(registrations||[]).map(row=>row.account_type),...legacyRoles.map(row=>row.account_type)])];
+      const roles=[...new Set([...(registrations||[]).map(row=>row.account_type),...metadataRoles,...legacyRoles.map(row=>row.account_type)])];
       return json({employer:employers?.[0]||null,jobSeeker:seekers?.[0]||null,jobs:jobs||[],registrations:roles});
     }
     if(request.method!=="POST")return json({error:"Method not allowed."},405);
@@ -910,7 +915,11 @@ async function adminDashboard(request,env) {
     for(let page=1;page<=100;page++){
       const result=await supabaseRest(config,"/auth/v1/admin/users?page="+page+"&per_page=1000");
       const batch=result?.users||[];
-      users.push(...batch.filter(u=>String(u.email||"").toLowerCase()!==PROLINK_ADMIN_EMAIL).map(u=>({id:u.id,email:u.email||"",created_at:u.created_at||null,last_sign_in_at:u.last_sign_in_at||null,email_confirmed_at:u.email_confirmed_at||null,provider:u.app_metadata?.provider||"email"})));
+      users.push(...batch.filter(u=>String(u.email||"").toLowerCase()!==PROLINK_ADMIN_EMAIL).map(u=>{
+        const metadata=u.user_metadata||{};
+        const recruitmentRoles=Array.isArray(metadata.recruitment_roles)?[...new Set(metadata.recruitment_roles.filter(role=>["employer","job_seeker"].includes(role)))]:[];
+        return {id:u.id,email:u.email||"",created_at:u.created_at||null,last_sign_in_at:u.last_sign_in_at||null,email_confirmed_at:u.email_confirmed_at||null,provider:u.app_metadata?.provider||"email",recruitmentRoles};
+      }));
       if(batch.length<1000)break;
     }
   }catch(error){
@@ -922,8 +931,8 @@ async function adminDashboard(request,env) {
   const today=todayFormatter.format(new Date());
   const newUsersToday=users.filter(user=>user.created_at&&todayFormatter.format(new Date(user.created_at))===today).length;
   const profiles=profilesResult||[],reviews=reviewsResult||[],profileChangeRequests=profileChangeRequestsResult||[],workRequests=workRequestsResult||[],employerProfiles=employerProfilesResult||[],jobSeekerProfiles=jobSeekerProfilesResult||[],jobs=jobsResult||[],recruitmentRegistrations=recruitmentRegistrationsResult||[];
-  const employerAccountIds=new Set(recruitmentRegistrations.filter(row=>row.account_type==="employer").map(row=>row.user_id));
-  const jobSeekerAccountIds=new Set(recruitmentRegistrations.filter(row=>row.account_type==="job_seeker").map(row=>row.user_id));
+  const employerAccountIds=new Set([...recruitmentRegistrations.filter(row=>row.account_type==="employer").map(row=>row.user_id),...users.filter(user=>user.recruitmentRoles?.includes("employer")).map(user=>user.id)]);
+  const jobSeekerAccountIds=new Set([...recruitmentRegistrations.filter(row=>row.account_type==="job_seeker").map(row=>row.user_id),...users.filter(user=>user.recruitmentRoles?.includes("job_seeker")).map(user=>user.id)]);
   // Count legacy profile owners too, so existing approved/pending profile holders
   // remain represented even if they predate explicit role registration.
   employerProfiles.forEach(row=>employerAccountIds.add(row.user_id));
@@ -949,7 +958,7 @@ async function adminDashboard(request,env) {
     closedJobs:jobsResult?jobs.filter(r=>r.status==="closed").length:null
   };
   const profileByUser=Object.fromEntries(profiles.map(profile=>[profile.user_id,profile]));
-  const recruitmentRolesByUser=new Map();
+  const recruitmentRolesByUser=new Map(users.filter(user=>user.recruitmentRoles?.length).map(user=>[user.id,[...user.recruitmentRoles]]));
   recruitmentRegistrations.forEach(row=>{if(!recruitmentRolesByUser.has(row.user_id))recruitmentRolesByUser.set(row.user_id,[]);recruitmentRolesByUser.get(row.user_id).push(row.account_type);});
   employerProfiles.forEach(row=>{if(!recruitmentRolesByUser.has(row.user_id))recruitmentRolesByUser.set(row.user_id,[]);if(!recruitmentRolesByUser.get(row.user_id).includes("employer"))recruitmentRolesByUser.get(row.user_id).push("employer");});
   jobSeekerProfiles.forEach(row=>{if(!recruitmentRolesByUser.has(row.user_id))recruitmentRolesByUser.set(row.user_id,[]);if(!recruitmentRolesByUser.get(row.user_id).includes("job_seeker"))recruitmentRolesByUser.get(row.user_id).push("job_seeker");});
