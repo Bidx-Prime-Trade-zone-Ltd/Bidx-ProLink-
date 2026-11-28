@@ -235,31 +235,6 @@ function App() {
     return () => subscription.unsubscribe();
   }, []);
   useEffect(()=>{
-    if(!session?.user?.id)return;
-    let active=true;
-    (async()=>{
-      let roles=[];
-      try{roles=JSON.parse(localStorage.getItem('prolink-pending-recruitment-roles')||'[]');}catch{}
-      roles=Array.isArray(roles)?[...new Set(roles.filter(role=>['employer','job_seeker'].includes(role)))]:[];
-      if(!roles.length)return;
-      try{
-        const current=session.user.user_metadata?.recruitment_roles||[];
-        const merged=[...new Set([...current,...roles])];
-        const {error}=await supabase.auth.updateUser({data:{recruitment_roles:merged}});
-        if(error)throw error;
-        const {data:{session:latest}}=await supabase.auth.getSession();
-        if(!latest?.access_token)throw new Error('Session unavailable while saving employment role.');
-        for(const account_type of roles){
-          const response=await fetch('/api/recruitment',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+latest.access_token},body:JSON.stringify({kind:'register',account_type})});
-          const payload=await response.json().catch(()=>({}));
-          if(!response.ok)throw new Error(payload.error||'Employment role registration could not be saved.');
-        }
-        if(active)localStorage.removeItem('prolink-pending-recruitment-roles');
-      }catch(error){console.error('[ProLinkRecruitment] Signup role sync failed:',error);}
-    })();
-    return()=>{active=false;};
-  },[session?.user?.id]);
-  useEffect(()=>{
     let active=true;
     if(!session?.user?.id){setAccountCountry(null);setAccountCountryLoading(false);return()=>{active=false;};}
     setAccountCountry(null);setAccountCountryLoading(true);setCountryGateError('');
